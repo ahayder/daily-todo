@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { AppState } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
+import { Trash2, FileText } from "lucide-react";
 import type { Dispatch } from "react";
 
 type Props = {
@@ -27,7 +28,16 @@ export function NotesView({ state, dispatch }: Props) {
   const note = noteId ? state.notesDocs[noteId] : null;
 
   if (!note || !noteId) {
-    return <section className="empty-view">No note selected.</section>;
+    return (
+      <section className="empty-view-container">
+        <div className="empty-view">
+          <FileText className="h-8 w-8 text-[var(--ink-700)] opacity-30 mb-3" />
+          <p className="text-sm text-[var(--ink-700)]">
+            Select a note or create a new one
+          </p>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -36,27 +46,38 @@ export function NotesView({ state, dispatch }: Props) {
         <input
           aria-label="Note title"
           className="note-title-input"
+          placeholder="Untitled Note"
           value={note.title}
           onChange={(event) =>
-            dispatch({ type: "rename-note", noteId, title: event.target.value })
+            dispatch({
+              type: "rename-note",
+              noteId,
+              title: event.target.value,
+            })
           }
         />
-        <button type="button" onClick={() => dispatch({ type: "create-note" })}>
-          New
-        </button>
         <AlertDialog>
-          <AlertDialogTrigger render={<button type="button">Delete</button>} />
-          <AlertDialogContent className="note-delete-dialog">
+          <AlertDialogTrigger
+            aria-label="Delete note"
+            className="note-delete-trigger"
+          >
+            <Trash2 className="h-4.5 w-4.5" />
+          </AlertDialogTrigger>
+          <AlertDialogContent className="alert-dialog-content">
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-              <AlertDialogDescription>
+              <AlertDialogTitle className="text-[var(--ink-900)] font-semibold">
+                Delete this note?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-[var(--ink-700)]">
                 This action permanently removes the note and its drawing data.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="alert-dialog-cancel">
+                Cancel
+              </AlertDialogCancel>
               <AlertDialogAction
-                className="note-delete-confirm"
+                className="alert-dialog-destructive"
                 onClick={() => dispatch({ type: "delete-note", noteId })}
               >
                 Delete
@@ -66,14 +87,18 @@ export function NotesView({ state, dispatch }: Props) {
         </AlertDialog>
       </div>
 
-      <div className="editor-layer dotted-grid">
+      <div className="editor-layer">
         <MarkdownEditor
           value={note.markdown}
-          onChange={(markdown) => dispatch({ type: "update-note-markdown", noteId, markdown })}
+          onChange={(markdown) =>
+            dispatch({ type: "update-note-markdown", noteId, markdown })
+          }
         />
         <DrawingOverlay
           strokes={note.drawingStrokes}
-          onChange={(drawingStrokes) => dispatch({ type: "set-note-drawing", noteId, drawingStrokes })}
+          onChange={(drawingStrokes) =>
+            dispatch({ type: "set-note-drawing", noteId, drawingStrokes })
+          }
         />
       </div>
     </section>

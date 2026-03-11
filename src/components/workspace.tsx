@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { DailyView } from "@/components/daily-view";
 import { NotesView } from "@/components/notes-view";
 import { Sidebar } from "@/components/sidebar";
+import { TopNavbar } from "@/components/top-navbar";
 import { useAppState } from "@/components/app-context";
 import type { ViewMode } from "@/lib/types";
 
@@ -23,14 +24,23 @@ export function Workspace({ forcedView }: Props) {
 
   return (
     <div className="app-shell">
-      <Sidebar state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }} dispatch={dispatch} />
-      <main className="main-panel">
-        {activeView === "daily" ? (
-          <DailyView state={state} dispatch={dispatch} />
-        ) : (
-          <NotesView state={state} dispatch={dispatch} />
-        )}
-      </main>
+      <TopNavbar
+        state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
+        dispatch={dispatch}
+      />
+      <div className="app-body">
+        <Sidebar
+          state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
+          dispatch={dispatch}
+        />
+        <main className="main-panel">
+          {activeView === "daily" ? (
+            <DailyView state={state} dispatch={dispatch} />
+          ) : (
+            <NotesView state={state} dispatch={dispatch} />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

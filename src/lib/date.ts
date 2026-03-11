@@ -12,13 +12,13 @@ export function getYearMonth(dateISO: string): string {
 export function getMonthLabel(yearMonth: string): string {
   const [year, month] = yearMonth.split("-").map(Number);
   const date = new Date(year, month - 1, 1);
-  return date.toLocaleString(undefined, { month: "long", year: "numeric" });
+  return date.toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
 export function getDayLabel(dateISO: string): string {
   const [year, month, day] = dateISO.split("-").map(Number);
   const date = new Date(year, month - 1, day);
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
