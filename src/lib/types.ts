@@ -1,6 +1,7 @@
 export type Priority = 1 | 2 | 3;
 
 export type ViewMode = "daily" | "notes";
+export type ThemeMode = "light" | "dark" | "system";
 
 export type Point = {
   x: number;
@@ -45,6 +46,7 @@ export type UIState = {
   expandedYears: string[];
   expandedMonths: string[];
   lastView: ViewMode;
+  themeMode: ThemeMode;
 };
 
 export type AppState = {

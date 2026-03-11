@@ -3,6 +3,32 @@ import { appStateSchema } from "@/lib/schema";
 import { createInitialState, ensureDailyPageForDate, STORAGE_KEY } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
+function normalizeThemeMode(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== "object") return parsed;
+  const candidate = parsed as {
+    uiState?: {
+      themeMode?: unknown;
+    };
+  };
+
+  if (!candidate.uiState || typeof candidate.uiState !== "object") {
+    return parsed;
+  }
+
+  const themeMode = candidate.uiState.themeMode;
+  if (themeMode === "light" || themeMode === "dark" || themeMode === "system") {
+    return parsed;
+  }
+
+  return {
+    ...candidate,
+    uiState: {
+      ...candidate.uiState,
+      themeMode: "system",
+    },
+  };
+}
+
 export function loadAppState(now = new Date()): AppState {
   const todayISO = toISODate(now);
 
@@ -18,7 +44,7 @@ export function loadAppState(now = new Date()): AppState {
   }
 
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = normalizeThemeMode(JSON.parse(raw));
     const validated = appStateSchema.safeParse(parsed);
 
     if (!validated.success) {
@@ -27,7 +53,16 @@ export function loadAppState(now = new Date()): AppState {
       return fallback;
     }
 
-    const rolled = ensureDailyPageForDate(validated.data, todayISO);
+    const rolled = ensureDailyPageForDate(
+      {
+        ...validated.data,
+        uiState: {
+          ...validated.data.uiState,
+          themeMode: validated.data.uiState.themeMode ?? "system",
+        },
+      },
+      todayISO,
+    );
     saveAppState(rolled);
     return rolled;
   } catch {

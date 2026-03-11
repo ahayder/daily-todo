@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Eraser, Pencil, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DrawingStroke, DrawingTool, Point } from "@/lib/types";
 
 type Props = {
@@ -52,37 +54,58 @@ export function DrawingOverlay({ strokes, onChange }: Props) {
 
   const size = tool === "eraser" ? ERASER_SIZE : PEN_SIZE;
 
-  const controls = useMemo(
-    () => (
-      <div className="drawing-controls">
-        <button type="button" onClick={() => setEnabled((prev) => !prev)}>
-          {enabled ? "Hide Drawing" : "Draw"}
-        </button>
+  const controls = useMemo(() => {
+    return (
+      <div className="drawing-controls" aria-label="Drawing controls">
+        <Tooltip>
+          <TooltipTrigger
+            className={enabled ? "drawing-icon-btn is-active" : "drawing-icon-btn"}
+            aria-label={enabled ? "Disable drawing" : "Enable drawing"}
+            onClick={() => setEnabled((prev) => !prev)}
+          >
+            <Pencil size={14} />
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            {enabled ? "Disable drawing" : "Enable drawing"}
+          </TooltipContent>
+        </Tooltip>
         {enabled ? (
           <>
-            <button
-              type="button"
-              className={tool === "pen" ? "is-active" : ""}
-              onClick={() => setTool("pen")}
-            >
-              Pen
-            </button>
-            <button
-              type="button"
-              className={tool === "eraser" ? "is-active" : ""}
-              onClick={() => setTool("eraser")}
-            >
-              Eraser
-            </button>
-            <button type="button" onClick={() => onChange([])}>
-              Clear
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                className={tool === "pen" ? "drawing-icon-btn is-active" : "drawing-icon-btn"}
+                aria-label="Pen tool"
+                onClick={() => setTool("pen")}
+              >
+                <Pencil size={14} />
+              </TooltipTrigger>
+              <TooltipContent side="left">Pen tool</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                className={tool === "eraser" ? "drawing-icon-btn is-active" : "drawing-icon-btn"}
+                aria-label="Eraser tool"
+                onClick={() => setTool("eraser")}
+              >
+                <Eraser size={14} />
+              </TooltipTrigger>
+              <TooltipContent side="left">Eraser tool</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                className="drawing-icon-btn"
+                aria-label="Clear drawing"
+                onClick={() => onChange([])}
+              >
+                <Trash2 size={14} />
+              </TooltipTrigger>
+              <TooltipContent side="left">Clear drawing</TooltipContent>
+            </Tooltip>
           </>
         ) : null}
       </div>
-    ),
-    [enabled, onChange, tool],
-  );
+    );
+  }, [enabled, onChange, tool]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

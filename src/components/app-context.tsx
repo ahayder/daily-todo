@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   type Dispatch,
@@ -21,11 +22,13 @@ import type {
   AppState,
   DrawingStroke,
   Priority,
+  ThemeMode,
   ViewMode,
 } from "@/lib/types";
 
 export type AppAction =
   | { type: "set-view"; view: ViewMode }
+  | { type: "set-theme-mode"; themeMode: ThemeMode }
   | { type: "select-daily"; date: string }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
@@ -74,6 +77,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           lastView: action.view,
+        },
+      };
+    case "set-theme-mode":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          themeMode: action.themeMode,
         },
       };
     case "select-daily":
@@ -273,6 +284,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, undefined, () =>
     ensureDailyPageForDate(loadAppState(), toISODate(new Date())),
   );
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const applyDarkState = (isDark: boolean) => {
+      root.classList.toggle("dark", isDark);
+      root.style.colorScheme = isDark ? "dark" : "light";
+    };
+
+    if (state.uiState.themeMode === "dark") {
+      applyDarkState(true);
+      return;
+    }
+
+    if (state.uiState.themeMode === "light") {
+      applyDarkState(false);
+      return;
+    }
+
+    applyDarkState(query.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      applyDarkState(event.matches);
+    };
+
+    query.addEventListener("change", handleChange);
+    return () => {
+      query.removeEventListener("change", handleChange);
+    };
+  }, [state.uiState.themeMode]);
 
   useEffect(() => {
     saveAppState(state);

@@ -40,4 +40,31 @@ describe("DailyView", () => {
     const taskText = screen.getByText("Task one");
     expect(taskText).toHaveClass("done");
   });
+
+  test("uses enter to add without an Add button", async () => {
+    render(<Harness />);
+
+    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
+    expect(screen.getByText("Press", { exact: false })).toHaveTextContent("↵");
+
+    const input = screen.getByPlaceholderText("Add a task");
+    await userEvent.type(input, "Task two{enter}");
+
+    expect(screen.getByText("Task two")).toBeInTheDocument();
+  });
+
+  test("shows semantic priority headings, empty states, and count badges", () => {
+    render(<Harness />);
+
+    expect(screen.getByRole("heading", { name: "Critical" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Important" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Someday" })).toBeInTheDocument();
+
+    const emptyStates = screen.getAllByText("No tasks yet");
+    expect(emptyStates).toHaveLength(2);
+
+    expect(screen.getByLabelText("Critical task count")).toHaveTextContent("1");
+    expect(screen.queryByLabelText("Important task count")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Someday task count")).not.toBeInTheDocument();
+  });
 });

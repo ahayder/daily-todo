@@ -2,7 +2,12 @@
 
 import type { ReactNode } from "react";
 import { AppProvider } from "@/components/app-context";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: ReactNode }) {
-  return <AppProvider>{children}</AppProvider>;
+  return (
+    <TooltipProvider>
+      <AppProvider>{children}</AppProvider>
+    </TooltipProvider>
+  );
 }

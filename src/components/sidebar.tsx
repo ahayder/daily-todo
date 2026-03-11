@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { toISODate } from "@/lib/date";
 import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
 import { getSortedDailyDates } from "@/lib/store";
-import type { AppState } from "@/lib/types";
+import type { AppState, ThemeMode } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
 import type { Dispatch } from "react";
 
@@ -12,8 +13,15 @@ type Props = {
   dispatch: Dispatch<AppAction>;
 };
 
+const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
 export function Sidebar({ state, dispatch }: Props) {
   const sortedDates = getSortedDailyDates(state);
+  const todayISO = toISODate(new Date());
   const groupedYears = new Map<string, Map<string, string[]>>();
 
   for (const date of sortedDates) {
@@ -38,24 +46,46 @@ export function Sidebar({ state, dispatch }: Props) {
     <aside className="sidebar">
       <div className="sidebar-header">
         <h1>DailyTodoApp</h1>
+        <div className="theme-toggle" role="group" aria-label="Theme mode">
+          {THEME_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={
+                state.uiState.themeMode === option.value ? "theme-btn is-active" : "theme-btn"
+              }
+              aria-pressed={state.uiState.themeMode === option.value}
+              onClick={() => dispatch({ type: "set-theme-mode", themeMode: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="sidebar-nav">
         <Link
           href="/daily"
-          className={state.uiState.lastView === "daily" ? "is-active" : ""}
+          className={state.uiState.lastView === "daily" ? "nav-link is-active" : "nav-link"}
           onClick={() => dispatch({ type: "set-view", view: "daily" })}
         >
           DailyTodo
         </Link>
         <Link
           href="/notes"
-          className={state.uiState.lastView === "notes" ? "is-active" : ""}
+          className={state.uiState.lastView === "notes" ? "nav-link is-active" : "nav-link"}
           onClick={() => dispatch({ type: "set-view", view: "notes" })}
         >
           Notes
         </Link>
       </div>
+      <Link
+        href="/daily"
+        className="today-link"
+        onClick={() => dispatch({ type: "select-daily", date: todayISO })}
+      >
+        Today
+      </Link>
 
       {state.uiState.lastView === "daily" ? (
         <div className="sidebar-tree">
@@ -119,7 +149,7 @@ export function Sidebar({ state, dispatch }: Props) {
         </div>
       ) : (
         <div className="notes-list">
-          <button type="button" onClick={() => dispatch({ type: "create-note" })}>
+          <button type="button" className="new-note-btn" onClick={() => dispatch({ type: "create-note" })}>
             + New Note
           </button>
           <ul>

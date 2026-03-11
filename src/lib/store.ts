@@ -51,6 +51,7 @@ export function createInitialState(todayISO: string): AppState {
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       lastView: "daily",
+      themeMode: "system",
     },
   };
 }

@@ -5,12 +5,41 @@ import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { DrawingOverlay } from "@/components/drawing-overlay";
+import { Badge } from "@/components/ui/badge";
 import type { AppState, Priority } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
 
 type Props = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
+};
+
+const PRIORITY_META: Record<
+  Priority,
+  {
+    label: string;
+    groupClassName: string;
+    badgeClassName: string;
+  }
+> = {
+  1: {
+    label: "Critical",
+    groupClassName: "priority-group priority-group-1",
+    badgeClassName:
+      "priority-count-badge border-[var(--priority-1)]/30 bg-[var(--priority-1-soft)] text-[var(--priority-1)]",
+  },
+  2: {
+    label: "Important",
+    groupClassName: "priority-group priority-group-2",
+    badgeClassName:
+      "priority-count-badge border-[var(--priority-2)]/30 bg-[var(--priority-2-soft)] text-[var(--priority-2)]",
+  },
+  3: {
+    label: "Someday",
+    groupClassName: "priority-group priority-group-3",
+    badgeClassName:
+      "priority-count-badge border-[var(--priority-3)]/30 bg-[var(--priority-3-soft)] text-[var(--priority-3)]",
+  },
 };
 
 export function DailyView({ state, dispatch }: Props) {
@@ -46,7 +75,9 @@ export function DailyView({ state, dispatch }: Props) {
 
       <div className="todo-pane">
         <div className="todo-header">
-          <h2>Todo List</h2>
+          <div className="todo-title-row">
+            <h2>Todo List</h2>
+          </div>
           <div className="todo-form">
             <input
               type="text"
@@ -68,24 +99,29 @@ export function DailyView({ state, dispatch }: Props) {
               <option value={2}>Priority 2</option>
               <option value={3}>Priority 3</option>
             </select>
-            <button
-              type="button"
-              onClick={() => {
-                dispatch({ type: "add-todo", date, text: todoText, priority });
-                setTodoText("");
-              }}
-            >
-              Add
-            </button>
           </div>
+          <p className="todo-hint" aria-live="polite">
+            Press <kbd>↵</kbd> to add
+          </p>
         </div>
 
         <div className="priority-groups">
-          {[1, 2, 3].map((priorityLevel) => (
-            <div key={priorityLevel} className="priority-group">
-              <h3>{`Priority ${priorityLevel}`}</h3>
+          {([1, 2, 3] as const).map((priorityLevel) => {
+            const todos = grouped[priorityLevel];
+            const { label, groupClassName, badgeClassName } = PRIORITY_META[priorityLevel];
+
+            return (
+            <div key={priorityLevel} className={groupClassName}>
+              <div className="priority-group-header">
+                <h3>{label}</h3>
+                {todos.length > 0 ? (
+                  <Badge className={badgeClassName} aria-label={`${label} task count`}>
+                    {todos.length}
+                  </Badge>
+                ) : null}
+              </div>
               <ul>
-                {grouped[priorityLevel as Priority].map((todo) => (
+                {todos.map((todo) => (
                   <li key={todo.id}>
                     <label>
                       <input
@@ -104,9 +140,12 @@ export function DailyView({ state, dispatch }: Props) {
                     </button>
                   </li>
                 ))}
+                {todos.length === 0 ? (
+                  <li className="priority-empty">No tasks yet</li>
+                ) : null}
               </ul>
             </div>
-          ))}
+          )})}
         </div>
       </div>
     </section>

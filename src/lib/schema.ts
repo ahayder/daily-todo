@@ -44,6 +44,7 @@ export const appStateSchema = z.object({
     expandedYears: z.array(z.string()),
     expandedMonths: z.array(z.string()),
     lastView: z.enum(["daily", "notes"]),
+    themeMode: z.enum(["light", "dark", "system"]).optional(),
   }),
 });
 
