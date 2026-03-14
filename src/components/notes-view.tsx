@@ -1,6 +1,5 @@
 "use client";
 
-import { DrawingOverlay } from "@/components/drawing-overlay";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import {
   AlertDialog,
@@ -92,12 +91,6 @@ export function NotesView({ state, dispatch }: Props) {
           value={note.markdown}
           onChange={(markdown) =>
             dispatch({ type: "update-note-markdown", noteId, markdown })
-          }
-        />
-        <DrawingOverlay
-          strokes={note.drawingStrokes}
-          onChange={(drawingStrokes) =>
-            dispatch({ type: "set-note-drawing", noteId, drawingStrokes })
           }
         />
       </div>

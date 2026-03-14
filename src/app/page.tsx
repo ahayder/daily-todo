@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Workspace } from "@/components/workspace";
 
 export default function Home() {
-  redirect("/daily");
+  return <Workspace forcedView="daily" />;
 }

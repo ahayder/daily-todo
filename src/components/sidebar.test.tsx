@@ -16,7 +16,6 @@ function Harness() {
   initial.dailyPages["2026-03-11"] = {
     date: "2026-03-11",
     markdown: "",
-    drawingStrokes: [],
     todos: [],
   };
 
@@ -25,20 +24,16 @@ function Harness() {
 }
 
 describe("Sidebar", () => {
-  test("shows active nav, supports Today quick nav, and toggles theme mode", async () => {
+  test("renders tree structure and today button", async () => {
     render(<Harness />);
 
-    const dailyLink = screen.getByRole("link", { name: "DailyTodo" });
-    expect(dailyLink).toHaveClass("is-active");
+    const todayButton = screen.getByRole("button", { name: /today/i });
+    expect(todayButton).toBeInTheDocument();
 
-    const todayLink = screen.getByRole("link", { name: "Today" });
-    await userEvent.click(todayLink);
+    const yearButtons = screen.getAllByRole("button", { name: /2026/i });
+    expect(yearButtons.length).toBeGreaterThan(0);
 
-    const todayLabel = getDayLabel(toISODate(new Date()));
-    expect(screen.getByText(todayLabel)).toBeInTheDocument();
-
-    const darkModeButton = screen.getByRole("button", { name: "Dark" });
-    await userEvent.click(darkModeButton);
-    expect(darkModeButton).toHaveAttribute("aria-pressed", "true");
+    const currentDayButton = screen.getByRole("button", { name: /Mar 10, 2026/i });
+    expect(currentDayButton).toBeInTheDocument();
   });
 });

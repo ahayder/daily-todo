@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Brain } from "lucide-react";
 import { useState, useEffect, type Dispatch } from "react";
-import type { AppState, ThemeMode } from "@/lib/types";
+import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +25,14 @@ const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
 
 const THEME_CYCLE: ThemeMode[] = ["light", "dark", "system"];
 
+const CATEGORY_CYCLE: CategoryTheme[] = ["normal", "adhd1", "adhd2"];
+
+const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
+  normal: "Labels: Normal",
+  adhd1: "Labels: ADHD 1",
+  adhd2: "Labels: ADHD 2",
+};
+
 export function TopNavbar({ state, dispatch }: Props) {
   const [mounted, setMounted] = useState(false);
 
@@ -34,6 +42,7 @@ export function TopNavbar({ state, dispatch }: Props) {
 
   const themeMode = mounted ? state.uiState.themeMode : "system";
   const ThemeIcon = THEME_ICONS[themeMode];
+  const categoryTheme = mounted ? state.uiState.categoryTheme : "normal";
 
   const cycleTheme = () => {
     const currentIndex = THEME_CYCLE.indexOf(themeMode);
@@ -83,8 +92,27 @@ export function TopNavbar({ state, dispatch }: Props) {
         </Link>
       </nav>
 
-      {/* Right: Theme toggle */}
-      <div className="flex items-center">
+      {/* Right: toggles */}
+      <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                const currentIndex = CATEGORY_CYCLE.indexOf(categoryTheme);
+                const next = CATEGORY_CYCLE[(currentIndex + 1) % CATEGORY_CYCLE.length];
+                dispatch({ type: "set-category-theme", theme: next });
+              }}
+              aria-label={`Category labels: ${categoryTheme}`}
+              className="theme-cycle-btn"
+            >
+              <Brain className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {CATEGORY_TOOLTIP[categoryTheme]}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <button

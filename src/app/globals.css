@@ -9,8 +9,8 @@
   --ink-900: #1f2430;
   --ink-700: #40495e;
   --paper: #faf8f4;
-  --paper-strong: #ffffff;
-  --line: #e8e2d9;
+  --paper-strong: #eee7dc;
+  --line: #d6ccbd;
   --brand: #2f6d62;
   --brand-soft: #d9ece8;
   --warn: #b8422e;
@@ -21,23 +21,23 @@
   --priority-3: #4a7c59;
   --priority-3-soft: #e8f4ec;
   --surface-shadow: 0 1px 3px rgba(31, 36, 48, 0.06), 0 1px 2px rgba(31, 36, 48, 0.04);
-  --background: oklch(1 0 0);
+  --background: oklch(0.95 0.01 85);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+  --card: oklch(0.935 0.012 85);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.94 0.011 85);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
+  --muted: oklch(0.928 0.01 85);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
+  --accent: oklch(0.93 0.012 85);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.85 0.014 85);
+  --input: oklch(0.85 0.014 85);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
@@ -45,13 +45,13 @@
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.938 0.012 85);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.925 0.012 85);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-border: oklch(0.85 0.014 85);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
@@ -221,7 +221,7 @@ select {
 
 .today-btn:hover {
   background: var(--brand);
-  color: white;
+  color: var(--paper);
 }
 
 .sidebar-section-header {
@@ -538,12 +538,36 @@ select {
 
 .tiptap-editor ul[data-type="taskList"] li {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5em;
+  align-items: center;
+  gap: 0.7em;
+  min-height: 1.9em;
 }
 
 .tiptap-editor ul[data-type="taskList"] li > label {
-  margin-top: 0.25em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-top: 0;
+  line-height: 1;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label > input[type="checkbox"] {
+  width: 1.18rem;
+  height: 1.18rem;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+  transform: translateY(-1px);
+}
+
+.tiptap-editor ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > div > p {
+  line-height: 1.7;
 }
 
 .tiptap-editor a {
@@ -760,13 +784,46 @@ select {
 
 .alert-dialog-destructive {
   background: var(--warn);
-  color: white;
+  color: var(--paper);
   border: none;
   border-radius: 10px;
 }
 
 .alert-dialog-destructive:hover {
   opacity: 0.9;
+}
+
+/* ─── Tooltips ────────────────────────────────── */
+.tooltip-content {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 20rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.625rem;
+  background: var(--ink-900);
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tooltip-arrow {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: var(--ink-900);
+  transform: translateY(calc(-50% - 2px)) rotate(45deg);
+}
+
+.tooltip-arrow[data-side="bottom"] {
+  top: 0.25rem;
+}
+
+.tooltip-arrow[data-side="top"] {
+  bottom: -0.625rem;
 }
 
 /* ─── Empty View ──────────────────────────────── */
@@ -957,6 +1014,247 @@ select {
 
 .dark .drawing-icon-btn {
   background: color-mix(in srgb, var(--paper-strong) 84%, transparent);
+}
+
+/* ─── Editor Toolbar ──────────────────────────── */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: color-mix(in srgb, var(--ink-100) 40%, transparent);
+  border-radius: 8px;
+  padding: 2px;
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.toolbar-btn:hover {
+  background: var(--paper-strong);
+  color: var(--ink-900);
+}
+.toolbar-btn--active {
+  background: var(--paper-strong);
+  color: var(--ink-900);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+/* ─── Bubble Menu ─────────────────────────────── */
+.bubble-menu {
+  position: absolute;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--ink-900);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24), 0 1px 4px rgba(0, 0, 0, 0.12);
+  animation: bubble-in 0.15s ease;
+  pointer-events: auto;
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.bubble-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.bubble-btn:hover {
+  background: color-mix(in srgb, var(--paper) 18%, transparent);
+}
+.bubble-btn--active {
+  background: color-mix(in srgb, var(--paper) 24%, transparent);
+  color: var(--paper);
+}
+
+/* ─── Drawing Canvas Container ────────────────── */
+.drawing-canvas-container {
+  position: relative;
+  height: 400px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.drawing-canvas-container--focused {
+  border-color: var(--brand, var(--ring));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand, var(--ring)) 20%, transparent);
+}
+.drawing-canvas-container--selected {
+  border-color: var(--ring);
+}
+
+/* ─── Drawing Toolbar (custom floating) ───────── */
+.drawing-toolbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  animation: dtb-in 0.2s ease;
+}
+@keyframes dtb-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+.drawing-toolbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(8px);
+}
+.dtb-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.dtb-btn:hover {
+  background: var(--ink-100);
+  color: var(--ink-900);
+}
+.dtb-btn--active {
+  background: var(--brand, var(--ring));
+  color: var(--paper);
+}
+.dtb-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* Color popover */
+.dtb-color-wrapper {
+  position: relative;
+}
+.dtb-color-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  animation: dtb-in 0.15s ease;
+}
+.dtb-color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.dtb-color-swatch:hover {
+  transform: scale(1.15);
+  border-color: var(--ink-300);
+}
+
+/* ─── Dark mode overrides for new components ──── */
+.dark .editor-toolbar {
+  background: var(--paper);
+  border-bottom-color: var(--border);
+}
+.dark .toolbar-group {
+  background: color-mix(in srgb, var(--ink-100) 20%, transparent);
+}
+.dark .bubble-menu {
+  background: var(--paper-strong);
+  border: 1px solid var(--border);
+}
+.dark .bubble-btn {
+  color: var(--ink-700);
+}
+.dark .bubble-btn:hover {
+  background: color-mix(in srgb, var(--ink-100) 30%, transparent);
+}
+.dark .bubble-btn--active {
+  background: color-mix(in srgb, var(--ink-100) 40%, transparent);
+  color: var(--ink-900);
+}
+.dark .drawing-toolbar-inner {
+  background: var(--paper);
+  border-color: var(--border);
+}
+.dark .dtb-btn {
+  color: var(--ink-600);
+}
+.dark .dtb-btn:hover {
+  background: color-mix(in srgb, var(--ink-100) 30%, transparent);
+  color: var(--ink-900);
+}
+
+.dark .dtb-color-popover {
+  background: var(--paper);
+  border-color: var(--border);
 }
 
 /* ─── Tailwind Theme Token Bridge ─────────────── */

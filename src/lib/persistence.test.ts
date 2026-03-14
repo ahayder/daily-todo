@@ -29,14 +29,13 @@ describe("loadAppState", () => {
       STORAGE_KEY,
       JSON.stringify({
         dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", drawingStrokes: [], todos: [] },
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
         },
         notesDocs: {
           note_1: {
             id: "note_1",
             title: "Quick Notes",
             markdown: "",
-            drawingStrokes: [],
             updatedAt: "2026-03-11T08:00:00.000Z",
           },
         },
@@ -59,14 +58,13 @@ describe("loadAppState", () => {
       STORAGE_KEY,
       JSON.stringify({
         dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", drawingStrokes: [], todos: [] },
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
         },
         notesDocs: {
           note_1: {
             id: "note_1",
             title: "Quick Notes",
             markdown: "",
-            drawingStrokes: [],
             updatedAt: "2026-03-11T08:00:00.000Z",
           },
         },

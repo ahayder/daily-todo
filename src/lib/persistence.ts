@@ -59,6 +59,7 @@ export function loadAppState(now = new Date()): AppState {
         uiState: {
           ...validated.data.uiState,
           themeMode: validated.data.uiState.themeMode ?? "system",
+          categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
         },
       },
       todayISO,

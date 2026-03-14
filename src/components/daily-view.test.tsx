@@ -10,9 +10,6 @@ vi.mock("@/components/markdown-editor", () => ({
   MarkdownEditor: () => <div data-testid="markdown-editor" />,
 }));
 
-vi.mock("@/components/drawing-overlay", () => ({
-  DrawingOverlay: () => <div data-testid="drawing-overlay" />,
-}));
 
 function Harness() {
   const initial = createInitialState("2026-03-11");
@@ -38,22 +35,21 @@ describe("DailyView", () => {
     await userEvent.click(checkbox);
 
     const taskText = screen.getByText("Task one");
-    expect(taskText).toHaveClass("done");
+    expect(taskText).toHaveClass("task-text--done");
   });
 
   test("uses enter to add without an Add button", async () => {
     render(<Harness />);
 
     expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
-    expect(screen.getByText("Press", { exact: false })).toHaveTextContent("↵");
 
-    const input = screen.getByPlaceholderText("Add a task");
+    const input = screen.getByPlaceholderText("Add a critical task…");
     await userEvent.type(input, "Task two{enter}");
 
     expect(screen.getByText("Task two")).toBeInTheDocument();
   });
 
-  test("shows semantic priority headings, empty states, and count badges", () => {
+  test("shows semantic priority headings and empty states", () => {
     render(<Harness />);
 
     expect(screen.getByRole("heading", { name: "Critical" })).toBeInTheDocument();
@@ -62,9 +58,5 @@ describe("DailyView", () => {
 
     const emptyStates = screen.getAllByText("No tasks yet");
     expect(emptyStates).toHaveLength(2);
-
-    expect(screen.getByLabelText("Critical task count")).toHaveTextContent("1");
-    expect(screen.queryByLabelText("Important task count")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Someday task count")).not.toBeInTheDocument();
   });
 });

@@ -4,10 +4,9 @@ import { useMemo, useState, type Dispatch } from "react";
 import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { DrawingOverlay } from "@/components/drawing-overlay";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AppState, Priority } from "@/lib/types";
+import type { AppState, CategoryTheme, Priority } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
 import { CalendarDays, GripVertical, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,34 +16,44 @@ type Props = {
   dispatch: Dispatch<AppAction>;
 };
 
-const PRIORITY_META: Record<
+type PriorityLabels = {
+  label: string;
+  placeholder: string;
+};
+
+const PRIORITY_COLORS: Record<
   Priority,
-  {
-    label: string;
-    accentVar: string;
-    softVar: string;
-    placeholder: string;
-  }
+  { accentVar: string; softVar: string }
 > = {
-  1: {
-    label: "Critical",
-    accentVar: "--priority-1",
-    softVar: "--priority-1-soft",
-    placeholder: "Add a critical task…",
+  1: { accentVar: "--priority-1", softVar: "--priority-1-soft" },
+  2: { accentVar: "--priority-2", softVar: "--priority-2-soft" },
+  3: { accentVar: "--priority-3", softVar: "--priority-3-soft" },
+};
+
+const CATEGORY_LABELS: Record<CategoryTheme, Record<Priority, PriorityLabels>> = {
+  normal: {
+    1: { label: "Critical", placeholder: "Add a critical task…" },
+    2: { label: "Important", placeholder: "Add an important task…" },
+    3: { label: "Someday", placeholder: "Add a task for later…" },
   },
-  2: {
-    label: "Important",
-    accentVar: "--priority-2",
-    softVar: "--priority-2-soft",
-    placeholder: "Add an important task…",
+  adhd1: {
+    1: { label: "Must Do (Non-negotiable)", placeholder: "Add a must-do task…" },
+    2: { label: "Should Do", placeholder: "Add a should-do task…" },
+    3: { label: "Could Do", placeholder: "Add a could-do task…" },
   },
-  3: {
-    label: "Someday",
-    accentVar: "--priority-3",
-    softVar: "--priority-3-soft",
-    placeholder: "Add a task for later…",
+  adhd2: {
+    1: { label: "Today's Focus", placeholder: "Add a focus task…" },
+    2: { label: "Upcoming", placeholder: "Add an upcoming task…" },
+    3: { label: "Someday", placeholder: "Add a task for later…" },
   },
 };
+
+function getPriorityMeta(theme: CategoryTheme, priority: Priority) {
+  return {
+    ...PRIORITY_COLORS[priority],
+    ...CATEGORY_LABELS[theme][priority],
+  };
+}
 
 function InlineTaskInput({
   date,
@@ -54,7 +63,7 @@ function InlineTaskInput({
 }: {
   date: string;
   priority: Priority;
-  meta: (typeof PRIORITY_META)[Priority];
+  meta: ReturnType<typeof getPriorityMeta>;
   dispatch: Dispatch<AppAction>;
 }) {
   const [text, setText] = useState("");
@@ -136,12 +145,6 @@ export function DailyView({ state, dispatch }: Props) {
               dispatch({ type: "update-daily-markdown", date, markdown })
             }
           />
-          <DrawingOverlay
-            strokes={page.drawingStrokes}
-            onChange={(drawingStrokes) =>
-              dispatch({ type: "set-daily-drawing", date, drawingStrokes })
-            }
-          />
         </div>
       </div>
 
@@ -150,7 +153,7 @@ export function DailyView({ state, dispatch }: Props) {
         <div className="priority-groups">
           {([1, 2, 3] as const).map((priorityLevel) => {
             const todos = grouped[priorityLevel];
-            const meta = PRIORITY_META[priorityLevel];
+            const meta = getPriorityMeta(state.uiState.categoryTheme, priorityLevel);
 
             return (
               <div key={priorityLevel} className="priority-group">

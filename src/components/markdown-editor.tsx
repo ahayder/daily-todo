@@ -8,6 +8,10 @@ import TaskItem from "@tiptap/extension-task-item";
 import Underline from "@tiptap/extension-underline";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
+import { DrawingNode } from "./editor/drawing-node";
+import { EditorToolbar } from "./editor/editor-toolbar";
+import { EditorBubbleMenu } from "./editor/bubble-menu";
+import { SlashCommand } from "./editor/slash-command";
 
 type Props = {
   value: string;
@@ -32,10 +36,12 @@ export function MarkdownEditor({ value, onChange }: Props) {
       }),
       Underline,
       Markdown.configure({
-        html: false,
+        html: true,
         transformPastedText: true,
         transformCopiedText: true,
       }),
+      DrawingNode,
+      SlashCommand,
     ],
     content: value,
     editorProps: {
@@ -68,8 +74,12 @@ export function MarkdownEditor({ value, onChange }: Props) {
   }, [value, editor]);
 
   return (
-    <div className="tiptap-wrapper">
-      <EditorContent editor={editor} />
+    <div className="tiptap-wrapper flex flex-col h-full w-full">
+      <EditorToolbar editor={editor} />
+      <div className="relative flex-1">
+        <EditorBubbleMenu editor={editor} />
+        <EditorContent editor={editor} className="flex-1" />
+      </div>
     </div>
   );
 }
