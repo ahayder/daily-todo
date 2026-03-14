@@ -1,16 +1,6 @@
 import { z } from "zod";
 
-const pointSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-});
 
-const drawingStrokeSchema = z.object({
-  id: z.string(),
-  tool: z.enum(["pen", "eraser"]),
-  size: z.number().positive(),
-  points: z.array(pointSchema),
-});
 
 const todoSchema = z.object({
   id: z.string(),
@@ -23,7 +13,6 @@ const todoSchema = z.object({
 const dailyPageSchema = z.object({
   date: z.string(),
   markdown: z.string(),
-  drawingStrokes: z.array(drawingStrokeSchema),
   todos: z.array(todoSchema),
 });
 
@@ -31,7 +20,6 @@ const noteDocSchema = z.object({
   id: z.string(),
   title: z.string(),
   markdown: z.string(),
-  drawingStrokes: z.array(drawingStrokeSchema),
   updatedAt: z.string(),
 });
 
@@ -45,6 +33,7 @@ export const appStateSchema = z.object({
     expandedMonths: z.array(z.string()),
     lastView: z.enum(["daily", "notes"]),
     themeMode: z.enum(["light", "dark", "system"]).optional(),
+    categoryTheme: z.enum(["normal", "adhd1", "adhd2"]).optional(),
   }),
 });
 

@@ -11,7 +11,6 @@ export function createEmptyDailyPage(date: string): DailyPage {
   return {
     date,
     markdown: "",
-    drawingStrokes: [],
     todos: [],
   };
 }
@@ -31,7 +30,6 @@ export function createNoteDoc(title = "Untitled Note"): NoteDoc {
     id: makeId("note"),
     title,
     markdown: "",
-    drawingStrokes: [],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -52,6 +50,7 @@ export function createInitialState(todayISO: string): AppState {
       expandedMonths: [getYearMonth(todayISO)],
       lastView: "daily",
       themeMode: "system",
+      categoryTheme: "normal",
     },
   };
 }
@@ -93,7 +92,6 @@ export function ensureDailyPageForDate(state: AppState, todayISO: string): AppSt
   const nextPage: DailyPage = {
     date: todayISO,
     markdown: previous?.markdown ?? "",
-    drawingStrokes: [],
     todos: previous ? cloneCarryoverTodos(previous.todos) : [],
   };
 

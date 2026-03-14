@@ -20,7 +20,7 @@ import {
 } from "@/lib/store";
 import type {
   AppState,
-  DrawingStroke,
+  CategoryTheme,
   Priority,
   ThemeMode,
   ViewMode,
@@ -29,11 +29,11 @@ import type {
 export type AppAction =
   | { type: "set-view"; view: ViewMode }
   | { type: "set-theme-mode"; themeMode: ThemeMode }
+  | { type: "set-category-theme"; theme: CategoryTheme }
   | { type: "select-daily"; date: string }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
   | { type: "update-daily-markdown"; date: string; markdown: string }
-  | { type: "set-daily-drawing"; date: string; drawingStrokes: DrawingStroke[] }
   | { type: "add-todo"; date: string; text: string; priority: Priority }
   | { type: "toggle-todo"; date: string; todoId: string }
   | { type: "delete-todo"; date: string; todoId: string }
@@ -41,8 +41,7 @@ export type AppAction =
   | { type: "select-note"; noteId: string }
   | { type: "rename-note"; noteId: string; title: string }
   | { type: "delete-note"; noteId: string }
-  | { type: "update-note-markdown"; noteId: string; markdown: string }
-  | { type: "set-note-drawing"; noteId: string; drawingStrokes: DrawingStroke[] };
+  | { type: "update-note-markdown"; noteId: string; markdown: string };
 
 function toggleString(list: string[], value: string): string[] {
   if (list.includes(value)) {
@@ -87,6 +86,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           themeMode: action.themeMode,
         },
       };
+    case "set-category-theme":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          categoryTheme: action.theme,
+        },
+      };
     case "select-daily":
       return {
         ...state,
@@ -122,20 +129,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           [action.date]: {
             ...page,
             markdown: action.markdown,
-          },
-        },
-      };
-    }
-    case "set-daily-drawing": {
-      const page = state.dailyPages[action.date];
-      if (!page) return state;
-      return {
-        ...state,
-        dailyPages: {
-          ...state.dailyPages,
-          [action.date]: {
-            ...page,
-            drawingStrokes: action.drawingStrokes,
           },
         },
       };
@@ -248,21 +241,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           [action.noteId]: {
             ...note,
             markdown: action.markdown,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-      };
-    }
-    case "set-note-drawing": {
-      const note = state.notesDocs[action.noteId];
-      if (!note) return state;
-      return {
-        ...state,
-        notesDocs: {
-          ...state.notesDocs,
-          [action.noteId]: {
-            ...note,
-            drawingStrokes: action.drawingStrokes,
             updatedAt: new Date().toISOString(),
           },
         },
