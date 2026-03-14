@@ -2,8 +2,8 @@ import { Extension } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { type Instance } from "tippy.js";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { Heading1, Heading2, List, ListTodo, PenTool } from "lucide-react";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { Heading1, Heading2, List, ListTodo, PenTool, Type } from "lucide-react";
 
 type CommandProps = {
   editor: any;
@@ -17,6 +17,13 @@ type CommandItem = {
 };
 
 const COMMANDS: CommandItem[] = [
+  {
+    title: "Normal Text",
+    icon: <Type size={18} />,
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setNode("paragraph").run();
+    },
+  },
   {
     title: "Heading 1",
     icon: <Heading1 size={18} />,

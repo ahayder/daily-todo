@@ -34,6 +34,8 @@ export const appStateSchema = z.object({
     lastView: z.enum(["daily", "notes"]),
     themeMode: z.enum(["light", "dark", "system"]).optional(),
     categoryTheme: z.enum(["normal", "adhd1", "adhd2"]).optional(),
+    isFocusMode: z.boolean().optional(),
+    focusedTodoId: z.string().nullable().optional(),
   }),
 });
 

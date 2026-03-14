@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Sun, Moon, Monitor, Brain } from "lucide-react";
+import { Sun, Moon, Monitor, Brain, Target } from "lucide-react";
 import { useState, useEffect, type Dispatch } from "react";
 import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
@@ -94,6 +94,23 @@ export function TopNavbar({ state, dispatch }: Props) {
 
       {/* Right: toggles */}
       <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: "set-focus-mode", isFocus: !state.uiState.isFocusMode });
+              }}
+              aria-label="Toggle Focus Mode"
+              className={cn("theme-cycle-btn", state.uiState.isFocusMode && "text-[var(--brand)] bg-[var(--brand-soft)]")}
+            >
+              <Target className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {state.uiState.isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <button

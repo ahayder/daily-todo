@@ -29,10 +29,12 @@ export function Workspace({ forcedView }: Props) {
         dispatch={dispatch}
       />
       <div className="app-body">
-        <Sidebar
-          state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
-          dispatch={dispatch}
-        />
+        {!state.uiState.isFocusMode && (
+          <Sidebar
+            state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
+            dispatch={dispatch}
+          />
+        )}
         <main className="main-panel">
           {activeView === "daily" ? (
             <DailyView state={state} dispatch={dispatch} />

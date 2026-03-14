@@ -15,13 +15,14 @@ export function createEmptyDailyPage(date: string): DailyPage {
   };
 }
 
-export function createTodo(text: string, priority: Priority): Todo {
+export function createTodo(text: string, priority: Priority, parentId?: string): Todo {
   return {
     id: makeId("todo"),
     text,
     priority,
     done: false,
     createdAt: new Date().toISOString(),
+    parentId,
   };
 }
 
@@ -51,6 +52,8 @@ export function createInitialState(todayISO: string): AppState {
       lastView: "daily",
       themeMode: "system",
       categoryTheme: "normal",
+      isFocusMode: false,
+      focusedTodoId: null,
     },
   };
 }

@@ -60,6 +60,8 @@ export function loadAppState(now = new Date()): AppState {
           ...validated.data.uiState,
           themeMode: validated.data.uiState.themeMode ?? "system",
           categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
+          isFocusMode: validated.data.uiState.isFocusMode ?? false,
+          focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
         },
       },
       todayISO,

@@ -34,14 +34,17 @@ export type AppAction =
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
   | { type: "update-daily-markdown"; date: string; markdown: string }
-  | { type: "add-todo"; date: string; text: string; priority: Priority }
+  | { type: "add-todo"; date: string; text: string; priority: Priority; parentId?: string }
   | { type: "toggle-todo"; date: string; todoId: string }
   | { type: "delete-todo"; date: string; todoId: string }
   | { type: "create-note"; title?: string }
   | { type: "select-note"; noteId: string }
   | { type: "rename-note"; noteId: string; title: string }
   | { type: "delete-note"; noteId: string }
-  | { type: "update-note-markdown"; noteId: string; markdown: string };
+  | { type: "update-note-markdown"; noteId: string; markdown: string }
+  | { type: "edit-todo"; date: string; todoId: string; text: string }
+  | { type: "move-todo-priority"; date: string; todoId: string; newPriority: Priority; newIndex: number }
+  | { type: "set-focus-mode"; isFocus: boolean; todoId?: string | null };
 
 function toggleString(list: string[], value: string): string[] {
   if (list.includes(value)) {
@@ -94,6 +97,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           categoryTheme: action.theme,
         },
       };
+    case "set-focus-mode":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          isFocusMode: action.isFocus,
+          focusedTodoId: action.todoId ?? null,
+        },
+      };
     case "select-daily":
       return {
         ...state,
@@ -142,7 +154,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.dailyPages,
           [action.date]: {
             ...page,
-            todos: [...page.todos, createTodo(action.text.trim(), action.priority)],
+            todos: [...page.todos, createTodo(action.text.trim(), action.priority, action.parentId)],
           },
         },
       };
@@ -159,6 +171,59 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             todos: page.todos.map((todo) =>
               todo.id === action.todoId ? { ...todo, done: !todo.done } : todo,
             ),
+          },
+        },
+      };
+    }
+    case "edit-todo": {
+      const page = state.dailyPages[action.date];
+      if (!page || !action.text.trim()) return state;
+      return {
+        ...state,
+        dailyPages: {
+          ...state.dailyPages,
+          [action.date]: {
+            ...page,
+            todos: page.todos.map((todo) =>
+              todo.id === action.todoId ? { ...todo, text: action.text.trim() } : todo,
+            ),
+          },
+        },
+      };
+    }
+    case "move-todo-priority": {
+      const page = state.dailyPages[action.date];
+      if (!page) return state;
+
+      const todoIndex = page.todos.findIndex((t) => t.id === action.todoId);
+      if (todoIndex === -1) return state;
+
+      const todo = page.todos[todoIndex];
+      const newTodos = [...page.todos];
+
+      // Remove from old position
+      newTodos.splice(todoIndex, 1);
+
+      // We need to insert it at the right index within the new priority group.
+      // But page.todos is a flat list. We need to find the absolute insertion index.
+      const todosInNewPriority = newTodos.filter((t) => t.priority === action.newPriority);
+      const insertAtRelative = Math.min(Math.max(0, action.newIndex), todosInNewPriority.length);
+      
+      let absoluteInsertIndex = newTodos.length;
+      if (insertAtRelative < todosInNewPriority.length) {
+          const targetTodoId = todosInNewPriority[insertAtRelative].id;
+          absoluteInsertIndex = newTodos.findIndex((t) => t.id === targetTodoId);
+      }
+
+      newTodos.splice(absoluteInsertIndex, 0, { ...todo, priority: action.newPriority });
+
+      return {
+        ...state,
+        dailyPages: {
+          ...state.dailyPages,
+          [action.date]: {
+            ...page,
+            todos: newTodos,
           },
         },
       };

@@ -12,6 +12,7 @@ export type Todo = {
   priority: Priority;
   done: boolean;
   createdAt: string;
+  parentId?: string;
 };
 
 export type DailyPage = {
@@ -35,6 +36,8 @@ export type UIState = {
   lastView: ViewMode;
   themeMode: ThemeMode;
   categoryTheme: CategoryTheme;
+  isFocusMode: boolean;
+  focusedTodoId: string | null;
 };
 
 export type AppState = {
