@@ -5,10 +5,10 @@ import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
 import { getSortedDailyDates } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
-import { useState, useEffect, type Dispatch } from "react";
+import { useSyncExternalStore, type Dispatch } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { CalendarDays, FileText, Plus, ChevronRight } from "lucide-react";
+import { CalendarDays, Copy, FileText, Plus, ChevronRight, PanelsTopLeft, Trash2 } from "lucide-react";
 
 type Props = {
   state: AppState;
@@ -16,13 +16,17 @@ type Props = {
 };
 
 export function Sidebar({ state, dispatch }: Props) {
-  const sortedDates = getSortedDailyDates(state);
-  const [mounted, setMounted] = useState(false);
-  const todayISO = mounted ? toISODate(new Date()) : "";
+  if (state.uiState.isSidebarCollapsed) {
+    return null;
+  }
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const sortedDates = getSortedDailyDates(state);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const todayISO = mounted ? toISODate(new Date()) : "";
 
   const groupedYears = new Map<string, Map<string, string[]>>();
 
@@ -43,8 +47,12 @@ export function Sidebar({ state, dispatch }: Props) {
   const notes = Object.values(state.notesDocs).sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
   );
+  const plannerPresets = Object.values(state.plannerPresets).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
 
   const isDailyView = !mounted || state.uiState.lastView === "daily";
+  const isPlannerView = mounted && state.uiState.lastView === "planner";
 
   return (
     <aside className="sidebar">
@@ -66,17 +74,47 @@ export function Sidebar({ state, dispatch }: Props) {
       {!isDailyView && mounted && (
         <div className="sidebar-section-header">
           <span className="sidebar-section-label">
-            <FileText className="h-3.5 w-3.5" />
-            Notes
+            {isPlannerView ? (
+              <>
+                <PanelsTopLeft className="h-3.5 w-3.5" />
+                Planner Presets
+              </>
+            ) : (
+              <>
+                <FileText className="h-3.5 w-3.5" />
+                Notes
+              </>
+            )}
           </span>
-          <button
-            type="button"
-            className="sidebar-add-btn"
-            onClick={() => dispatch({ type: "create-note" })}
-            aria-label="New note"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {isPlannerView && state.uiState.selectedPlannerPresetId && (
+              <button
+                type="button"
+                className="sidebar-add-btn"
+                onClick={() =>
+                  dispatch({
+                    type: "duplicate-planner-preset",
+                    presetId: state.uiState.selectedPlannerPresetId!,
+                  })
+                }
+                aria-label="Duplicate preset"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="sidebar-add-btn"
+              onClick={() =>
+                isPlannerView
+                  ? dispatch({ type: "create-planner-preset" })
+                  : dispatch({ type: "create-note" })
+              }
+              aria-label={isPlannerView ? "New preset" : "New note"}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -153,6 +191,43 @@ export function Sidebar({ state, dispatch }: Props) {
                   </div>
                 );
               })}
+          </div>
+        ) : isPlannerView ? (
+          <div className="notes-list">
+            {plannerPresets.map((preset) => (
+              <div
+                key={preset.id}
+                className={cn(
+                  "sidebar-item-row",
+                  state.uiState.selectedPlannerPresetId === preset.id && "sidebar-item-row--active",
+                )}
+              >
+                <button
+                  type="button"
+                  className={cn(
+                    "note-item sidebar-item-button",
+                    state.uiState.selectedPlannerPresetId === preset.id && "note-item--active",
+                  )}
+                  onClick={() => dispatch({ type: "select-planner-preset", presetId: preset.id })}
+                >
+                  <span className="note-item-title">{preset.name}</span>
+                  <span className="note-item-date">
+                    {new Date(preset.updatedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-row-action sidebar-row-action--danger"
+                  onClick={() => dispatch({ type: "delete-planner-preset", presetId: preset.id })}
+                  aria-label={`Delete ${preset.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="notes-list">

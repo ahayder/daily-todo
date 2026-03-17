@@ -12,7 +12,9 @@ describe("loadAppState", () => {
 
     expect(state.dailyPages["2026-03-11"]).toBeDefined();
     expect(Object.keys(state.notesDocs).length).toBeGreaterThan(0);
+    expect(Object.keys(state.plannerPresets).length).toBeGreaterThan(0);
     expect(state.uiState.themeMode).toBe("system");
+    expect(state.uiState.isSidebarCollapsed).toBe(false);
   });
 
   test("falls back when schema is invalid", () => {
@@ -81,5 +83,67 @@ describe("loadAppState", () => {
 
     const state = loadAppState(new Date("2026-03-11T08:00:00"));
     expect(state.uiState.themeMode).toBe("system");
+  });
+
+  test("backfills planner state for older payloads", () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {
+          note_1: {
+            id: "note_1",
+            title: "Quick Notes",
+            markdown: "",
+            updatedAt: "2026-03-11T08:00:00.000Z",
+          },
+        },
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: "note_1",
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "daily",
+        },
+      }),
+    );
+
+    const state = loadAppState(new Date("2026-03-11T08:00:00"));
+
+    expect(Object.keys(state.plannerPresets)).toHaveLength(1);
+    expect(state.uiState.selectedPlannerPresetId).toBeTruthy();
+  });
+
+  test("normalizes missing sidebar state to expanded", () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {
+          note_1: {
+            id: "note_1",
+            title: "Quick Notes",
+            markdown: "",
+            updatedAt: "2026-03-11T08:00:00.000Z",
+          },
+        },
+        plannerPresets: {},
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: "note_1",
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "daily",
+        },
+      }),
+    );
+
+    const state = loadAppState(new Date("2026-03-11T08:00:00"));
+    expect(state.uiState.isSidebarCollapsed).toBe(false);
   });
 });
