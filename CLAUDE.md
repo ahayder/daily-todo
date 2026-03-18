@@ -101,6 +101,10 @@ The app was visually analyzed against 20 common UI design styles. The running ap
 4. **Generous Breathing Room** — Whitespace is structural, not wasted. Cards and sections breathe. When in doubt, add space.
 5. **Soft Structure** — Warm-tinted borders (`--line`), warm-tinted shadows (rgba amber-tinted, never cool gray), `rounded-2xl` cards, `rounded-[10px]` inputs/buttons.
 
+### Styling Removal Rule
+
+When asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome, etc.), prefer deleting or simplifying the original styling rule instead of adding a new override that turns it off. Only add an override when the original rule must stay because it is still required by another component/state and cannot be cleanly split yet. Default approach: reduce CSS, do not layer more CSS to negate old CSS.
+
 ### Design Tokens
 
 ```css
