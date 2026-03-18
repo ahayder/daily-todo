@@ -549,14 +549,9 @@ select {
   height: 0;
 }
 
-.tiptap-editor ul {
-  padding-left: 1.5em;
-  list-style-type: disc;
-}
-
+.tiptap-editor ul,
 .tiptap-editor ol {
   padding-left: 1.5em;
-  list-style-type: decimal;
 }
 
 .tiptap-editor ul li,
@@ -607,7 +602,7 @@ select {
 
 .tiptap-editor ul[data-type="taskList"] li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.7em;
   min-height: 1.9em;
 }
@@ -617,7 +612,7 @@ select {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  margin-top: 0.25em;
+  margin-top: 0;
   line-height: 1;
 }
 
