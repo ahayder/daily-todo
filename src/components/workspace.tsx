@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { DailyView } from "@/components/daily-view";
 import { NotesView } from "@/components/notes-view";
+import { PlannerView } from "@/components/planner-view";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { useAppState } from "@/components/app-context";
@@ -28,7 +29,9 @@ export function Workspace({ forcedView }: Props) {
         state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
         dispatch={dispatch}
       />
-      <div className="app-body">
+      <div
+        className={state.uiState.isSidebarCollapsed ? "app-body app-body--sidebar-collapsed" : "app-body"}
+      >
         {!state.uiState.isFocusMode && (
           <Sidebar
             state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
@@ -38,6 +41,8 @@ export function Workspace({ forcedView }: Props) {
         <main className="main-panel">
           {activeView === "daily" ? (
             <DailyView state={state} dispatch={dispatch} />
+          ) : activeView === "planner" ? (
+            <PlannerView state={state} dispatch={dispatch} />
           ) : (
             <NotesView state={state} dispatch={dispatch} />
           )}

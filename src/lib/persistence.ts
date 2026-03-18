@@ -1,14 +1,18 @@
 import { toISODate } from "@/lib/date";
 import { appStateSchema } from "@/lib/schema";
-import { createInitialState, ensureDailyPageForDate, STORAGE_KEY } from "@/lib/store";
+import { createInitialState, ensureDailyPageForDate, ensurePlannerState, STORAGE_KEY } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
-function normalizeThemeMode(parsed: unknown): unknown {
+function normalizeLegacyState(parsed: unknown): unknown {
   if (!parsed || typeof parsed !== "object") return parsed;
   const candidate = parsed as {
     uiState?: {
       themeMode?: unknown;
+      lastView?: unknown;
+      selectedPlannerPresetId?: unknown;
+      isSidebarCollapsed?: unknown;
     };
+    plannerPresets?: unknown;
   };
 
   if (!candidate.uiState || typeof candidate.uiState !== "object") {
@@ -16,15 +20,37 @@ function normalizeThemeMode(parsed: unknown): unknown {
   }
 
   const themeMode = candidate.uiState.themeMode;
-  if (themeMode === "light" || themeMode === "dark" || themeMode === "system") {
-    return parsed;
-  }
+  const normalizedThemeMode =
+    themeMode === "light" || themeMode === "dark" || themeMode === "system"
+      ? themeMode
+      : "system";
+
+  const normalizedLastView =
+    candidate.uiState.lastView === "daily" ||
+    candidate.uiState.lastView === "notes" ||
+    candidate.uiState.lastView === "planner"
+      ? candidate.uiState.lastView
+      : "daily";
 
   return {
     ...candidate,
+    plannerPresets:
+      candidate.plannerPresets && typeof candidate.plannerPresets === "object"
+        ? candidate.plannerPresets
+        : {},
     uiState: {
       ...candidate.uiState,
-      themeMode: "system",
+      themeMode: normalizedThemeMode,
+      lastView: normalizedLastView,
+      selectedPlannerPresetId:
+        typeof candidate.uiState.selectedPlannerPresetId === "string" ||
+        candidate.uiState.selectedPlannerPresetId === null
+          ? candidate.uiState.selectedPlannerPresetId
+          : null,
+      isSidebarCollapsed:
+        typeof candidate.uiState.isSidebarCollapsed === "boolean"
+          ? candidate.uiState.isSidebarCollapsed
+          : false,
     },
   };
 }
@@ -44,7 +70,7 @@ export function loadAppState(now = new Date()): AppState {
   }
 
   try {
-    const parsed = normalizeThemeMode(JSON.parse(raw));
+    const parsed = normalizeLegacyState(JSON.parse(raw));
     const validated = appStateSchema.safeParse(parsed);
 
     if (!validated.success) {
@@ -53,17 +79,21 @@ export function loadAppState(now = new Date()): AppState {
       return fallback;
     }
 
-    const rolled = ensureDailyPageForDate(
-      {
-        ...validated.data,
-        uiState: {
-          ...validated.data.uiState,
-          themeMode: validated.data.uiState.themeMode ?? "system",
-          categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
-          isFocusMode: validated.data.uiState.isFocusMode ?? false,
-          focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
-        },
+    const normalizedState = ensurePlannerState({
+      ...validated.data,
+      uiState: {
+        ...validated.data.uiState,
+        themeMode: validated.data.uiState.themeMode ?? "system",
+        categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
+        isFocusMode: validated.data.uiState.isFocusMode ?? false,
+        focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
+        selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
+        isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
       },
+    });
+
+    const rolled = ensureDailyPageForDate(
+      normalizedState,
       todayISO,
     );
     saveAppState(rolled);

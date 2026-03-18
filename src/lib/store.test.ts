@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { createInitialState, ensureDailyPageForDate, groupTodosByPriority } from "@/lib/store";
+import {
+  createInitialState,
+  createPlannerPreset,
+  duplicatePlannerPreset,
+  ensureDailyPageForDate,
+  ensurePlannerState,
+  groupTodosByPriority,
+} from "@/lib/store";
 import type { Todo } from "@/lib/types";
 
 describe("ensureDailyPageForDate", () => {
@@ -54,5 +61,44 @@ describe("groupTodosByPriority", () => {
     expect(grouped[1].map((item) => item.text)).toEqual(["p1 open"]);
     expect(grouped[2].map((item) => item.text)).toEqual(["p2 open", "p2 done"]);
     expect(grouped[3]).toEqual([]);
+  });
+});
+
+describe("planner state", () => {
+  test("seeds a default planner preset in initial state", () => {
+    const state = createInitialState("2026-03-11");
+    const presetIds = Object.keys(state.plannerPresets);
+
+    expect(presetIds).toHaveLength(1);
+    expect(state.uiState.selectedPlannerPresetId).toBe(presetIds[0]);
+    expect(state.plannerPresets[presetIds[0]].dayOrder).toHaveLength(7);
+  });
+
+  test("backfills planner state when missing", () => {
+    const state = createInitialState("2026-03-11");
+    const { ...rest } = state;
+    const repaired = ensurePlannerState({
+      ...rest,
+      plannerPresets: {},
+      uiState: {
+        ...rest.uiState,
+        selectedPlannerPresetId: null,
+      },
+    });
+
+    expect(Object.keys(repaired.plannerPresets)).toHaveLength(1);
+    expect(repaired.uiState.selectedPlannerPresetId).toBeTruthy();
+  });
+
+  test("duplicates a preset with separate day titles", () => {
+    const preset = createPlannerPreset("Focus Week");
+    preset.days.monday.title = "Deep Work Monday";
+    const copy = duplicatePlannerPreset(preset);
+
+    copy.days.monday.title = "Recovery Monday";
+
+    expect(copy.id).not.toBe(preset.id);
+    expect(copy.days.monday.title).toBe("Recovery Monday");
+    expect(preset.days.monday.title).toBe("Deep Work Monday");
   });
 });

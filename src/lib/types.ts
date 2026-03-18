@@ -1,10 +1,46 @@
 export type Priority = 1 | 2 | 3;
 
-export type ViewMode = "daily" | "notes";
+export type ViewMode = "daily" | "notes" | "planner";
 export type ThemeMode = "light" | "dark" | "system";
 export type CategoryTheme = "normal" | "adhd1" | "adhd2";
+export type PlannerDayKey =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+export type PlannerEventColor =
+  | "teal"
+  | "gold"
+  | "rose"
+  | "sage"
+  | "lavender";
 
+export type PlannerEvent = {
+  id: string;
+  dayKey: PlannerDayKey;
+  title: string;
+  startMinutes: number;
+  endMinutes: number;
+  color: PlannerEventColor;
+  notes: string;
+};
 
+export type PlannerDay = {
+  key: PlannerDayKey;
+  title: string;
+  events: PlannerEvent[];
+};
+
+export type PlannerPreset = {
+  id: string;
+  name: string;
+  dayOrder: PlannerDayKey[];
+  days: Record<PlannerDayKey, PlannerDay>;
+  updatedAt: string;
+};
 
 export type Todo = {
   id: string;
@@ -31,6 +67,8 @@ export type NoteDoc = {
 export type UIState = {
   selectedDailyDate: string | null;
   selectedNoteId: string | null;
+  selectedPlannerPresetId: string | null;
+  isSidebarCollapsed: boolean;
   expandedYears: string[];
   expandedMonths: string[];
   lastView: ViewMode;
@@ -43,5 +81,6 @@ export type UIState = {
 export type AppState = {
   dailyPages: Record<string, DailyPage>;
   notesDocs: Record<string, NoteDoc>;
+  plannerPresets: Record<string, PlannerPreset>;
   uiState: UIState;
 };

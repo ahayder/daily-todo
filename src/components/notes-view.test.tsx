@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { NotesView } from "@/components/notes-view";
 import type { AppState } from "@/lib/types";
+import { createInitialState } from "@/lib/store";
 
 vi.mock("@/components/markdown-editor", () => ({
   MarkdownEditor: () => <div data-testid="markdown-editor" />,
@@ -12,32 +13,17 @@ vi.mock("@/components/markdown-editor", () => ({
 describe("NotesView", () => {
   test("confirms before deleting a note", async () => {
     const dispatch = vi.fn();
-    const state: AppState = {
-      dailyPages: {
-        "2026-03-11": {
-          date: "2026-03-11",
-          markdown: "",
-          todos: [],
-        },
-      },
-      notesDocs: {
-        note1: {
-          id: "note1",
-          title: "Quick Notes",
-          markdown: "",
-          updatedAt: "2026-03-11T10:00:00.000Z",
-        },
-      },
-      uiState: {
-        selectedDailyDate: "2026-03-11",
-        selectedNoteId: "note1",
-        expandedYears: ["2026"],
-        expandedMonths: ["2026-03"],
-        lastView: "notes",
-        themeMode: "system",
-        categoryTheme: "normal",
+    const state: AppState = createInitialState("2026-03-11");
+    state.notesDocs = {
+      note1: {
+        id: "note1",
+        title: "Quick Notes",
+        markdown: "",
+        updatedAt: "2026-03-11T10:00:00.000Z",
       },
     };
+    state.uiState.selectedNoteId = "note1";
+    state.uiState.lastView = "notes";
 
     render(<NotesView state={state} dispatch={dispatch} />);
 

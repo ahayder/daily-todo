@@ -61,6 +61,79 @@ describe("appReducer theme mode", () => {
     const next = appReducer(initial, { type: "set-theme-mode", themeMode: "dark" });
     expect(next.uiState.themeMode).toBe("dark");
   });
+
+  test("toggles shared sidebar collapsed state", () => {
+    const initial = createInitialState("2026-03-11");
+
+    const collapsed = appReducer(initial, { type: "toggle-sidebar-collapsed" });
+    expect(collapsed.uiState.isSidebarCollapsed).toBe(true);
+
+    const reopened = appReducer(collapsed, { type: "set-sidebar-collapsed", isCollapsed: false });
+    expect(reopened.uiState.isSidebarCollapsed).toBe(false);
+  });
+
+  test("creates and updates planner events", () => {
+    const initial = createInitialState("2026-03-11");
+    const presetId = initial.uiState.selectedPlannerPresetId!;
+
+    const created = appReducer(initial, {
+      type: "create-planner-event",
+      presetId,
+      dayKey: "monday",
+      title: "Deep Work",
+      startMinutes: 480,
+      endMinutes: 600,
+      color: "teal",
+      notes: "Phone off",
+    });
+
+    const event = created.plannerPresets[presetId].days.monday.events[0];
+    expect(event.title).toBe("Deep Work");
+
+    const updated = appReducer(created, {
+      type: "update-planner-event",
+      presetId,
+      dayKey: "monday",
+      eventId: event.id,
+      updates: {
+        title: "Deep Work Sprint",
+        color: "gold",
+      },
+    });
+
+    expect(updated.plannerPresets[presetId].days.monday.events[0].title).toBe("Deep Work Sprint");
+    expect(updated.plannerPresets[presetId].days.monday.events[0].color).toBe("gold");
+  });
+
+  test("deletes planner presets and keeps planner selectable", () => {
+    const initial = createInitialState("2026-03-11");
+    const firstPresetId = initial.uiState.selectedPlannerPresetId!;
+    const withSecondPreset = appReducer(initial, { type: "create-planner-preset", name: "Alt Week" });
+    const secondPresetId = withSecondPreset.uiState.selectedPlannerPresetId!;
+
+    const deletedSelected = appReducer(withSecondPreset, {
+      type: "delete-planner-preset",
+      presetId: secondPresetId,
+    });
+
+    expect(deletedSelected.plannerPresets[firstPresetId]).toBeDefined();
+    expect(deletedSelected.uiState.selectedPlannerPresetId).toBe(firstPresetId);
+
+    const recreated = appReducer(
+      {
+        ...initial,
+        uiState: { ...initial.uiState, lastView: "planner" },
+      },
+      {
+        type: "delete-planner-preset",
+        presetId: firstPresetId,
+      },
+    );
+
+    expect(Object.keys(recreated.plannerPresets)).toHaveLength(1);
+    expect(recreated.uiState.selectedPlannerPresetId).toBeTruthy();
+    expect(recreated.uiState.lastView).toBe("planner");
+  });
 });
 
 describe("AppProvider theme class behavior", () => {

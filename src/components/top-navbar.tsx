@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Sun, Moon, Monitor, Brain, Target } from "lucide-react";
-import { useState, useEffect, type Dispatch } from "react";
+import { Sun, Moon, Monitor, Brain, Target, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useSyncExternalStore, type Dispatch } from "react";
 import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
 import { cn } from "@/lib/utils";
@@ -34,11 +34,11 @@ const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
 };
 
 export function TopNavbar({ state, dispatch }: Props) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const themeMode = mounted ? state.uiState.themeMode : "system";
   const ThemeIcon = THEME_ICONS[themeMode];
@@ -53,11 +53,28 @@ export function TopNavbar({ state, dispatch }: Props) {
   const lastView = state.uiState.lastView;
   const isDaily = !mounted || lastView === "daily";
   const isNotes = mounted && lastView === "notes";
+  const isPlanner = mounted && lastView === "planner";
+  const SidebarIcon = state.uiState.isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
     <header className="top-navbar">
       {/* Left: App name */}
       <div className="flex items-center gap-2.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "toggle-sidebar-collapsed" })}
+              aria-label={state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+              className="theme-cycle-btn"
+            >
+              <SidebarIcon className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+          </TooltipContent>
+        </Tooltip>
         <div className="app-logo" aria-hidden="true" />
         <span className="text-[15px] font-semibold tracking-wide text-[var(--ink-900)]">
           DailyTodo
@@ -89,6 +106,18 @@ export function TopNavbar({ state, dispatch }: Props) {
           onClick={() => dispatch({ type: "set-view", view: "notes" })}
         >
           Notes
+        </Link>
+        <Link
+          href="/planner"
+          role="tab"
+          aria-selected={isPlanner}
+          className={cn(
+            "nav-pill",
+            isPlanner && "nav-pill--active",
+          )}
+          onClick={() => dispatch({ type: "set-view", view: "planner" })}
+        >
+          Planner
         </Link>
       </nav>
 

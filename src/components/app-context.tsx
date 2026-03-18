@@ -13,14 +13,20 @@ import {
 import { toISODate } from "@/lib/date";
 import { loadAppState, saveAppState } from "@/lib/persistence";
 import {
+  createPlannerEvent,
+  createPlannerPreset,
   createNoteDoc,
   createTodo,
+  duplicatePlannerPreset,
   ensureDailyPageForDate,
+  ensurePlannerState,
   getSortedDailyDates,
 } from "@/lib/store";
 import type {
   AppState,
   CategoryTheme,
+  PlannerDayKey,
+  PlannerEventColor,
   Priority,
   ThemeMode,
   ViewMode,
@@ -28,6 +34,8 @@ import type {
 
 export type AppAction =
   | { type: "set-view"; view: ViewMode }
+  | { type: "toggle-sidebar-collapsed" }
+  | { type: "set-sidebar-collapsed"; isCollapsed: boolean }
   | { type: "set-theme-mode"; themeMode: ThemeMode }
   | { type: "set-category-theme"; theme: CategoryTheme }
   | { type: "select-daily"; date: string }
@@ -42,6 +50,36 @@ export type AppAction =
   | { type: "rename-note"; noteId: string; title: string }
   | { type: "delete-note"; noteId: string }
   | { type: "update-note-markdown"; noteId: string; markdown: string }
+  | { type: "select-planner-preset"; presetId: string }
+  | { type: "create-planner-preset"; name?: string }
+  | { type: "duplicate-planner-preset"; presetId: string }
+  | { type: "delete-planner-preset"; presetId: string }
+  | { type: "rename-planner-preset"; presetId: string; name: string }
+  | { type: "rename-planner-day"; presetId: string; dayKey: PlannerDayKey; title: string }
+  | {
+      type: "create-planner-event";
+      presetId: string;
+      dayKey: PlannerDayKey;
+      title?: string;
+      startMinutes: number;
+      endMinutes: number;
+      color?: PlannerEventColor;
+      notes?: string;
+    }
+  | {
+      type: "update-planner-event";
+      presetId: string;
+      dayKey: PlannerDayKey;
+      eventId: string;
+      updates: Partial<{
+        title: string;
+        startMinutes: number;
+        endMinutes: number;
+        color: PlannerEventColor;
+        notes: string;
+      }>;
+    }
+  | { type: "delete-planner-event"; presetId: string; dayKey: PlannerDayKey; eventId: string }
   | { type: "edit-todo"; date: string; todoId: string; text: string }
   | { type: "move-todo-priority"; date: string; todoId: string; newPriority: Priority; newIndex: number }
   | { type: "set-focus-mode"; isFocus: boolean; todoId?: string | null };
@@ -71,6 +109,29 @@ function ensureSelectedNoteId(state: AppState): string {
   return first;
 }
 
+function ensureSelectedPlannerPresetId(state: AppState): string {
+  const existing = state.uiState.selectedPlannerPresetId;
+  if (existing && state.plannerPresets[existing]) {
+    return existing;
+  }
+  const first = Object.keys(state.plannerPresets)[0];
+  return first;
+}
+
+function clampPlannerMinutes(value: number): number {
+  return Math.min(24 * 60, Math.max(0, value));
+}
+
+function normalizePlannerRange(startMinutes: number, endMinutes: number) {
+  const start = clampPlannerMinutes(Math.min(startMinutes, endMinutes));
+  const end = clampPlannerMinutes(Math.max(startMinutes, endMinutes));
+
+  return {
+    startMinutes: start,
+    endMinutes: Math.max(start + 30, end),
+  };
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "set-view":
@@ -79,6 +140,22 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           lastView: action.view,
+        },
+      };
+    case "toggle-sidebar-collapsed":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          isSidebarCollapsed: !state.uiState.isSidebarCollapsed,
+        },
+      };
+    case "set-sidebar-collapsed":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          isSidebarCollapsed: action.isCollapsed,
         },
       };
     case "set-theme-mode":
@@ -257,6 +334,221 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
       };
     }
+    case "select-planner-preset":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          selectedPlannerPresetId: action.presetId,
+          lastView: "planner",
+        },
+      };
+    case "create-planner-preset": {
+      const preset = createPlannerPreset(action.name);
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [preset.id]: preset,
+        },
+        uiState: {
+          ...state.uiState,
+          selectedPlannerPresetId: preset.id,
+          lastView: "planner",
+        },
+      };
+    }
+    case "duplicate-planner-preset": {
+      const source = state.plannerPresets[action.presetId];
+      if (!source) return state;
+      const preset = duplicatePlannerPreset(source);
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [preset.id]: preset,
+        },
+        uiState: {
+          ...state.uiState,
+          selectedPlannerPresetId: preset.id,
+          lastView: "planner",
+        },
+      };
+    }
+    case "delete-planner-preset": {
+      if (!state.plannerPresets[action.presetId]) return state;
+
+      const remainingEntries = Object.entries(state.plannerPresets).filter(
+        ([id]) => id !== action.presetId,
+      );
+
+      if (!remainingEntries.length) {
+        const preset = createPlannerPreset();
+        return {
+          ...state,
+          plannerPresets: {
+            [preset.id]: preset,
+          },
+          uiState: {
+            ...state.uiState,
+            selectedPlannerPresetId: preset.id,
+            lastView: "planner",
+          },
+        };
+      }
+
+      const nextPlannerPresets = Object.fromEntries(remainingEntries);
+      const nextSelectedPresetId =
+        state.uiState.selectedPlannerPresetId &&
+        nextPlannerPresets[state.uiState.selectedPlannerPresetId]
+          ? state.uiState.selectedPlannerPresetId
+          : remainingEntries[0][0];
+
+      return {
+        ...state,
+        plannerPresets: nextPlannerPresets,
+        uiState: {
+          ...state.uiState,
+          selectedPlannerPresetId: nextSelectedPresetId,
+          lastView: "planner",
+        },
+      };
+    }
+    case "rename-planner-preset": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            name: action.name.trim() || "Untitled Week",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    }
+    case "rename-planner-day": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            updatedAt: new Date().toISOString(),
+            days: {
+              ...preset.days,
+              [action.dayKey]: {
+                ...preset.days[action.dayKey],
+                title: action.title.trim() || preset.days[action.dayKey].title,
+              },
+            },
+          },
+        },
+      };
+    }
+    case "create-planner-event": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const { startMinutes, endMinutes } = normalizePlannerRange(
+        action.startMinutes,
+        action.endMinutes,
+      );
+      const nextEvent = createPlannerEvent({
+        dayKey: action.dayKey,
+        title: action.title,
+        startMinutes,
+        endMinutes,
+        color: action.color,
+        notes: action.notes,
+      });
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            updatedAt: new Date().toISOString(),
+            days: {
+              ...preset.days,
+              [action.dayKey]: {
+                ...preset.days[action.dayKey],
+                events: [...preset.days[action.dayKey].events, nextEvent].sort(
+                  (a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes,
+                ),
+              },
+            },
+          },
+        },
+      };
+    }
+    case "update-planner-event": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const day = preset.days[action.dayKey];
+      const event = day.events.find((item) => item.id === action.eventId);
+      if (!event) return state;
+      const range = normalizePlannerRange(
+        action.updates.startMinutes ?? event.startMinutes,
+        action.updates.endMinutes ?? event.endMinutes,
+      );
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            updatedAt: new Date().toISOString(),
+            days: {
+              ...preset.days,
+              [action.dayKey]: {
+                ...day,
+                events: day.events
+                  .map((item) =>
+                    item.id === action.eventId
+                      ? {
+                          ...item,
+                          ...action.updates,
+                          title: action.updates.title?.trim() || item.title,
+                          notes: action.updates.notes ?? item.notes,
+                          startMinutes: range.startMinutes,
+                          endMinutes: range.endMinutes,
+                        }
+                      : item,
+                  )
+                  .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes),
+              },
+            },
+          },
+        },
+      };
+    }
+    case "delete-planner-event": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            updatedAt: new Date().toISOString(),
+            days: {
+              ...preset.days,
+              [action.dayKey]: {
+                ...preset.days[action.dayKey],
+                events: preset.days[action.dayKey].events.filter(
+                  (item) => item.id !== action.eventId,
+                ),
+              },
+            },
+          },
+        },
+      };
+    }
     case "select-note":
       return {
         ...state,
@@ -325,7 +617,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, undefined, () =>
-    ensureDailyPageForDate(loadAppState(), toISODate(new Date())),
+    ensureDailyPageForDate(ensurePlannerState(loadAppState()), toISODate(new Date())),
   );
 
   useLayoutEffect(() => {
@@ -378,10 +670,12 @@ export function useAppState(): AppContextValue {
 
   const selectedDailyDate = ensureSelectedDailyDate(context.state);
   const selectedNoteId = ensureSelectedNoteId(context.state);
+  const selectedPlannerPresetId = ensureSelectedPlannerPresetId(context.state);
 
   if (
     context.state.uiState.selectedDailyDate !== selectedDailyDate ||
-    context.state.uiState.selectedNoteId !== selectedNoteId
+    context.state.uiState.selectedNoteId !== selectedNoteId ||
+    context.state.uiState.selectedPlannerPresetId !== selectedPlannerPresetId
   ) {
     return {
       ...context,
@@ -391,6 +685,7 @@ export function useAppState(): AppContextValue {
           ...context.state.uiState,
           selectedDailyDate,
           selectedNoteId,
+          selectedPlannerPresetId,
         },
       },
     };
