@@ -45,6 +45,7 @@ function Harness({ children }: { children?: ReactNode }) {
 
 describe("DesktopUpdateProvider", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     mockIsTauri.mockReturnValue(true);
     mockGetName.mockResolvedValue("DailyTodoApp");
     mockGetVersion.mockResolvedValue("0.1.0");
@@ -130,5 +131,14 @@ describe("DesktopUpdateProvider", () => {
       screen.getByText("The app could not reach the configured update feed."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry Check" })).toBeInTheDocument();
+    expect(
+      JSON.parse(window.localStorage.getItem("dailytodo.updater-last-error.v1") ?? "{}"),
+    ).toMatchObject({
+      action: "check",
+      currentVersion: "0.1.0",
+      message:
+        "The update feed could not be reached. If releases are hosted in a private GitHub repo, the desktop updater cannot access them.",
+      userInitiated: true,
+    });
   });
 });

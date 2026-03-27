@@ -44,6 +44,18 @@ type CheckForUpdatesOptions = {
   userInitiated?: boolean;
 };
 
+type UpdaterLogAction = "check" | "install";
+
+type UpdaterLogEntry = {
+  action: UpdaterLogAction;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  message: string;
+  rawError: string;
+  timestamp: string;
+  userInitiated?: boolean;
+};
+
 type DesktopUpdateContextValue = {
   appName: string;
   currentVersion: string | null;
@@ -112,6 +124,36 @@ function getErrorMessage(error: unknown) {
   }
 
   return "The update feed could not be reached. If releases are hosted in a private GitHub repo, the desktop updater cannot access them.";
+}
+
+function getRawError(error: unknown) {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function recordUpdaterError(entry: UpdaterLogEntry) {
+  console.error("[updater]", entry);
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem("dailytodo.updater-last-error.v1", JSON.stringify(entry));
+  } catch (storageError) {
+    console.warn("Failed to persist updater error log", storageError);
+  }
 }
 
 export function DesktopUpdateProvider({ children }: { children: ReactNode }) {
@@ -214,7 +256,17 @@ export function DesktopUpdateProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       isCheckingRef.current = false;
-      setErrorMessage(getErrorMessage(error));
+      const nextErrorMessage = getErrorMessage(error);
+      setErrorMessage(nextErrorMessage);
+      recordUpdaterError({
+        action: "check",
+        currentVersion,
+        latestVersion,
+        message: nextErrorMessage,
+        rawError: getRawError(error),
+        timestamp: new Date().toISOString(),
+        userInitiated,
+      });
       setPhase("error");
 
       if (userInitiated) {
@@ -261,7 +313,16 @@ export function DesktopUpdateProvider({ children }: { children: ReactNode }) {
       setPhase("relaunching");
       await relaunch();
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      const nextErrorMessage = getErrorMessage(error);
+      setErrorMessage(nextErrorMessage);
+      recordUpdaterError({
+        action: "install",
+        currentVersion,
+        latestVersion,
+        message: nextErrorMessage,
+        rawError: getRawError(error),
+        timestamp: new Date().toISOString(),
+      });
       setPhase("error");
     }
   }
