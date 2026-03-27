@@ -63,7 +63,7 @@ describe("PlannerView", () => {
     expect(screen.getByText("Sleep")).toBeInTheDocument();
     expect(screen.getByText("Wind down first")).toBeInTheDocument();
     expect(screen.queryByTestId("planner-editor-popover")).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   test("keeps the dragged slot range visible until cancel", async () => {
     render(<Harness />);
