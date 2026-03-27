@@ -77,7 +77,7 @@ type DesktopUpdateContextValue = {
 const noopAsync = async () => false;
 const noopInstall = async () => {};
 const DesktopUpdateContext = createContext<DesktopUpdateContextValue>({
-  appName: "DailyTodoApp",
+  appName: "DailyTodo",
   currentVersion: null,
   latestVersion: null,
   releaseNotes: null,
@@ -157,7 +157,7 @@ function recordUpdaterError(entry: UpdaterLogEntry) {
 }
 
 export function DesktopUpdateProvider({ children }: { children: ReactNode }) {
-  const [appName, setAppName] = useState("DailyTodoApp");
+  const [appName, setAppName] = useState("DailyTodo");
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [releaseNotes, setReleaseNotes] = useState<string | null>(null);

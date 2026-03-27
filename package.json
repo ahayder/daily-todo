@@ -1,10 +1,10 @@
 {
   "name": "dailytodoapp",
-  "version": "2026.3.1",
+  "version": "2026.3.2",
   "private": true,
   "packageManager": "pnpm@8.7.1",
   "scripts": {
-    "dev": "next dev -p 5005",
+    "dev": "next dev --webpack -p 5005",
     "build": "pnpm version:sync && pnpm build:web",
     "build:web": "next build",
     "start": "pnpm dlx serve out",

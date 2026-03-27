@@ -47,7 +47,7 @@ describe("DesktopUpdateProvider", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockIsTauri.mockReturnValue(true);
-    mockGetName.mockResolvedValue("DailyTodoApp");
+    mockGetName.mockResolvedValue("DailyTodo");
     mockGetVersion.mockResolvedValue("0.1.0");
     mockRelaunch.mockReset();
     mockCheck.mockReset();
@@ -75,7 +75,7 @@ describe("DesktopUpdateProvider", () => {
       </DesktopUpdateProvider>,
     );
 
-    expect(await screen.findByText("Update ready for DailyTodoApp")).toBeInTheDocument();
+    expect(await screen.findByText("Update ready for DailyTodo")).toBeInTheDocument();
     expect(screen.getByRole("alertdialog")).toHaveTextContent(/Version\s+0\.1\.1/i);
 
     await userEvent.click(screen.getByRole("button", { name: "Update Now" }));
@@ -106,7 +106,7 @@ describe("DesktopUpdateProvider", () => {
       expect(mockCheck).toHaveBeenCalledTimes(initialCalls + 1);
     });
 
-    expect(screen.queryByText("Update ready for DailyTodoApp")).not.toBeInTheDocument();
+    expect(screen.queryByText("Update ready for DailyTodo")).not.toBeInTheDocument();
   });
 
   test("shows an actionable error when the update feed is unreachable", async () => {

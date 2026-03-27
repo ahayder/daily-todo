@@ -10,7 +10,7 @@ const body = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "DailyTodoApp",
+  title: "DailyTodo",
   description: "Daily notes and priority-grouped todos in one workspace",
 };
 
