@@ -1197,6 +1197,9 @@ select {
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--brand-soft) 22%, transparent), transparent 52%),
+    color-mix(in srgb, var(--paper-strong) 96%, transparent);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -1207,6 +1210,115 @@ select {
 }
 .drawing-canvas-container--selected {
   border-color: var(--ring);
+}
+.drawing-excalidraw-shell {
+  height: 100%;
+}
+.drawing-excalidraw-loading {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 0.92rem;
+}
+.drawing-excalidraw-shell .excalidraw {
+  --color-primary: var(--brand);
+  --color-surface-lowest: color-mix(in srgb, var(--paper-strong) 96%, transparent);
+  --color-surface-high: color-mix(in srgb, var(--paper) 94%, transparent);
+  --color-surface-mid: color-mix(in srgb, var(--paper) 88%, transparent);
+  --color-surface-primary-container: color-mix(in srgb, var(--brand-soft) 72%, transparent);
+  --color-on-primary-container: var(--brand);
+  --default-border-color: var(--line);
+  --island-bg-color: color-mix(in srgb, var(--paper-strong) 96%, transparent);
+  --shadow-island: 0 8px 24px rgba(31, 36, 48, 0.08);
+}
+.drawing-excalidraw-shell .excalidraw .FixedSideContainer_side_top,
+.drawing-excalidraw-shell .excalidraw .App-menu_top,
+.drawing-excalidraw-shell .excalidraw .App-menu_bottom,
+.drawing-excalidraw-shell .excalidraw .App-toolbar-container,
+.drawing-excalidraw-shell .excalidraw .main-menu-trigger,
+.drawing-excalidraw-shell .excalidraw .App-toolbar__extra-tools-trigger,
+.drawing-excalidraw-shell .excalidraw .zoom-actions,
+.drawing-excalidraw-shell .excalidraw .undo-redo-buttons,
+.drawing-excalidraw-shell .excalidraw .undo-button-container,
+.drawing-excalidraw-shell .excalidraw .redo-button-container,
+.drawing-excalidraw-shell .excalidraw .help-icon,
+.drawing-excalidraw-shell .excalidraw .disable-zen-mode,
+.drawing-excalidraw-shell .excalidraw .layer-ui__wrapper__top-right,
+.drawing-excalidraw-shell .excalidraw .layer-ui__wrapper__footer,
+.drawing-excalidraw-shell .excalidraw .layer-ui__wrapper__footer-right,
+.drawing-excalidraw-shell .excalidraw .layer-ui__wrapper__footer-left,
+.drawing-excalidraw-shell .excalidraw .App-menu__left,
+.drawing-excalidraw-shell .excalidraw .welcome-screen-center,
+.drawing-excalidraw-shell .excalidraw .welcome-screen-decor-hint {
+  display: none !important;
+}
+.drawing-excalidraw-shell .excalidraw .InteractiveCanvas {
+  cursor: crosshair;
+}
+.drawing-excalidraw-shell .excalidraw .layer-ui__wrapper {
+  inset: 0;
+}
+.drawing-legacy-state {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--warn) 8%, transparent), transparent 48%),
+    color-mix(in srgb, var(--paper) 92%, transparent);
+}
+.drawing-legacy-state__card {
+  max-width: 28rem;
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--paper-strong) 94%, transparent);
+  box-shadow: var(--surface-shadow);
+  padding: 1.25rem;
+}
+.drawing-legacy-state__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.drawing-legacy-state__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.drawing-legacy-state__body {
+  margin: 0.65rem 0 0;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.drawing-legacy-state__button {
+  margin-top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--brand);
+  color: white;
+  padding: 0.65rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    opacity 0.12s ease;
+}
+.drawing-legacy-state__button:hover {
+  opacity: 0.94;
+}
+.drawing-legacy-state__button:active {
+  transform: translateY(1px);
 }
 
 /* ─── Drawing Toolbar (custom floating) ───────── */
@@ -1301,6 +1413,10 @@ select {
 .dtb-color-swatch:hover {
   transform: scale(1.15);
   border-color: var(--ink-300);
+}
+.dtb-color-swatch--active {
+  border-color: var(--paper);
+  box-shadow: 0 0 0 2px var(--brand);
 }
 
 /* ─── Planner ─────────────────────────────────── */

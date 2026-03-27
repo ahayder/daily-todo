@@ -1,8 +1,7 @@
 "use client";
 
-import { useEditor } from "tldraw";
 import { useState, useRef, useEffect } from "react";
-import { DefaultColorStyle } from "tldraw";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import {
   Pencil,
   Eraser,
@@ -10,9 +9,8 @@ import {
   ArrowUpRight,
   Square,
   Type,
-  Undo2,
-  Redo2,
   Palette,
+  Trash2,
 } from "lucide-react";
 import {
   Tooltip,
@@ -21,37 +19,64 @@ import {
 } from "@/components/ui/tooltip";
 
 const COLORS = [
-  { name: "Black", value: "black", hex: "#1d1d1d" },
-  { name: "Grey", value: "grey", hex: "#9b9b9b" },
-  { name: "Blue", value: "blue", hex: "#4465e9" },
-  { name: "Light blue", value: "light-blue", hex: "#4ba1f1" },
-  { name: "Green", value: "green", hex: "#099268" },
-  { name: "Light green", value: "light-green", hex: "#40c057" },
-  { name: "Orange", value: "orange", hex: "#f76707" },
-  { name: "Red", value: "red", hex: "#e03131" },
-  { name: "Violet", value: "violet", hex: "#ae3ec9" },
+  { name: "Ink", value: "#1f2430", hex: "#1f2430" },
+  { name: "Slate", value: "#6c7483", hex: "#6c7483" },
+  { name: "Brand", value: "#2f6d62", hex: "#2f6d62" },
+  { name: "Blue", value: "#4465e9", hex: "#4465e9" },
+  { name: "Amber", value: "#c07c30", hex: "#c07c30" },
+  { name: "Red", value: "#b8422e", hex: "#b8422e" },
 ];
 
+type ToolId = "selection" | "freedraw" | "eraser" | "arrow" | "rectangle" | "text";
+
 type Tool = {
-  id: string;
+  id: ToolId;
   icon: React.ReactNode;
   label: string;
 };
 
 const TOOLS: Tool[] = [
-  { id: "select", icon: <MousePointer2 size={16} />, label: "Select" },
-  { id: "draw", icon: <Pencil size={16} />, label: "Draw" },
+  { id: "selection", icon: <MousePointer2 size={16} />, label: "Select" },
+  { id: "freedraw", icon: <Pencil size={16} />, label: "Draw" },
   { id: "eraser", icon: <Eraser size={16} />, label: "Eraser" },
   { id: "arrow", icon: <ArrowUpRight size={16} />, label: "Arrow" },
-  { id: "geo", icon: <Square size={16} />, label: "Rectangle" },
+  { id: "rectangle", icon: <Square size={16} />, label: "Rectangle" },
   { id: "text", icon: <Type size={16} />, label: "Text" },
 ];
 
-export function DrawingToolbar() {
-  const editor = useEditor();
+type Props = {
+  api: ExcalidrawImperativeAPI | null;
+  onClear: () => void;
+};
+
+export function DrawingToolbar({ api, onClear }: Props) {
   const [showColors, setShowColors] = useState(false);
+  const [activeTool, setActiveTool] = useState<ToolId>("freedraw");
+  const [activeColor, setActiveColor] = useState(COLORS[0].value);
   const colorRef = useRef<HTMLDivElement>(null);
-  const currentToolId = editor.getCurrentToolId();
+
+  useEffect(() => {
+    if (!api) return;
+
+    const syncFromAppState = () => {
+      const appState = api.getAppState();
+      const nextTool = appState.activeTool.type;
+      setActiveTool((nextTool === "selection" ||
+        nextTool === "freedraw" ||
+        nextTool === "eraser" ||
+        nextTool === "arrow" ||
+        nextTool === "rectangle" ||
+        nextTool === "text")
+        ? nextTool
+        : "freedraw");
+      setActiveColor(appState.currentItemStrokeColor);
+    };
+
+    syncFromAppState();
+    return api.onChange(() => {
+      syncFromAppState();
+    });
+  }, [api]);
 
   // Close color popover on click outside
   useEffect(() => {
@@ -66,6 +91,21 @@ export function DrawingToolbar() {
     }
   }, [showColors]);
 
+  const selectTool = (tool: ToolId) => {
+    if (!api) return;
+    api.setActiveTool({ type: tool });
+  };
+
+  const selectColor = (color: string) => {
+    if (!api) return;
+    api.updateScene({
+      appState: {
+        currentItemStrokeColor: color,
+      },
+    });
+    setShowColors(false);
+  };
+
   return (
     <div className="drawing-toolbar">
       <div className="drawing-toolbar-inner">
@@ -74,10 +114,11 @@ export function DrawingToolbar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className={`dtb-btn ${currentToolId === tool.id ? "dtb-btn--active" : ""}`}
+                aria-label={tool.label}
+                className={`dtb-btn ${activeTool === tool.id ? "dtb-btn--active" : ""}`}
                 onPointerDown={(e) => {
                   e.stopPropagation();
-                  editor.setCurrentTool(tool.id);
+                  selectTool(tool.id);
                 }}
               >
                 {tool.icon}
@@ -97,6 +138,7 @@ export function DrawingToolbar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
+                aria-label="Choose stroke color"
                 className="dtb-btn"
                 onPointerDown={(e) => {
                   e.stopPropagation();
@@ -115,14 +157,13 @@ export function DrawingToolbar() {
               {COLORS.map((c) => (
                 <button
                   key={c.value}
-                  className="dtb-color-swatch"
+                  aria-label={c.name}
+                  className={`dtb-color-swatch ${activeColor === c.value ? "dtb-color-swatch--active" : ""}`}
                   title={c.name}
                   style={{ backgroundColor: c.hex }}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    editor.setStyleForNextShapes(DefaultColorStyle, c.value as "black" | "grey" | "blue" | "light-blue" | "green" | "light-green" | "orange" | "red" | "violet");
-                    editor.setStyleForSelectedShapes(DefaultColorStyle, c.value as "black" | "grey" | "blue" | "light-blue" | "green" | "light-green" | "orange" | "red" | "violet");
-                    setShowColors(false);
+                    selectColor(c.value);
                   }}
                 />
               ))}
@@ -136,34 +177,18 @@ export function DrawingToolbar() {
           <TooltipTrigger asChild>
             <button
               type="button"
+              aria-label="Clear canvas"
               className="dtb-btn"
               onPointerDown={(e) => {
                 e.stopPropagation();
-                editor.undo();
+                onClear();
               }}
             >
-              <Undo2 size={16} />
+              <Trash2 size={16} />
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">
-            Undo
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="dtb-btn"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                editor.redo();
-              }}
-            >
-              <Redo2 size={16} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Redo
+            Clear canvas
           </TooltipContent>
         </Tooltip>
       </div>

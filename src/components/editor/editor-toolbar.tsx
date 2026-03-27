@@ -36,6 +36,7 @@ function ToolbarButton({
         <button
           type="button"
           onClick={onClick}
+          aria-label={tooltip}
           className={`toolbar-btn ${isActive ? "toolbar-btn--active" : ""}`}
         >
           {children}
