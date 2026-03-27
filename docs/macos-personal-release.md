@@ -27,6 +27,8 @@ pnpm tauri:build:mac
 
 This generates the `.app`, `.dmg`, and updater artifacts in `src-tauri/target/release/bundle/`.
 
+Do not add `--no-sign` to the build command. In this setup it also skips updater signing, which prevents GitHub Releases from getting the `latest.json` feed and `.sig` files required for in-app updates.
+
 ## Publishing an update
 
 1. Bump `package.json` to the next version.
