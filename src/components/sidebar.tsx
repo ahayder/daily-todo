@@ -8,7 +8,7 @@ import type { AppAction } from "@/components/app-context";
 import { useSyncExternalStore, type Dispatch } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Copy, FileText, Plus, ChevronRight, PanelsTopLeft, Trash2 } from "lucide-react";
+import { CalendarDays, Copy, FileText, Folder, FolderOpen, Plus, PanelsTopLeft, Trash2 } from "lucide-react";
 
 type Props = {
   state: AppState;
@@ -134,12 +134,11 @@ export function Sidebar({ state, dispatch }: Props) {
                       className="tree-toggle"
                       onClick={() => dispatch({ type: "toggle-year", year })}
                     >
-                      <ChevronRight
-                        className={cn(
-                          "h-3.5 w-3.5 tree-chevron",
-                          yearExpanded && "tree-chevron--open"
-                        )}
-                      />
+                      {yearExpanded ? (
+                        <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
+                      ) : (
+                        <Folder className="h-3.5 w-3.5 tree-folder-icon" />
+                      )}
                       <span>{year}</span>
                     </button>
 
@@ -156,12 +155,11 @@ export function Sidebar({ state, dispatch }: Props) {
                                   className="tree-toggle"
                                   onClick={() => dispatch({ type: "toggle-month", month })}
                                 >
-                                  <ChevronRight
-                                    className={cn(
-                                      "h-3.5 w-3.5 tree-chevron",
-                                      monthExpanded && "tree-chevron--open"
-                                    )}
-                                  />
+                                  {monthExpanded ? (
+                                    <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
+                                  ) : (
+                                    <Folder className="h-3.5 w-3.5 tree-folder-icon" />
+                                  )}
                                   <span>{getMonthLabel(month)}</span>
                                 </button>
                                 {monthExpanded && (
