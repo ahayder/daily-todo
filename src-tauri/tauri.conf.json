@@ -27,7 +27,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,6 +41,14 @@
     ],
     "macOS": {
       "minimumSystemVersion": "12.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ1Qzg2RUQ5QUJEQzRFMzAKUldRd1R0eXIyVzdJMWVlSUdxSlJwYThPN1hDNEZIeUtRL3Y3OGZmSEZhTHdFbW85QkpOK21UcEMK",
+      "endpoints": [
+        "https://github.com/ahayder/daily-todo/releases/latest/download/latest.json"
+      ]
     }
   }
 }

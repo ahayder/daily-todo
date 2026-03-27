@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DailyTodoApp
 
-## Getting Started
+DailyTodoApp is a warm, notebook-inspired productivity app built with Next.js and wrapped with Tauri for a personal macOS desktop build.
 
-First, run the development server:
+## Local development
+
+Run the web app:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the desktop shell during development:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm tauri:dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to load **Source Sans 3** as the app-wide sans-serif font for both body and headings.
+The production desktop build uses the static Next.js export in `out/`, so `pnpm build` automatically synchronizes the desktop version before Tauri bundles the app.
 
-## Learn More
+## Personal macOS release flow
 
-To learn more about Next.js, take a look at the following resources:
+For your own Macs, this repo now supports:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- installable macOS `.app` and `.dmg` bundles
+- GitHub Releases based updater metadata
+- in-app update prompts with download, install, and relaunch
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Release and updater instructions live in [docs/macos-personal-release.md](/Users/ahayder/Library/CloudStorage/GoogleDrive-alihayder19@gmail.com/My%20Drive/Area%20-%20PARA/DailyTodoProject/DailyTodoApp/docs/macos-personal-release.md).
