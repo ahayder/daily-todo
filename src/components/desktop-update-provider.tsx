@@ -96,10 +96,22 @@ function formatBytes(bytes: number) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
+    const normalizedMessage = error.message.toLowerCase();
+    if (normalizedMessage.includes("404") || normalizedMessage.includes("not found")) {
+      return "The update feed could not be reached. If releases are hosted in a private GitHub repo, the desktop updater cannot access them.";
+    }
     return error.message;
   }
 
-  return "The updater could not finish this action.";
+  if (typeof error === "string" && error.trim().length > 0) {
+    const normalizedMessage = error.toLowerCase();
+    if (normalizedMessage.includes("404") || normalizedMessage.includes("not found")) {
+      return "The update feed could not be reached. If releases are hosted in a private GitHub repo, the desktop updater cannot access them.";
+    }
+    return error;
+  }
+
+  return "The update feed could not be reached. If releases are hosted in a private GitHub repo, the desktop updater cannot access them.";
 }
 
 export function DesktopUpdateProvider({ children }: { children: ReactNode }) {
@@ -414,11 +426,13 @@ function DesktopUpdateDialog() {
                   )}
                 </>
               ) : (
-                "The app could not confirm the newest release yet."
+                phase === "error"
+                  ? "The app could not reach the configured update feed."
+                  : "The app could not confirm the newest release yet."
               )}
             </span>
           </AlertDialogDescription>
-          <div className="w-full space-y-3 text-left">
+          <div className="w-full space-y-3 text-left sm:col-start-2">
             {progressText ? (
               <div className="space-y-2">
                 <div className="h-2 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--line)_80%,transparent)]">

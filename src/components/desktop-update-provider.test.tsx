@@ -107,4 +107,28 @@ describe("DesktopUpdateProvider", () => {
 
     expect(screen.queryByText("Update ready for DailyTodoApp")).not.toBeInTheDocument();
   });
+
+  test("shows an actionable error when the update feed is unreachable", async () => {
+    mockCheck.mockRejectedValue(new Error("404 Not Found"));
+
+    render(
+      <DesktopUpdateProvider>
+        <Harness />
+      </DesktopUpdateProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Check now" }));
+
+    expect(await screen.findByText("Updater needs attention")).toBeInTheDocument();
+    expect(
+      screen.getByText(/The update feed could not be reached\./i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/private GitHub repo/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("The app could not reach the configured update feed."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry Check" })).toBeInTheDocument();
+  });
 });
