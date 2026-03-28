@@ -24,7 +24,7 @@ The core metaphor is a **physical desk notebook** — warm, calm, analog in feel
 | Markdown Editor | Tiptap (ProseMirror-based, Notion-like) |
 | Drawing | Native Canvas API (custom DrawingOverlay component) |
 | State | React useReducer + Context (AppProvider) |
-| Persistence | localStorage (via `src/lib/persistence.ts`, key: `dailytodo.v1`) |
+| Persistence | PocketBase sync + local cache (`src/lib/persistence.ts`, PocketBase collections + browser cache) |
 | Icons | lucide-react |
 | Animation | tw-animate-css |
 | Testing | Vitest + @testing-library/react |
@@ -53,7 +53,9 @@ src/
 └── lib/
     ├── types.ts            # All TypeScript types (Todo, DailyPage, NoteDoc, etc.)
     ├── store.ts            # Pure state factories + selectors (groupTodosByPriority, etc.)
-    ├── persistence.ts      # localStorage load/save
+    ├── persistence.ts      # persistence types, normalization, metadata helpers
+    ├── local-cache-storage.ts # browser cache envelope for assembled AppState
+    ├── pocketbase/        # PocketBase auth + persistence repositories
     ├── date.ts             # Date formatting helpers
     └── schema.ts           # Zod validation for persisted state
 ```
@@ -64,22 +66,25 @@ src/
 AppState {
   dailyPages: Record<dateISO, DailyPage>   // e.g. "2026-03-11"
   notesDocs:  Record<id, NoteDoc>
-  uiState:    UIState                       // selected items, expanded tree nodes, lastView
+  plannerPresets: Record<id, PlannerPreset>
+  uiState:    UIState                       // synced selection state + device-local preferences
 }
 
-DailyPage { date, markdown, drawingStrokes[], todos[] }
-NoteDoc   { id, title, markdown, drawingStrokes[], updatedAt }
+DailyPage { date, markdown, todos[] }
+NoteDoc   { id, title, markdown, updatedAt }
+PlannerPreset { id, name, dayOrder[], days, updatedAt }
 Todo      { id, text, priority(1|2|3), done, createdAt }
 ```
 
 ### Key Behaviors
 
 - **Carryover**: When a new day is created (`ensureDailyPageForDate`), all incomplete todos AND the markdown from the previous day are copied forward automatically.
-- **Persistence**: Every state change saves to `localStorage` via a `useEffect` in `AppProvider`.
+- **Persistence**: `AppProvider` hydrates an assembled `AppState`, keeps a browser cache for fast startup/offline support, and syncs through PocketBase when authenticated.
 - **Drawing**: Canvas overlay sits `position: absolute; inset: 0; z-index: 4` over the editor. `pointer-events: none` when disabled, `pointer-events: auto` when enabled.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization. No toolbar — content-first like Notion.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
 - **Navigation**: Top navbar with Daily/Notes pills. Theme toggle (Sun/Moon/Monitor cycle) in top-right.
+- **Sync model**: PocketBase stores top-level entities in separate collections (`daily_pages`, `notes`, `planner_presets`, `workspace_state`) while nested child structures remain embedded JSON inside those parent records. Legacy `app_state_snapshots` is retained temporarily for migration/rollback safety.
 
 ---
 
@@ -217,7 +222,9 @@ Ordered by priority. Check off as completed.
 
 - **Tiptap editor** uses `@tiptap/react` with `immediatelyRender: false` for Next.js SSR compatibility. Uses `tiptap-markdown` for markdown round-trip.
 - **Drawing canvas** does not resize on window resize — the canvas dimensions are set once on mount from `parentElement.clientWidth/Height`. A `ResizeObserver` would fix this.
-- **State is localStorage-only** — no backend, no sync. All data lives in `dailytodo.v1` key.
+- **Persistence is hybrid** — PocketBase is the source of truth for synced content, while the browser keeps a per-user assembled cache for fast warm startup, offline fallback, and device-local UI preferences.
+- **Device-local UI state** — values like theme mode, sidebar collapsed state, and focus mode remain local-only and should not be moved into synced PocketBase records unless there is a strong cross-device reason.
+- **Hybrid storage strategy** — use scalar/relation fields for ownership, ids, titles, timestamps, and other queryable atoms; use JSON fields for nested parent-owned structures such as daily todos, planner day order, planner days/events, and small UI arrays.
 - **shadcn/ui** components live in `src/components/ui/`. Generate new ones with `npx shadcn@latest add <component>`.
 - **Tailwind v4 & CSS Cascade Layers (CRITICAL)**: Because Tailwind v4 relies entirely on native `@layer` (theme, base, components, utilities), **NEVER write unlayered CSS resets or component styles in globals.css**. Unlayered CSS rules (like `* { padding:0; }`) automatically overpower all layered utilities across the entire app, destroying component padding and spacing system.
   - **Do**: Always wrap custom global resets in `@layer base { ... }`.

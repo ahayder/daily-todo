@@ -219,10 +219,13 @@ describe("AppProvider theme class behavior", () => {
     await userEvent.click(screen.getAllByRole("button", { name: "Sign in" })[1]);
 
     expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
-    expect(persistence.repository.load).toHaveBeenCalledWith({
-      userId: "user_1",
-      now: expect.any(Date),
-    });
+    expect(persistence.repository.load).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_1",
+        now: expect.any(Date),
+        onRemoteSync: expect.any(Function),
+      }),
+    );
   });
 
   test("keeps editing available when persistence save fails", async () => {

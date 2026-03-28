@@ -13,6 +13,7 @@
     "tauri:build": "tauri build",
     "tauri:build:mac": "pnpm tauri build --bundles app,dmg --ci",
     "version:sync": "node scripts/sync-app-version.mjs",
+    "pocketbase:schema:apply": "node scripts/apply-pocketbase-schema.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"

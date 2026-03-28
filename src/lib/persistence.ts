@@ -1,7 +1,7 @@
 import { toISODate } from "@/lib/date";
 import { appStateSchema } from "@/lib/schema";
 import { createInitialState, ensureDailyPageForDate, ensurePlannerState } from "@/lib/store";
-import type { AppState } from "@/lib/types";
+import type { AppState, UIState } from "@/lib/types";
 
 export const APP_STATE_VERSION = 1;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
@@ -13,11 +13,28 @@ export type PersistenceConflictResolution =
   | "local-overwrote-remote"
   | "remote-overwrote-local";
 
+export type PersistenceRecordKind =
+  | "daily_page"
+  | "note"
+  | "planner_preset"
+  | "workspace_state";
+
+export type PersistenceRecordMetadata = {
+  key: string;
+  kind: PersistenceRecordKind;
+  fingerprint: string;
+  lastRemoteUpdatedAt: string | null;
+  lastRemoteUpdatedAtClient: string | null;
+};
+
 export type PersistenceMetadata = {
   stateVersion: number;
   lastLocalMutationAt: string | null;
   lastRemoteUpdatedAt: string | null;
   lastRemoteUpdatedAtClient: string | null;
+  records: Record<string, PersistenceRecordMetadata>;
+  hasMigratedToSplitStore: boolean;
+  lastSuccessfulDualWriteAt: string | null;
 };
 
 export type CachedAppStateEnvelope = {
@@ -42,6 +59,7 @@ export type PersistenceSaveResult = {
   conflictResolution: PersistenceConflictResolution;
   notice: string | null;
   errorMessage: string | null;
+  resolvedState?: AppState;
 };
 
 export type LocalCacheLoadResult = {
@@ -60,8 +78,31 @@ export type RemoteSnapshot = {
   updatedAtClient: string | null;
 };
 
+export type SyncableUIState = Pick<
+  UIState,
+  | "selectedDailyDate"
+  | "selectedNoteId"
+  | "selectedPlannerPresetId"
+  | "expandedYears"
+  | "expandedMonths"
+  | "lastView"
+>;
+
+export type LocalOnlyUIState = Pick<
+  UIState,
+  | "isSidebarCollapsed"
+  | "themeMode"
+  | "categoryTheme"
+  | "isFocusMode"
+  | "focusedTodoId"
+>;
+
 export type PersistenceRepository = {
-  load(input: { userId: string; now?: Date }): Promise<PersistenceLoadResult>;
+  load(input: {
+    userId: string;
+    now?: Date;
+    onRemoteSync?: (result: PersistenceLoadResult) => void;
+  }): Promise<PersistenceLoadResult>;
   save(input: {
     userId: string;
     state: AppState;
@@ -95,6 +136,9 @@ export function createPersistenceMetadata(
     lastLocalMutationAt: null,
     lastRemoteUpdatedAt: null,
     lastRemoteUpdatedAtClient: null,
+    records: {},
+    hasMigratedToSplitStore: false,
+    lastSuccessfulDualWriteAt: null,
     ...overrides,
   };
 }
@@ -124,6 +168,9 @@ function normalizeLegacyState(parsed: unknown): unknown {
       lastView?: unknown;
       selectedPlannerPresetId?: unknown;
       isSidebarCollapsed?: unknown;
+      categoryTheme?: unknown;
+      isFocusMode?: unknown;
+      focusedTodoId?: unknown;
     };
     plannerPresets?: unknown;
   };
@@ -164,6 +211,19 @@ function normalizeLegacyState(parsed: unknown): unknown {
         typeof candidate.uiState.isSidebarCollapsed === "boolean"
           ? candidate.uiState.isSidebarCollapsed
           : false,
+      categoryTheme:
+        candidate.uiState.categoryTheme === "adhd1" ||
+        candidate.uiState.categoryTheme === "adhd2" ||
+        candidate.uiState.categoryTheme === "normal"
+          ? candidate.uiState.categoryTheme
+          : "normal",
+      isFocusMode:
+        typeof candidate.uiState.isFocusMode === "boolean" ? candidate.uiState.isFocusMode : false,
+      focusedTodoId:
+        typeof candidate.uiState.focusedTodoId === "string" ||
+        candidate.uiState.focusedTodoId === null
+          ? candidate.uiState.focusedTodoId
+          : null,
     },
   };
 }
@@ -199,4 +259,49 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
 
 export function normalizeAppState(input: unknown, now = new Date()): AppState {
   return tryParseAppState(input, now) ?? seedAppState(now);
+}
+
+export function extractSyncableUIState(uiState: UIState): SyncableUIState {
+  return {
+    selectedDailyDate: uiState.selectedDailyDate,
+    selectedNoteId: uiState.selectedNoteId,
+    selectedPlannerPresetId: uiState.selectedPlannerPresetId,
+    expandedYears: uiState.expandedYears,
+    expandedMonths: uiState.expandedMonths,
+    lastView: uiState.lastView,
+  };
+}
+
+export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
+  return {
+    isSidebarCollapsed: uiState.isSidebarCollapsed,
+    themeMode: uiState.themeMode,
+    categoryTheme: uiState.categoryTheme,
+    isFocusMode: uiState.isFocusMode,
+    focusedTodoId: uiState.focusedTodoId,
+  };
+}
+
+export function mergeUiState(
+  syncable: SyncableUIState,
+  localOnly: LocalOnlyUIState,
+  fallback: UIState,
+): UIState {
+  return {
+    ...fallback,
+    ...syncable,
+    ...localOnly,
+  };
+}
+
+export function getMaxTimestamp(values: Array<string | null | undefined>): string | null {
+  let latest: string | null = null;
+
+  for (const value of values) {
+    if (compareTimestamps(value ?? null, latest) > 0) {
+      latest = value ?? null;
+    }
+  }
+
+  return latest;
 }

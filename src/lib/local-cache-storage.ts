@@ -2,6 +2,7 @@ import {
   APP_STATE_VERSION,
   LEGACY_LOCAL_STORAGE_KEY,
   createPersistenceMetadata,
+  type PersistenceRecordMetadata,
   type LocalCacheStorage,
   tryParseAppState,
 } from "@/lib/persistence";
@@ -15,6 +16,9 @@ type ParsedEnvelope = {
     lastLocalMutationAt?: unknown;
     lastRemoteUpdatedAt?: unknown;
     lastRemoteUpdatedAtClient?: unknown;
+    records?: unknown;
+    hasMigratedToSplitStore?: unknown;
+    lastSuccessfulDualWriteAt?: unknown;
   };
 };
 
@@ -80,6 +84,18 @@ export function createBrowserLocalCacheStorage(): LocalCacheStorage {
               lastRemoteUpdatedAtClient:
                 typeof parsedMetadata?.lastRemoteUpdatedAtClient === "string"
                   ? parsedMetadata.lastRemoteUpdatedAtClient
+                  : null,
+              records:
+                parsedMetadata?.records && typeof parsedMetadata.records === "object"
+                  ? (parsedMetadata.records as Record<string, PersistenceRecordMetadata>)
+                  : {},
+              hasMigratedToSplitStore:
+                typeof parsedMetadata?.hasMigratedToSplitStore === "boolean"
+                  ? parsedMetadata.hasMigratedToSplitStore
+                  : false,
+              lastSuccessfulDualWriteAt:
+                typeof parsedMetadata?.lastSuccessfulDualWriteAt === "string"
+                  ? parsedMetadata.lastSuccessfulDualWriteAt
                   : null,
             }),
           },

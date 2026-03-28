@@ -694,6 +694,22 @@ export function AppProvider({ children, repository }: AppProviderProps) {
         const result = await repository.load({
           userId: session.userId,
           now: new Date(),
+          onRemoteSync: (remoteResult) => {
+            if (!mounted) {
+              return;
+            }
+
+            const snapshot = JSON.stringify(remoteResult.state);
+            saveSnapshotRef.current = snapshot;
+            dirtySnapshotRef.current = null;
+            metadataRef.current = remoteResult.metadata;
+            setState(remoteResult.state);
+            setSyncStatus(remoteResult.status);
+            setSyncNotice(remoteResult.notice);
+            setSyncError(remoteResult.errorMessage);
+            setLastSyncedAt(remoteResult.metadata.lastRemoteUpdatedAt);
+            setPersistenceAvailable(remoteResult.persistenceAvailable);
+          },
         });
         if (!mounted) {
           return;
@@ -788,6 +804,13 @@ export function AppProvider({ children, repository }: AppProviderProps) {
           setSyncNotice(result.notice);
           setSyncError(result.errorMessage);
           setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+          if (result.resolvedState) {
+            const resolvedSnapshot = JSON.stringify(result.resolvedState);
+            saveSnapshotRef.current = resolvedSnapshot;
+            dirtySnapshotRef.current = null;
+            setState(result.resolvedState);
+            return;
+          }
           if (result.status === "synced") {
             saveSnapshotRef.current = nextSnapshot;
             dirtySnapshotRef.current = null;
@@ -823,6 +846,13 @@ export function AppProvider({ children, repository }: AppProviderProps) {
     setSyncNotice(result.notice);
     setSyncError(result.errorMessage);
     setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+    if (result.resolvedState) {
+      const resolvedSnapshot = JSON.stringify(result.resolvedState);
+      saveSnapshotRef.current = resolvedSnapshot;
+      dirtySnapshotRef.current = null;
+      setState(result.resolvedState);
+      return;
+    }
     if (result.status === "synced") {
       saveSnapshotRef.current = nextSnapshot;
       dirtySnapshotRef.current = null;
@@ -852,6 +882,13 @@ export function AppProvider({ children, repository }: AppProviderProps) {
           setSyncNotice(result.notice);
           setSyncError(result.errorMessage);
           setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+          if (result.resolvedState) {
+            const resolvedSnapshot = JSON.stringify(result.resolvedState);
+            saveSnapshotRef.current = resolvedSnapshot;
+            dirtySnapshotRef.current = null;
+            setState(result.resolvedState);
+            return;
+          }
           if (result.status === "synced") {
             saveSnapshotRef.current = dirtySnapshotRef.current;
             dirtySnapshotRef.current = null;

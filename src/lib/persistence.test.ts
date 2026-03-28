@@ -6,6 +6,7 @@ import {
   normalizeAppState,
 } from "@/lib/persistence";
 import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
+import { SplitPersistenceRepository } from "@/lib/split-persistence-repository";
 import { createInitialState } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
@@ -196,5 +197,109 @@ describe("SnapshotPersistenceRepository", () => {
     });
 
     expect(calls).toEqual(["cache:2026-03-11", "remote:2026-03-11", "cache:2026-03-11"]);
+  });
+});
+
+describe("SplitPersistenceRepository", () => {
+  test("returns cached state immediately and reconciles remote in the background", async () => {
+    const cached = createInitialState("2026-03-11");
+    const remoteState = {
+      ...cached,
+      notesDocs: {
+        ...cached.notesDocs,
+        note_2: {
+          id: "note_2",
+          title: "From remote",
+          markdown: "",
+          updatedAt: "2026-03-11T08:05:00.000Z",
+        },
+      },
+    };
+    const cache = {
+      loadCached: vi.fn(() => ({
+        envelope: {
+          state: cached,
+          metadata: createPersistenceMetadata({ hasMigratedToSplitStore: true }),
+        },
+        available: true,
+      })),
+      saveCached: vi.fn(() => ({ available: true })),
+      clearCached: vi.fn(() => ({ available: true })),
+    };
+    const remoteStore = {
+      loadRemoteState: vi.fn(async () => ({
+        state: remoteState,
+        source: "remote" as const,
+        status: "synced" as const,
+        metadata: createPersistenceMetadata({ hasMigratedToSplitStore: true }),
+        conflictResolution: "remote-overwrote-local" as const,
+        notice: "Newer changes from another device were loaded.",
+        errorMessage: null,
+        persistenceAvailable: true,
+      })),
+      saveRemoteState: vi.fn(),
+    };
+
+    const onRemoteSync = vi.fn();
+    const repository = new SplitPersistenceRepository(remoteStore, cache);
+    const loaded = await repository.load({
+      userId: "user_1",
+      now: new Date("2026-03-11T08:00:00Z"),
+      onRemoteSync,
+    });
+
+    expect(loaded.source).toBe("local");
+    expect(loaded.status).toBe("syncing");
+
+    await vi.waitFor(() => {
+      expect(onRemoteSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "remote",
+          state: remoteState,
+        }),
+      );
+    });
+  });
+
+  test("writes resolved state back to cache after save", async () => {
+    const state = createInitialState("2026-03-11");
+    const resolvedState = {
+      ...state,
+      uiState: {
+        ...state.uiState,
+        selectedDailyDate: "2026-03-12",
+      },
+    };
+    const cacheWrites: string[] = [];
+    const cache = {
+      loadCached: vi.fn(() => ({ envelope: null, available: true })),
+      saveCached: vi.fn(({ envelope }: { envelope: { state: AppState } }) => {
+        cacheWrites.push(envelope.state.uiState.selectedDailyDate ?? "none");
+        return { available: true };
+      }),
+      clearCached: vi.fn(() => ({ available: true })),
+    };
+    const remoteStore = {
+      loadRemoteState: vi.fn(),
+      saveRemoteState: vi.fn(async () => ({
+        status: "synced" as const,
+        metadata: createPersistenceMetadata({ hasMigratedToSplitStore: true }),
+        conflictResolution: "remote-overwrote-local" as const,
+        notice: "Newer changes from another device were loaded.",
+        errorMessage: null,
+        resolvedState,
+      })),
+    };
+
+    const repository = new SplitPersistenceRepository(remoteStore, cache);
+    const saved = await repository.save({
+      userId: "user_1",
+      state,
+      baseMetadata: createPersistenceMetadata(),
+      now: new Date("2026-03-11T08:00:00Z"),
+    });
+
+    expect(saved.resolvedState).toEqual(resolvedState);
+    expect(cacheWrites).toEqual(["2026-03-11", "2026-03-12"]);
   });
 });
