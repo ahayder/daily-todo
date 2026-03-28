@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   release-macos:
+    env:
+      NEXT_PUBLIC_POCKETBASE_URL: ${{ vars.NEXT_PUBLIC_POCKETBASE_URL }}
+      NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION: ${{ vars.NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION }}
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +51,14 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Validate PocketBase configuration
+        run: |
+          if [ -z "$NEXT_PUBLIC_POCKETBASE_URL" ]; then
+            echo "NEXT_PUBLIC_POCKETBASE_URL is not configured." >&2
+            echo "Add it as a GitHub Actions repository variable before tagging a release." >&2
+            exit 1
+          fi
 
       - name: Validate updater signing key
         env:
