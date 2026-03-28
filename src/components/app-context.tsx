@@ -21,6 +21,8 @@ import {
   createPlannerEvent,
   createPlannerPreset,
   createNoteDoc,
+  createNoteFolder,
+  DEFAULT_NOTES_FOLDER_ID,
   createTodo,
   duplicatePlannerPreset,
   getSortedDailyDates,
@@ -29,6 +31,7 @@ import {
   createPersistenceMetadata,
   normalizeAppState,
   seedAppState,
+  stripNoteBodies,
   type PersistenceMetadata,
   type PersistenceRepository,
   type PersistenceStatus,
@@ -40,6 +43,7 @@ import {
 import type {
   AppState,
   CategoryTheme,
+  NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
   Priority,
@@ -51,16 +55,23 @@ export type AppAction =
   | { type: "set-view"; view: ViewMode }
   | { type: "toggle-sidebar-collapsed" }
   | { type: "set-sidebar-collapsed"; isCollapsed: boolean }
+  | { type: "set-daily-task-pane-width"; width: number }
   | { type: "set-theme-mode"; themeMode: ThemeMode }
   | { type: "set-category-theme"; theme: CategoryTheme }
   | { type: "select-daily"; date: string }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
+  | { type: "toggle-note-folder"; folderId: string }
   | { type: "update-daily-markdown"; date: string; markdown: string }
   | { type: "add-todo"; date: string; text: string; priority: Priority; parentId?: string }
   | { type: "toggle-todo"; date: string; todoId: string }
   | { type: "delete-todo"; date: string; todoId: string }
   | { type: "create-note"; title?: string }
+  | { type: "create-note-folder"; name?: string; parentFolderId?: string | null }
+  | { type: "rename-note-folder"; folderId: string; name: string }
+  | { type: "delete-note-folder"; folderId: string }
+  | { type: "move-note-to-folder"; noteId: string; folderId: string | null }
+  | { type: "select-note-folder"; folderId: string | null }
   | { type: "select-note"; noteId: string }
   | { type: "rename-note"; noteId: string; title: string }
   | { type: "delete-note"; noteId: string }
@@ -115,13 +126,72 @@ function ensureSelectedDailyDate(state: AppState): string {
   return sorted[0];
 }
 
-function ensureSelectedNoteId(state: AppState): string {
+function ensureSelectedNoteId(state: AppState): string | null {
   const existing = state.uiState.selectedNoteId;
   if (existing && state.notesDocs[existing]) {
     return existing;
   }
+  if (state.uiState.selectedNoteFolderId) {
+    return null;
+  }
   const first = Object.keys(state.notesDocs)[0];
-  return first;
+  return first ?? null;
+}
+
+function ensureSelectedNoteFolderId(state: AppState): string | null {
+  const existing = state.uiState.selectedNoteFolderId;
+  if (existing && state.noteFolders[existing]) {
+    return existing;
+  }
+
+  return null;
+}
+
+function collectFolderTreeIds(
+  folders: AppState["noteFolders"],
+  rootFolderId: string,
+): Set<string> {
+  const ids = new Set<string>();
+  const stack = [rootFolderId];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop();
+    if (!currentId || ids.has(currentId) || !folders[currentId]) {
+      continue;
+    }
+
+    ids.add(currentId);
+
+    for (const folder of Object.values(folders)) {
+      if (folder.parentId === currentId) {
+        stack.push(folder.id);
+      }
+    }
+  }
+
+  return ids;
+}
+
+function expandFolderPath(
+  expandedFolderIds: string[],
+  folders: AppState["noteFolders"],
+  folderId: string | null | undefined,
+): string[] {
+  const nextExpanded = new Set(
+    expandedFolderIds.filter((expandedFolderId) => Boolean(folders[expandedFolderId])),
+  );
+
+  let currentFolderId = folderId;
+  while (currentFolderId && folders[currentFolderId]) {
+    nextExpanded.add(currentFolderId);
+    currentFolderId = folders[currentFolderId].parentId;
+  }
+
+  if (folders[DEFAULT_NOTES_FOLDER_ID]) {
+    nextExpanded.add(DEFAULT_NOTES_FOLDER_ID);
+  }
+
+  return Array.from(nextExpanded);
 }
 
 function ensureSelectedPlannerPresetId(state: AppState): string {
@@ -172,6 +242,10 @@ function loadDevelopmentWorkspaceState() {
   }
 }
 
+function serializeStateForSync(state: AppState) {
+  return JSON.stringify(stripNoteBodies(state));
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "set-view":
@@ -196,6 +270,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           isSidebarCollapsed: action.isCollapsed,
+        },
+      };
+    case "set-daily-task-pane-width":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          dailyTaskPaneWidth: action.width,
         },
       };
     case "set-theme-mode":
@@ -246,6 +328,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           expandedMonths: toggleString(state.uiState.expandedMonths, action.month),
+        },
+      };
+    case "toggle-note-folder":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          expandedNoteFolders: toggleString(state.uiState.expandedNoteFolders, action.folderId),
         },
       };
     case "update-daily-markdown": {
@@ -360,7 +450,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "create-note": {
-      const note = createNoteDoc(action.title);
+      const selectedNote = state.uiState.selectedNoteId
+        ? state.notesDocs[state.uiState.selectedNoteId]
+        : null;
+      const folderId =
+        state.uiState.selectedNoteFolderId ??
+        selectedNote?.folderId ??
+        DEFAULT_NOTES_FOLDER_ID;
+      const note = createNoteDoc(action.title, folderId);
       return {
         ...state,
         notesDocs: {
@@ -370,10 +467,142 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           selectedNoteId: note.id,
+          selectedNoteFolderId: folderId,
+          expandedNoteFolders: expandFolderPath(
+            state.uiState.expandedNoteFolders,
+            state.noteFolders,
+            folderId,
+          ),
           lastView: "notes",
         },
       };
     }
+    case "create-note-folder": {
+      const parentFolderId =
+        action.parentFolderId === undefined
+          ? state.uiState.selectedNoteFolderId
+          : action.parentFolderId;
+      const folder = createNoteFolder(action.name, parentFolderId ?? null);
+
+      return {
+        ...state,
+        noteFolders: {
+          ...state.noteFolders,
+          [folder.id]: folder,
+        },
+        uiState: {
+          ...state.uiState,
+          selectedNoteFolderId: folder.id,
+          selectedNoteId: null,
+          expandedNoteFolders: expandFolderPath(
+            state.uiState.expandedNoteFolders,
+            {
+              ...state.noteFolders,
+              [folder.id]: folder,
+            },
+            folder.id,
+          ),
+          lastView: "notes",
+        },
+      };
+    }
+    case "rename-note-folder": {
+      const folder = state.noteFolders[action.folderId];
+      if (!folder) return state;
+      if (action.folderId === DEFAULT_NOTES_FOLDER_ID) return state;
+
+      return {
+        ...state,
+        noteFolders: {
+          ...state.noteFolders,
+          [action.folderId]: {
+            ...folder,
+            name: action.name.trim() || "New Folder",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    }
+    case "move-note-to-folder": {
+      const note = state.notesDocs[action.noteId];
+      if (!note) return state;
+      const nextFolderId = action.folderId ?? DEFAULT_NOTES_FOLDER_ID;
+      if (!state.noteFolders[nextFolderId]) return state;
+
+      return {
+        ...state,
+        notesDocs: {
+          ...state.notesDocs,
+          [action.noteId]: {
+            ...note,
+            folderId: nextFolderId,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        uiState: {
+          ...state.uiState,
+          selectedNoteId: action.noteId,
+          selectedNoteFolderId: nextFolderId,
+          expandedNoteFolders: expandFolderPath(
+            state.uiState.expandedNoteFolders,
+            state.noteFolders,
+            nextFolderId,
+          ),
+          lastView: "notes",
+        },
+      };
+    }
+    case "delete-note-folder": {
+      if (!state.noteFolders[action.folderId]) return state;
+      if (action.folderId === DEFAULT_NOTES_FOLDER_ID) return state;
+
+      const deletedFolderIds = collectFolderTreeIds(state.noteFolders, action.folderId);
+      const nextNoteFolders = Object.fromEntries(
+        Object.entries(state.noteFolders).filter(([folderId]) => !deletedFolderIds.has(folderId)),
+      );
+      const nextNotesDocs = Object.fromEntries(
+        Object.entries(state.notesDocs).filter(
+          ([, note]) => !note.folderId || !deletedFolderIds.has(note.folderId),
+        ),
+      );
+
+      return {
+        ...state,
+        noteFolders: nextNoteFolders,
+        notesDocs: nextNotesDocs,
+        uiState: {
+          ...state.uiState,
+          selectedNoteFolderId:
+            state.uiState.selectedNoteFolderId &&
+            deletedFolderIds.has(state.uiState.selectedNoteFolderId)
+              ? null
+              : state.uiState.selectedNoteFolderId,
+          selectedNoteId:
+            state.uiState.selectedNoteId && nextNotesDocs[state.uiState.selectedNoteId]
+              ? state.uiState.selectedNoteId
+              : null,
+          expandedNoteFolders: state.uiState.expandedNoteFolders.filter(
+            (folderId) => !deletedFolderIds.has(folderId) && Boolean(nextNoteFolders[folderId]),
+          ),
+          lastView: "notes",
+        },
+      };
+    }
+    case "select-note-folder":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          selectedNoteFolderId: action.folderId,
+          selectedNoteId: null,
+          expandedNoteFolders: expandFolderPath(
+            state.uiState.expandedNoteFolders,
+            state.noteFolders,
+            action.folderId,
+          ),
+          lastView: "notes",
+        },
+      };
     case "select-planner-preset":
       return {
         ...state,
@@ -590,11 +819,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "select-note":
+      if (!state.notesDocs[action.noteId]) return state;
       return {
         ...state,
         uiState: {
           ...state.uiState,
           selectedNoteId: action.noteId,
+          selectedNoteFolderId: state.notesDocs[action.noteId].folderId,
+          expandedNoteFolders: expandFolderPath(
+            state.uiState.expandedNoteFolders,
+            state.noteFolders,
+            state.notesDocs[action.noteId].folderId,
+          ),
           lastView: "notes",
         },
       };
@@ -607,24 +843,36 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.notesDocs,
           [action.noteId]: {
             ...note,
-            title: action.title || "Untitled Note",
+            title: action.title,
             updatedAt: new Date().toISOString(),
           },
         },
       };
     }
     case "delete-note": {
+      const deletedNote = state.notesDocs[action.noteId];
+      if (!deletedNote) return state;
+
       const entries = Object.entries(state.notesDocs).filter(([id]) => id !== action.noteId);
-      if (!entries.length) return state;
       const nextNotesDocs = Object.fromEntries(entries);
+      const selectedNoteId =
+        state.uiState.selectedNoteId === action.noteId
+          ? null
+          : nextNotesDocs[state.uiState.selectedNoteId ?? ""]
+            ? state.uiState.selectedNoteId
+            : null;
+      const selectedNoteFolderId =
+        state.uiState.selectedNoteFolderId && state.noteFolders[state.uiState.selectedNoteFolderId]
+          ? state.uiState.selectedNoteFolderId
+          : deletedNote.folderId;
+
       return {
         ...state,
         notesDocs: nextNotesDocs,
         uiState: {
           ...state.uiState,
-          selectedNoteId: nextNotesDocs[state.uiState.selectedNoteId ?? ""]
-            ? state.uiState.selectedNoteId
-            : entries[0][0],
+          selectedNoteId,
+          selectedNoteFolderId: selectedNoteFolderId ?? null,
         },
       };
     }
@@ -651,12 +899,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 type AppContextValue = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
+  notes: {
+    selectedBodyStatus: NoteBodyStatus;
+    selectedBodyNotice: string | null;
+    selectedBodyError: string | null;
+  };
   sync: {
     status: PersistenceStatus;
+    indicator: "saved" | "saving" | "unsynced" | "issue";
+    lastSavedAt: string | null;
     lastSyncedAt: string | null;
     notice: string | null;
     errorMessage: string | null;
     hasPendingChanges: boolean;
+    hasUnsyncedChanges: boolean;
+    isSaving: boolean;
     persistenceAvailable: boolean;
   };
   retrySync: () => Promise<void>;
@@ -669,6 +926,10 @@ type AppProviderProps = {
   repository: PersistenceRepository;
 };
 
+const WORKSPACE_REMOTE_SAVE_DEBOUNCE_MS = 3000;
+const NOTE_BODY_REMOTE_SAVE_DEBOUNCE_MS = 5000;
+const REMOTE_SAVE_THROTTLE_MS = 10000;
+
 export function AppProvider({ children, repository }: AppProviderProps) {
   const { session, status: authStatus } = useAuth();
   const pathname = usePathname();
@@ -676,14 +937,28 @@ export function AppProvider({ children, repository }: AppProviderProps) {
   const saveSnapshotRef = useRef<string | null>(null);
   const metadataRef = useRef<PersistenceMetadata>(createPersistenceMetadata());
   const dirtySnapshotRef = useRef<string | null>(null);
+  const latestStateRef = useRef<AppState | null>(null);
   const lastAuthenticatedUserIdRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const lastRemoteSaveStartedAtRef = useRef<number | null>(null);
+  const remoteSaveInFlightRef = useRef(false);
+  const saveAfterCurrentRef = useRef(false);
   const themeMode = state?.uiState.themeMode;
   const [syncStatus, setSyncStatus] = useState<PersistenceStatus>("idle");
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasSyncIssue, setHasSyncIssue] = useState(false);
+  const noteBodySaveTimerRef = useRef<number | null>(null);
+  const noteBodySnapshotRef = useRef<Record<string, string>>({});
+  const [selectedBodyStatus, setSelectedBodyStatus] = useState<NoteBodyStatus>("idle");
+  const [selectedBodyNotice, setSelectedBodyNotice] = useState<string | null>(null);
+  const [selectedBodyError, setSelectedBodyError] = useState<string | null>(null);
 
   const isPublicAuthRoute = pathname.startsWith("/auth/reset");
 
@@ -692,6 +967,200 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       setState((current) => (current ? appReducer(current, action) : current));
     },
     [],
+  );
+
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
+
+  const clearSaveTimer = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  const clearNoteBodySaveTimer = useCallback(() => {
+    if (noteBodySaveTimerRef.current !== null) {
+      window.clearTimeout(noteBodySaveTimerRef.current);
+      noteBodySaveTimerRef.current = null;
+    }
+  }, []);
+
+  const applySaveOutcome = useCallback(
+    (
+      result:
+        | {
+            status: PersistenceStatus;
+            metadata: PersistenceMetadata;
+            notice: string | null;
+            errorMessage: string | null;
+            resolvedState?: AppState;
+          }
+        | null,
+      attemptedSnapshot: string,
+    ) => {
+      if (result) {
+        metadataRef.current = result.metadata;
+        setSyncStatus(result.status);
+        setSyncNotice(result.notice);
+        setSyncError(result.errorMessage);
+        setPersistenceAvailable(true);
+
+        if (result.status === "synced") {
+          setHasSyncIssue(false);
+          setLastSavedAt(result.metadata.lastRemoteUpdatedAt ?? result.metadata.lastLocalMutationAt);
+          setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+
+          const successfulSnapshot = result.resolvedState
+            ? serializeStateForSync(result.resolvedState)
+            : attemptedSnapshot;
+          saveSnapshotRef.current = successfulSnapshot;
+
+          if (result.resolvedState && dirtySnapshotRef.current === attemptedSnapshot) {
+            latestStateRef.current = result.resolvedState;
+            setState(result.resolvedState);
+          }
+
+          if (dirtySnapshotRef.current === attemptedSnapshot) {
+            dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
+            setHasUnsyncedChanges(false);
+          } else {
+            setHasPendingChanges(Boolean(dirtySnapshotRef.current));
+            setHasUnsyncedChanges(Boolean(dirtySnapshotRef.current));
+          }
+
+          return;
+        }
+
+        setHasSyncIssue(result.status === "error");
+        setLastSavedAt(result.metadata.lastRemoteUpdatedAt ?? result.metadata.lastLocalMutationAt);
+        setHasPendingChanges(Boolean(dirtySnapshotRef.current));
+        setHasUnsyncedChanges(
+          Boolean(dirtySnapshotRef.current) || result.status === "offline",
+        );
+        return;
+      }
+
+      setSyncStatus("error");
+      setSyncNotice("Your latest changes are still available on this device.");
+      setSyncError("We couldn’t sync right now.");
+      setHasSyncIssue(false);
+      setHasPendingChanges(Boolean(dirtySnapshotRef.current));
+      setHasUnsyncedChanges(Boolean(dirtySnapshotRef.current));
+    },
+    [],
+  );
+
+  const flushLatestState = useCallback(
+    async ({
+      forceCurrentState = false,
+      bypassThrottle = false,
+    }: { forceCurrentState?: boolean; bypassThrottle?: boolean } = {}) => {
+      if (!session || authStatus !== "authenticated") {
+        return;
+      }
+
+      const currentState = latestStateRef.current;
+      if (!currentState) {
+        return;
+      }
+
+      const currentSnapshot = serializeStateForSync(currentState);
+      const attemptedSnapshot = dirtySnapshotRef.current ?? (forceCurrentState ? currentSnapshot : null);
+
+      if (!attemptedSnapshot) {
+        setIsSaving(false);
+        return;
+      }
+
+      if (isDevelopmentWorkspaceSession(session)) {
+        saveDevelopmentWorkspaceState(currentState);
+        saveSnapshotRef.current = attemptedSnapshot;
+        dirtySnapshotRef.current = null;
+        metadataRef.current = createPersistenceMetadata({
+          ...metadataRef.current,
+          lastLocalMutationAt: new Date().toISOString(),
+        });
+        setHasPendingChanges(false);
+        setHasUnsyncedChanges(false);
+        setHasSyncIssue(false);
+        setIsSaving(false);
+        setSyncStatus("synced");
+        setSyncNotice("Development workspace is active. Changes stay on this device.");
+        setSyncError(null);
+        setLastSavedAt(metadataRef.current.lastLocalMutationAt);
+        setLastSyncedAt(null);
+        return;
+      }
+
+      if (remoteSaveInFlightRef.current) {
+        saveAfterCurrentRef.current = true;
+        return;
+      }
+
+      if (!bypassThrottle) {
+        const lastRemoteSaveStartedAt = lastRemoteSaveStartedAtRef.current;
+        if (lastRemoteSaveStartedAt !== null) {
+          const remainingThrottleMs =
+            REMOTE_SAVE_THROTTLE_MS - (Date.now() - lastRemoteSaveStartedAt);
+
+          if (remainingThrottleMs > 0) {
+            clearSaveTimer();
+            setIsSaving(true);
+            saveTimerRef.current = window.setTimeout(() => {
+              saveTimerRef.current = null;
+              void flushLatestState();
+            }, remainingThrottleMs);
+            return;
+          }
+        }
+      }
+
+      remoteSaveInFlightRef.current = true;
+      lastRemoteSaveStartedAtRef.current = Date.now();
+      setIsSaving(true);
+      setSyncStatus("syncing");
+      setSyncNotice("Saving your latest changes to PocketBase.");
+      setSyncError(null);
+
+      try {
+        const result = await repository.save({
+          userId: session.userId,
+          state: currentState,
+          baseMetadata: metadataRef.current,
+          now: new Date(),
+        });
+
+        applySaveOutcome(result, attemptedSnapshot);
+      } catch {
+        applySaveOutcome(null, attemptedSnapshot);
+      } finally {
+        remoteSaveInFlightRef.current = false;
+
+        if (saveAfterCurrentRef.current) {
+          saveAfterCurrentRef.current = false;
+          void flushLatestState();
+          return;
+        }
+
+        setIsSaving(false);
+      }
+    },
+    [applySaveOutcome, authStatus, clearSaveTimer, repository, session],
+  );
+
+  const queueSave = useCallback(
+    (delayMs: number) => {
+      clearSaveTimer();
+      setIsSaving(true);
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        void flushLatestState();
+      }, delayMs);
+    },
+    [clearSaveTimer, flushLatestState],
   );
 
   useEffect(() => {
@@ -709,22 +1178,36 @@ export function AppProvider({ children, repository }: AppProviderProps) {
 
       saveSnapshotRef.current = null;
       dirtySnapshotRef.current = null;
+      latestStateRef.current = null;
+      clearSaveTimer();
+      clearNoteBodySaveTimer();
+      lastRemoteSaveStartedAtRef.current = null;
+      remoteSaveInFlightRef.current = false;
+      saveAfterCurrentRef.current = false;
+      noteBodySnapshotRef.current = {};
       metadataRef.current = createPersistenceMetadata();
       startTransition(() => {
         setState(null);
         setSyncStatus("idle");
         setSyncNotice(null);
         setSyncError(null);
+        setLastSavedAt(null);
         setLastSyncedAt(null);
         setPersistenceAvailable(true);
         setHasPendingChanges(false);
+        setHasUnsyncedChanges(false);
+        setIsSaving(false);
+        setHasSyncIssue(false);
+        setSelectedBodyStatus("idle");
+        setSelectedBodyNotice(null);
+        setSelectedBodyError(null);
       });
       return;
     }
 
     if (isDevelopmentWorkspaceSession(session)) {
       const devState = loadDevelopmentWorkspaceState();
-      const snapshot = JSON.stringify(devState);
+      const snapshot = serializeStateForSync(devState);
       saveSnapshotRef.current = snapshot;
       dirtySnapshotRef.current = null;
       metadataRef.current = createPersistenceMetadata({
@@ -732,12 +1215,19 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       });
       startTransition(() => {
         setHasPendingChanges(false);
+        setHasUnsyncedChanges(false);
+        setIsSaving(false);
+        setHasSyncIssue(false);
         setState(devState);
         setSyncStatus("synced");
         setSyncNotice("Development workspace is active. Changes stay on this device.");
         setSyncError(null);
+        setLastSavedAt(metadataRef.current.lastLocalMutationAt);
         setLastSyncedAt(null);
         setPersistenceAvailable(true);
+        setSelectedBodyStatus("idle");
+        setSelectedBodyNotice(null);
+        setSelectedBodyError(null);
       });
       return;
     }
@@ -747,6 +1237,7 @@ export function AppProvider({ children, repository }: AppProviderProps) {
     const hydrate = async () => {
       try {
         setSyncStatus("loading");
+        await repository.evictExpiredCachedBodies({ userId: session.userId, now: new Date() });
         const result = await repository.load({
           userId: session.userId,
           now: new Date(),
@@ -755,15 +1246,21 @@ export function AppProvider({ children, repository }: AppProviderProps) {
               return;
             }
 
-            const snapshot = JSON.stringify(remoteResult.state);
+            const snapshot = serializeStateForSync(remoteResult.state);
             saveSnapshotRef.current = snapshot;
             dirtySnapshotRef.current = null;
             setHasPendingChanges(false);
+            setHasUnsyncedChanges(remoteResult.status !== "synced");
+            setIsSaving(false);
+            setHasSyncIssue(remoteResult.status === "error");
             metadataRef.current = remoteResult.metadata;
             setState(remoteResult.state);
             setSyncStatus(remoteResult.status);
             setSyncNotice(remoteResult.notice);
             setSyncError(remoteResult.errorMessage);
+            setLastSavedAt(
+              remoteResult.metadata.lastRemoteUpdatedAt ?? remoteResult.metadata.lastLocalMutationAt,
+            );
             setLastSyncedAt(remoteResult.metadata.lastRemoteUpdatedAt);
             setPersistenceAvailable(remoteResult.persistenceAvailable);
           },
@@ -772,15 +1269,19 @@ export function AppProvider({ children, repository }: AppProviderProps) {
           return;
         }
 
-        const snapshot = JSON.stringify(result.state);
+        const snapshot = serializeStateForSync(result.state);
         saveSnapshotRef.current = snapshot;
         dirtySnapshotRef.current = null;
         setHasPendingChanges(false);
+        setHasUnsyncedChanges(result.status !== "synced");
+        setIsSaving(false);
+        setHasSyncIssue(result.status === "error");
         metadataRef.current = result.metadata;
         setState(result.state);
         setSyncStatus(result.status);
         setSyncNotice(result.notice);
         setSyncError(result.errorMessage);
+        setLastSavedAt(result.metadata.lastRemoteUpdatedAt ?? result.metadata.lastLocalMutationAt);
         setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
         setPersistenceAvailable(result.persistenceAvailable);
       } catch {
@@ -790,7 +1291,12 @@ export function AppProvider({ children, repository }: AppProviderProps) {
 
         setState(seedAppState(new Date()));
         setSyncStatus("error");
+        setSyncNotice("We couldn’t restore your last synced workspace.");
         setSyncError("We couldn’t restore your workspace.");
+        setLastSavedAt(null);
+        setHasSyncIssue(true);
+        setHasUnsyncedChanges(false);
+        setIsSaving(false);
       }
     };
 
@@ -799,7 +1305,139 @@ export function AppProvider({ children, repository }: AppProviderProps) {
     return () => {
       mounted = false;
     };
-  }, [authStatus, repository, session]);
+  }, [authStatus, clearNoteBodySaveTimer, clearSaveTimer, repository, session]);
+
+  const selectedNoteId = state?.uiState.selectedNoteId ?? null;
+  const selectedNote = selectedNoteId ? state?.notesDocs[selectedNoteId] ?? null : null;
+
+  useEffect(() => {
+    if (!session || authStatus !== "authenticated" || !selectedNoteId || !selectedNote) {
+      setSelectedBodyStatus("idle");
+      setSelectedBodyNotice(null);
+      setSelectedBodyError(null);
+      return;
+    }
+
+    if (typeof selectedNote.markdown === "string") {
+      noteBodySnapshotRef.current[selectedNoteId] ??= selectedNote.markdown;
+      setSelectedBodyStatus("ready");
+      setSelectedBodyNotice(null);
+      setSelectedBodyError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedBodyStatus("loading");
+    setSelectedBodyNotice(null);
+    setSelectedBodyError(null);
+
+    void repository
+      .loadNoteBody({
+        userId: session.userId,
+        noteId: selectedNoteId,
+        now: new Date(),
+      })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (result.markdown !== null) {
+          const loadedMarkdown = result.markdown;
+          noteBodySnapshotRef.current[selectedNoteId] = loadedMarkdown;
+          setState((current) => {
+            if (!current?.notesDocs[selectedNoteId]) {
+              return current;
+            }
+
+            return {
+              ...current,
+              notesDocs: {
+                ...current.notesDocs,
+                [selectedNoteId]: {
+                  ...current.notesDocs[selectedNoteId],
+                  markdown: loadedMarkdown,
+                  updatedAt: result.updatedAtClient ?? current.notesDocs[selectedNoteId].updatedAt,
+                },
+              },
+            };
+          });
+        }
+
+        setSelectedBodyStatus(result.status === "error" ? "error" : result.status);
+        setSelectedBodyNotice(result.notice);
+        setSelectedBodyError(result.errorMessage);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setSelectedBodyStatus("error");
+        setSelectedBodyNotice(null);
+        setSelectedBodyError("We couldn’t load this note right now.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus, repository, selectedNote, selectedNoteId, session]);
+
+  useEffect(() => {
+    if (
+      !session ||
+      authStatus !== "authenticated" ||
+      !selectedNoteId ||
+      !selectedNote ||
+      typeof selectedNote.markdown !== "string"
+    ) {
+      clearNoteBodySaveTimer();
+      return;
+    }
+
+    const previousMarkdown = noteBodySnapshotRef.current[selectedNoteId];
+    if (previousMarkdown === selectedNote.markdown) {
+      return;
+    }
+
+    void repository.primeRecentNoteCache({
+      userId: session.userId,
+      noteBodies: [
+        {
+          noteId: selectedNoteId,
+          markdown: selectedNote.markdown,
+          updatedAtClient: selectedNote.updatedAt,
+        },
+      ],
+      now: new Date(),
+    });
+
+    clearNoteBodySaveTimer();
+    noteBodySaveTimerRef.current = window.setTimeout(() => {
+      noteBodySaveTimerRef.current = null;
+      void repository
+        .saveNoteBody({
+          userId: session.userId,
+          noteId: selectedNoteId,
+          markdown: selectedNote.markdown ?? "",
+          updatedAtClient: selectedNote.updatedAt,
+          now: new Date(),
+        })
+        .then((result) => {
+          noteBodySnapshotRef.current[selectedNoteId] = result.markdown;
+          setSelectedBodyStatus(result.status === "offline" ? "stale-offline" : "ready");
+          setSelectedBodyNotice(result.notice);
+          setSelectedBodyError(result.errorMessage);
+        })
+        .catch(() => {
+          setSelectedBodyStatus("error");
+          setSelectedBodyNotice(null);
+          setSelectedBodyError("We couldn’t save this note right now.");
+        });
+    }, NOTE_BODY_REMOTE_SAVE_DEBOUNCE_MS);
+
+    return clearNoteBodySaveTimer;
+  }, [authStatus, clearNoteBodySaveTimer, repository, selectedNote, selectedNoteId, session]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined" || !state) return;
@@ -839,7 +1477,7 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       return;
     }
 
-    const nextSnapshot = JSON.stringify(state);
+    const nextSnapshot = serializeStateForSync(state);
     if (nextSnapshot === saveSnapshotRef.current) {
       dirtySnapshotRef.current = null;
       return;
@@ -849,120 +1487,41 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       dirtySnapshotRef.current = nextSnapshot;
       startTransition(() => {
         setHasPendingChanges(true);
+        setHasUnsyncedChanges(true);
+        setIsSaving(true);
+        setHasSyncIssue(false);
       });
-      const timer = window.setTimeout(() => {
-        saveDevelopmentWorkspaceState(state);
-        saveSnapshotRef.current = nextSnapshot;
-        dirtySnapshotRef.current = null;
-        setHasPendingChanges(false);
-        metadataRef.current = createPersistenceMetadata({
-          ...metadataRef.current,
-          lastLocalMutationAt: new Date().toISOString(),
-        });
-        setSyncStatus("synced");
-        setSyncNotice("Development workspace is active. Changes stay on this device.");
-        setSyncError(null);
-      }, 150);
-
-      return () => {
-        window.clearTimeout(timer);
-      };
+      queueSave(150);
+      return clearSaveTimer;
     }
 
     dirtySnapshotRef.current = nextSnapshot;
     startTransition(() => {
       setHasPendingChanges(true);
-      setSyncStatus((current) => (current === "offline" ? "offline" : "syncing"));
+      setHasUnsyncedChanges(true);
+      setIsSaving(true);
+      setHasSyncIssue(false);
+      setSyncStatus("syncing");
+      setSyncNotice("Saving your latest changes to PocketBase.");
+      setSyncError(null);
     });
 
-    const timer = window.setTimeout(() => {
-      void repository
-        .save({
-          userId: session.userId,
-          state,
-          baseMetadata: metadataRef.current,
-          now: new Date(),
-        })
-        .then((result) => {
-          metadataRef.current = result.metadata;
-          setSyncStatus(result.status);
-          setSyncNotice(result.notice);
-          setSyncError(result.errorMessage);
-          setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
-          if (result.resolvedState) {
-            const resolvedSnapshot = JSON.stringify(result.resolvedState);
-            saveSnapshotRef.current = resolvedSnapshot;
-            dirtySnapshotRef.current = null;
-            setHasPendingChanges(false);
-            setState(result.resolvedState);
-            return;
-          }
-          if (result.status === "synced") {
-            saveSnapshotRef.current = nextSnapshot;
-            dirtySnapshotRef.current = null;
-            setHasPendingChanges(false);
-          }
-        })
-        .catch(() => {
-          setSyncStatus("error");
-          setSyncError("We couldn’t sync right now.");
-        });
-    }, 750);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [authStatus, repository, session, state]);
+    queueSave(WORKSPACE_REMOTE_SAVE_DEBOUNCE_MS);
+    return clearSaveTimer;
+  }, [authStatus, clearSaveTimer, queueSave, session, state]);
 
   const retrySync = useCallback(async () => {
     if (!session || !state || authStatus !== "authenticated") {
       return;
     }
 
-    if (isDevelopmentWorkspaceSession(session)) {
-      saveDevelopmentWorkspaceState(state);
-      saveSnapshotRef.current = JSON.stringify(state);
-      dirtySnapshotRef.current = null;
-      setHasPendingChanges(false);
-      metadataRef.current = createPersistenceMetadata({
-        ...metadataRef.current,
-        lastLocalMutationAt: new Date().toISOString(),
-      });
-      setSyncStatus("synced");
-      setSyncNotice("Development workspace is active. Changes stay on this device.");
-      setSyncError(null);
-      setLastSyncedAt(null);
-      return;
-    }
-
-    setSyncStatus("syncing");
-    const nextSnapshot = JSON.stringify(state);
-    const result = await repository.save({
-      userId: session.userId,
-      state,
-      baseMetadata: metadataRef.current,
-      now: new Date(),
-    });
-
-    metadataRef.current = result.metadata;
-    setSyncStatus(result.status);
-    setSyncNotice(result.notice);
-    setSyncError(result.errorMessage);
-    setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
-    if (result.resolvedState) {
-      const resolvedSnapshot = JSON.stringify(result.resolvedState);
-      saveSnapshotRef.current = resolvedSnapshot;
-      dirtySnapshotRef.current = null;
-      setHasPendingChanges(false);
-      setState(result.resolvedState);
-      return;
-    }
-    if (result.status === "synced") {
-      saveSnapshotRef.current = nextSnapshot;
-      dirtySnapshotRef.current = null;
-      setHasPendingChanges(false);
-    }
-  }, [authStatus, repository, session, state]);
+    dirtySnapshotRef.current ??= serializeStateForSync(state);
+    setHasPendingChanges(true);
+    setHasUnsyncedChanges(true);
+    setHasSyncIssue(false);
+    clearSaveTimer();
+    await flushLatestState({ forceCurrentState: true, bypassThrottle: true });
+  }, [authStatus, clearSaveTimer, flushLatestState, session, state]);
 
   useEffect(() => {
     if (!session || authStatus !== "authenticated") {
@@ -975,47 +1534,13 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       }
 
       if (isDevelopmentWorkspaceSession(session)) {
-        saveDevelopmentWorkspaceState(state);
-        saveSnapshotRef.current = dirtySnapshotRef.current;
-        dirtySnapshotRef.current = null;
-        setHasPendingChanges(false);
-        setSyncStatus("synced");
-        setSyncNotice("Development workspace is active. Changes stay on this device.");
-        setSyncError(null);
+        clearSaveTimer();
+        void flushLatestState({ forceCurrentState: true });
         return;
       }
 
-      void repository
-        .save({
-          userId: session.userId,
-          state,
-          baseMetadata: metadataRef.current,
-          now: new Date(),
-        })
-        .then((result) => {
-          metadataRef.current = result.metadata;
-          setSyncStatus(result.status);
-          setSyncNotice(result.notice);
-          setSyncError(result.errorMessage);
-          setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
-          if (result.resolvedState) {
-            const resolvedSnapshot = JSON.stringify(result.resolvedState);
-            saveSnapshotRef.current = resolvedSnapshot;
-            dirtySnapshotRef.current = null;
-            setHasPendingChanges(false);
-            setState(result.resolvedState);
-            return;
-          }
-          if (result.status === "synced") {
-            saveSnapshotRef.current = dirtySnapshotRef.current;
-            dirtySnapshotRef.current = null;
-            setHasPendingChanges(false);
-          }
-        })
-        .catch(() => {
-          setSyncStatus("error");
-          setSyncError("We couldn’t sync before leaving the page.");
-        });
+      clearSaveTimer();
+      void flushLatestState({ forceCurrentState: true, bypassThrottle: true });
     };
 
     const handleVisibilityChange = () => {
@@ -1031,7 +1556,15 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       window.removeEventListener("pagehide", flushIfNeeded);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authStatus, repository, session, state]);
+  }, [authStatus, clearSaveTimer, flushLatestState, session, state]);
+
+  const syncIndicator: AppContextValue["sync"]["indicator"] = hasSyncIssue
+    ? "issue"
+    : isSaving
+      ? "saving"
+      : hasUnsyncedChanges
+        ? "unsynced"
+        : "saved";
 
   const value = useMemo(
     () =>
@@ -1039,12 +1572,21 @@ export function AppProvider({ children, repository }: AppProviderProps) {
         ? {
             state,
             dispatch,
+            notes: {
+              selectedBodyStatus,
+              selectedBodyNotice,
+              selectedBodyError,
+            },
             sync: {
               status: syncStatus,
+              indicator: syncIndicator,
+              lastSavedAt,
               lastSyncedAt,
               notice: syncNotice,
               errorMessage: syncError,
               hasPendingChanges,
+              hasUnsyncedChanges,
+              isSaving,
               persistenceAvailable,
             },
             retrySync,
@@ -1053,10 +1595,17 @@ export function AppProvider({ children, repository }: AppProviderProps) {
     [
       dispatch,
       hasPendingChanges,
+      hasUnsyncedChanges,
+      isSaving,
+      lastSavedAt,
       lastSyncedAt,
+      selectedBodyError,
+      selectedBodyNotice,
+      selectedBodyStatus,
       persistenceAvailable,
       retrySync,
       state,
+      syncIndicator,
       syncError,
       syncNotice,
       syncStatus,
@@ -1094,11 +1643,13 @@ export function useAppState(): AppContextValue {
 
   const selectedDailyDate = ensureSelectedDailyDate(context.state);
   const selectedNoteId = ensureSelectedNoteId(context.state);
+  const selectedNoteFolderId = ensureSelectedNoteFolderId(context.state);
   const selectedPlannerPresetId = ensureSelectedPlannerPresetId(context.state);
 
   if (
     context.state.uiState.selectedDailyDate !== selectedDailyDate ||
     context.state.uiState.selectedNoteId !== selectedNoteId ||
+    context.state.uiState.selectedNoteFolderId !== selectedNoteFolderId ||
     context.state.uiState.selectedPlannerPresetId !== selectedPlannerPresetId
   ) {
     return {
@@ -1109,6 +1660,7 @@ export function useAppState(): AppContextValue {
           ...context.state.uiState,
           selectedDailyDate,
           selectedNoteId,
+          selectedNoteFolderId,
           selectedPlannerPresetId,
         },
       },

@@ -138,6 +138,50 @@ export class SnapshotPersistenceRepository implements PersistenceRepository {
     this.localCache.clearCached({ userId });
   }
 
+  async loadNoteBody(): Promise<{
+    markdown: string | null;
+    status: "error";
+    source: "none";
+    updatedAtClient: null;
+    notice: null;
+    errorMessage: string;
+  }> {
+    return {
+      markdown: null,
+      status: "error",
+      source: "none",
+      updatedAtClient: null,
+      notice: null,
+      errorMessage: "Note bodies are unavailable in snapshot mode.",
+    };
+  }
+
+  async saveNoteBody({
+    markdown,
+    updatedAtClient,
+  }: {
+    markdown: string;
+    updatedAtClient: string;
+  }): Promise<{
+    markdown: string;
+    updatedAtClient: string;
+    status: "offline";
+    notice: string;
+    errorMessage: string;
+  }> {
+    return {
+      markdown,
+      updatedAtClient,
+      status: "offline",
+      notice: "PocketBase is unavailable, so your changes are saved on this device.",
+      errorMessage: "Sync is offline right now.",
+    };
+  }
+
+  async primeRecentNoteCache(): Promise<void> {}
+
+  async evictExpiredCachedBodies(): Promise<void> {}
+
   private async resolveRemoteSnapshot(
     userId: string,
     remoteSnapshot: RemoteSnapshot,

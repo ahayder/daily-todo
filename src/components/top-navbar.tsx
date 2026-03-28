@@ -2,31 +2,22 @@
 
 import Link from "next/link";
 import {
-  Brain,
   Check,
-  CloudOff,
   Download,
   LoaderCircle,
-  LogOut,
-  Monitor,
-  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
-  Sun,
-  Target,
-  TriangleAlert,
 } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
 import type { AppAction } from "@/components/app-context";
-import { useAuth } from "@/components/auth-context";
 import { useDesktopUpdate } from "@/components/desktop-update-provider";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
+import type { AppState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -34,27 +25,17 @@ type Props = {
   dispatch: Dispatch<AppAction>;
   sync: {
     status: "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
+    indicator: "saved" | "saving" | "unsynced" | "issue";
+    lastSavedAt: string | null;
     lastSyncedAt: string | null;
     notice: string | null;
     errorMessage: string | null;
     hasPendingChanges: boolean;
+    hasUnsyncedChanges: boolean;
+    isSaving: boolean;
     persistenceAvailable: boolean;
   };
   retrySync: () => Promise<void>;
-};
-
-const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
-  light: Sun,
-  dark: Moon,
-  system: Monitor,
-};
-
-const THEME_CYCLE: ThemeMode[] = ["light", "dark", "system"];
-const CATEGORY_CYCLE: CategoryTheme[] = ["normal", "adhd1", "adhd2"];
-const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
-  normal: "Labels: Normal",
-  adhd1: "Labels: ADHD 1",
-  adhd2: "Labels: ADHD 2",
 };
 
 function formatLastSynced(lastSyncedAt: string | null) {
@@ -71,27 +52,44 @@ function formatLastSynced(lastSyncedAt: string | null) {
   }).format(date);
 }
 
+function formatRelativeLastSaved(lastSyncedAt: string | null) {
+  if (!lastSyncedAt) return "Last saved never";
+
+  const date = new Date(lastSyncedAt);
+  if (Number.isNaN(date.getTime())) return "Last saved never";
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return "Last saved just now";
+
+  const secondMs = 1000;
+  const minuteMs = 60 * secondMs;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < minuteMs) {
+    const seconds = Math.max(1, Math.floor(diffMs / secondMs));
+    return `Last saved ${seconds}s ago`;
+  }
+
+  if (diffMs < hourMs) {
+    return `Last saved ${Math.floor(diffMs / minuteMs)}m ago`;
+  }
+
+  if (diffMs < dayMs) {
+    return `Last saved ${Math.floor(diffMs / hourMs)}h ago`;
+  }
+
+  return `Last saved ${formatLastSynced(lastSyncedAt)}`;
+}
+
 export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   const desktopUpdate = useDesktopUpdate();
-  const { session, signOut } = useAuth();
-  const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
-
-  const themeMode = mounted ? state.uiState.themeMode : "system";
-  const ThemeIcon = THEME_ICONS[themeMode];
-  const categoryTheme = mounted ? state.uiState.categoryTheme : "normal";
-
-  const cycleTheme = () => {
-    const currentIndex = THEME_CYCLE.indexOf(themeMode);
-    const next = THEME_CYCLE[(currentIndex + 1) % THEME_CYCLE.length];
-    dispatch({ type: "set-theme-mode", themeMode: next });
-  };
 
   const lastView = state.uiState.lastView;
   const isDaily = !mounted || lastView === "daily";
@@ -130,46 +128,39 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
           : RefreshCw;
 
   const syncPresentation = useMemo(() => {
-    if (sync.status === "syncing" || sync.status === "loading") {
+    if (sync.indicator === "saving") {
       return {
-        label: "Syncing…",
-        detail: sync.notice ?? "Saving your latest changes to PocketBase.",
-        icon: LoaderCircle,
-        tone: "text-[var(--brand)] bg-[var(--brand-soft)] border-[color:color-mix(in_srgb,var(--brand)_18%,transparent)]",
-        animate: true,
+        label: "Saving…",
+        detail: sync.notice ?? "Your latest changes will be saved to PocketBase automatically.",
+        tone: "text-[var(--brand)]",
       };
     }
 
-    if (sync.status === "offline") {
+    if (sync.indicator === "unsynced") {
       return {
-        label: "Offline",
-        detail: sync.notice ?? "Saved on this device until PocketBase comes back.",
-        icon: CloudOff,
-        tone: "text-[var(--ink-700)] bg-[color:color-mix(in_srgb,var(--ink-700)_8%,transparent)] border-[var(--line)]",
-        animate: false,
+        label: formatRelativeLastSaved(sync.lastSavedAt),
+        detail:
+          sync.errorMessage ??
+          sync.notice ??
+          "Your latest state is still on this device and not yet confirmed in PocketBase.",
+        tone: "text-[color:color-mix(in_srgb,var(--brand)_70%,var(--ink-700))]",
       };
     }
 
-    if (sync.status === "error") {
+    if (sync.indicator === "issue") {
       return {
-        label: "Sync needs attention",
-        detail: sync.errorMessage ?? "Changes may not persist yet.",
-        icon: TriangleAlert,
-        tone: "text-[var(--warn)] bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] border-[color:color-mix(in_srgb,var(--warn)_16%,transparent)]",
-        animate: false,
+        label: "Sync issue",
+        detail: sync.errorMessage ?? sync.notice ?? "We couldn’t verify your sync state right now.",
+        tone: "text-[color:color-mix(in_srgb,var(--brand)_58%,var(--ink-700))]",
       };
     }
 
     return {
-      label: "Synced",
-      detail: sync.notice ?? "Your workspace is up to date.",
-      icon: Check,
-      tone: "text-[var(--brand)] bg-[color:color-mix(in_srgb,var(--brand-soft)_70%,white)] border-[color:color-mix(in_srgb,var(--brand)_18%,transparent)]",
-      animate: false,
+      label: formatRelativeLastSaved(sync.lastSavedAt),
+      detail: sync.notice ?? "Your current workspace state is saved to PocketBase.",
+      tone: "text-[var(--ink-700)]",
     };
-  }, [sync.errorMessage, sync.notice, sync.status]);
-
-  const SyncIcon = syncPresentation.icon;
+  }, [sync.errorMessage, sync.indicator, sync.lastSavedAt, sync.notice]);
 
   return (
     <header className="top-navbar">
@@ -225,63 +216,40 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         </Link>
       </nav>
 
-      <div className="relative flex items-center gap-1">
-        <button
-          type="button"
-          aria-label="Open sync status"
-          onClick={() => setIsSyncPanelOpen((current) => !current)}
+      <div className="flex items-center gap-1">
+        <div
+          aria-live="polite"
           className={cn(
-            "inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition",
+            "inline-flex min-h-8 items-center px-1 text-xs font-medium",
             syncPresentation.tone,
           )}
         >
-          <SyncIcon className={cn("h-3.5 w-3.5", syncPresentation.animate && "animate-spin")} />
           <span>{syncPresentation.label}</span>
-        </button>
+        </div>
 
-        {isSyncPanelOpen ? (
-          <div className="absolute top-11 right-0 z-30 w-72 rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_96%,white)] p-4 shadow-[0_24px_80px_rgba(31,36,48,0.12)]">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-[var(--ink-900)]">{syncPresentation.label}</p>
-                <p className="text-xs leading-5 text-[var(--ink-700)]">{syncPresentation.detail}</p>
-              </div>
-              <SyncIcon className={cn("mt-0.5 h-4 w-4 shrink-0", syncPresentation.animate && "animate-spin", sync.status === "error" ? "text-[var(--warn)]" : "text-[var(--brand)]")} />
-            </div>
-
-            <div className="mt-4 space-y-2 rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper)_65%,white)] p-3 text-xs text-[var(--ink-700)]">
-              <p>Last sync: {formatLastSynced(sync.lastSyncedAt)}</p>
-              <p>{sync.persistenceAvailable ? "Local cache is available on this device." : "Local cache is unavailable on this device."}</p>
-              <p>{sync.hasPendingChanges ? "There are unsynced changes waiting to be retried." : "No unsynced local changes are waiting."}</p>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="rounded-full px-2 py-1 text-xs font-semibold text-[var(--ink-700)] transition hover:bg-[color:color-mix(in_srgb,var(--ink-700)_6%,transparent)] hover:text-[var(--ink-900)]"
-                onClick={() => setIsSyncPanelOpen(false)}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                disabled={isRetrying}
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[color:color-mix(in_srgb,var(--brand)_86%,black)] disabled:opacity-60"
-                onClick={async () => {
-                  try {
-                    setIsRetrying(true);
-                    await retrySync();
-                  } finally {
-                    setIsRetrying(false);
-                  }
-                }}
-              >
-                {isRetrying ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                Retry now
-              </button>
-            </div>
-          </div>
-        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Force sync now"
+              className="theme-cycle-btn"
+              disabled={isRetrying}
+              onClick={async () => {
+                try {
+                  setIsRetrying(true);
+                  await retrySync();
+                } finally {
+                  setIsRetrying(false);
+                }
+              }}
+            >
+              <RefreshCw className={cn("h-4 w-4", (isRetrying || sync.isSaving) && "animate-spin")} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Force sync now
+          </TooltipContent>
+        </Tooltip>
 
         {showDesktopUpdater ? (
           <Tooltip>
@@ -324,93 +292,6 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
             </TooltipContent>
           </Tooltip>
         ) : null}
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => {
-                dispatch({ type: "set-focus-mode", isFocus: !state.uiState.isFocusMode });
-              }}
-              aria-label="Toggle Focus Mode"
-              className={cn(
-                "theme-cycle-btn",
-                state.uiState.isFocusMode && "bg-[var(--brand-soft)] text-[var(--brand)]",
-              )}
-            >
-              <Target className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {state.uiState.isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => {
-                const currentIndex = CATEGORY_CYCLE.indexOf(categoryTheme);
-                const next = CATEGORY_CYCLE[(currentIndex + 1) % CATEGORY_CYCLE.length];
-                dispatch({ type: "set-category-theme", theme: next });
-              }}
-              aria-label={`Category labels: ${categoryTheme}`}
-              className="theme-cycle-btn"
-            >
-              <Brain className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {CATEGORY_TOOLTIP[categoryTheme]}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={cycleTheme}
-              aria-label={`Theme: ${themeMode}`}
-              className="theme-cycle-btn"
-            >
-              <ThemeIcon className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {themeMode === "light"
-              ? "Light mode"
-              : themeMode === "dark"
-                ? "Dark mode"
-                : "System theme"}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  setIsSigningOut(true);
-                  if (sync.hasPendingChanges) {
-                    await retrySync();
-                  }
-                  await signOut();
-                } finally {
-                  setIsSigningOut(false);
-                }
-              }}
-              aria-label="Sign out"
-              className="theme-cycle-btn"
-            >
-              {isSigningOut ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {session?.email ? `Sign out (${session.email})` : "Sign out"}
-          </TooltipContent>
-        </Tooltip>
       </div>
     </header>
   );

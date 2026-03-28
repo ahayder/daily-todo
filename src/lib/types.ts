@@ -60,17 +60,40 @@ export type DailyPage = {
 export type NoteDoc = {
   id: string;
   title: string;
+  folderId: string | null;
+  markdown?: string;
+  updatedAt: string;
+};
+
+export type NoteSummary = Pick<NoteDoc, "id" | "title" | "folderId" | "updatedAt">;
+
+export type CachedNoteBody = {
+  noteId: string;
   markdown: string;
+  updatedAtClient: string | null;
+  lastAccessedAt: string;
+  expiresAt: string;
+};
+
+export type NoteBodyStatus = "idle" | "loading" | "ready" | "error" | "stale-offline";
+
+export type NoteFolder = {
+  id: string;
+  name: string;
+  parentId: string | null;
   updatedAt: string;
 };
 
 export type UIState = {
   selectedDailyDate: string | null;
   selectedNoteId: string | null;
+  selectedNoteFolderId: string | null;
   selectedPlannerPresetId: string | null;
   isSidebarCollapsed: boolean;
+  dailyTaskPaneWidth: number;
   expandedYears: string[];
   expandedMonths: string[];
+  expandedNoteFolders: string[];
   lastView: ViewMode;
   themeMode: ThemeMode;
   categoryTheme: CategoryTheme;
@@ -81,6 +104,7 @@ export type UIState = {
 export type AppState = {
   dailyPages: Record<string, DailyPage>;
   notesDocs: Record<string, NoteDoc>;
+  noteFolders: Record<string, NoteFolder>;
   plannerPresets: Record<string, PlannerPreset>;
   uiState: UIState;
 };

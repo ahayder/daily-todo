@@ -105,7 +105,10 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         {
           name: "title",
           type: "text",
-          required: true,
+        },
+        {
+          name: "folder_id",
+          type: "text",
         },
         {
           name: "markdown",
@@ -119,6 +122,47 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
       ],
       indexes: [
         "CREATE UNIQUE INDEX idx_notes_owner_note_id ON notes (owner, note_id)",
+      ],
+    },
+    {
+      name: "note_folders",
+      type: "base",
+      listRule: COLLECTION_ACCESS_RULE,
+      viewRule: COLLECTION_ACCESS_RULE,
+      createRule: COLLECTION_ACCESS_RULE,
+      updateRule: COLLECTION_ACCESS_RULE,
+      deleteRule: COLLECTION_ACCESS_RULE,
+      fields: [
+        {
+          name: "owner",
+          type: "relation",
+          required: true,
+          maxSelect: 1,
+          collectionId: usersCollectionId,
+          cascadeDelete: true,
+        },
+        {
+          name: "folder_id",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "name",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "parent_folder_id",
+          type: "text",
+        },
+        {
+          name: "updated_at_client",
+          type: "date",
+          required: true,
+        },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_note_folders_owner_folder_id ON note_folders (owner, folder_id)",
       ],
     },
     {
@@ -191,6 +235,10 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         },
         {
           name: "selected_note_id",
+          type: "text",
+        },
+        {
+          name: "selected_note_folder_id",
           type: "text",
         },
         {

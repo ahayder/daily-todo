@@ -3,9 +3,12 @@ import {
   seedAppState,
   type CachedAppStateEnvelope,
   type LocalCacheStorage,
+  type NoteBodyLoadResult,
+  type NoteBodySaveResult,
   type PersistenceLoadResult,
   type PersistenceMetadata,
   type PersistenceRepository,
+  type RecentNoteBodiesStorage,
   type PersistenceSaveResult,
   type PersistenceStatus,
 } from "@/lib/persistence";
@@ -24,6 +27,14 @@ export type SplitRemotePersistenceStore = {
     metadata: PersistenceMetadata;
     now?: Date;
   }): Promise<PersistenceSaveResult>;
+  loadNoteBody?(input: { userId: string; noteId: string; now?: Date }): Promise<NoteBodyLoadResult>;
+  saveNoteBody?(input: {
+    userId: string;
+    noteId: string;
+    markdown: string;
+    updatedAtClient: string;
+    now?: Date;
+  }): Promise<NoteBodySaveResult>;
 };
 
 function getCachedLoadStatus(metadata: PersistenceMetadata): PersistenceStatus {
@@ -34,6 +45,7 @@ export class SplitPersistenceRepository implements PersistenceRepository {
   constructor(
     private readonly remoteStore: SplitRemotePersistenceStore,
     private readonly localCache: LocalCacheStorage,
+    private readonly noteBodiesStorage?: RecentNoteBodiesStorage,
   ) {}
 
   async load({
@@ -180,5 +192,140 @@ export class SplitPersistenceRepository implements PersistenceRepository {
 
   async clearUserData({ userId }: { userId: string }): Promise<void> {
     this.localCache.clearCached({ userId });
+    await this.noteBodiesStorage?.clearUserData({ userId });
+  }
+
+  async loadNoteBody({
+    userId,
+    noteId,
+    now = new Date(),
+  }: {
+    userId: string;
+    noteId: string;
+    now?: Date;
+  }): Promise<NoteBodyLoadResult> {
+    await this.noteBodiesStorage?.evictExpired({ userId, now });
+
+    const cached = await this.noteBodiesStorage?.loadNoteBody({ userId, noteId, now });
+    if (cached) {
+      return {
+        markdown: cached.markdown,
+        status: "ready",
+        source: "local",
+        updatedAtClient: cached.updatedAtClient,
+        notice: null,
+        errorMessage: null,
+      };
+    }
+
+    if (!this.remoteStore.loadNoteBody) {
+      return {
+        markdown: null,
+        status: "error",
+        source: "none",
+        updatedAtClient: null,
+        notice: null,
+        errorMessage: "Note bodies are unavailable.",
+      };
+    }
+
+    const remote = await this.remoteStore.loadNoteBody({ userId, noteId, now });
+    if (remote.markdown !== null && remote.status === "ready") {
+      await this.noteBodiesStorage?.saveNoteBody({
+        userId,
+        noteId,
+        markdown: remote.markdown,
+        updatedAtClient: remote.updatedAtClient,
+        now,
+      });
+    }
+    return remote;
+  }
+
+  async saveNoteBody({
+    userId,
+    noteId,
+    markdown,
+    updatedAtClient,
+    now = new Date(),
+  }: {
+    userId: string;
+    noteId: string;
+    markdown: string;
+    updatedAtClient: string;
+    now?: Date;
+  }): Promise<NoteBodySaveResult> {
+    await this.noteBodiesStorage?.evictExpired({ userId, now });
+    await this.noteBodiesStorage?.saveNoteBody({
+      userId,
+      noteId,
+      markdown,
+      updatedAtClient,
+      now,
+    });
+
+    if (!this.remoteStore.saveNoteBody) {
+      return {
+        markdown,
+        updatedAtClient,
+        status: "offline",
+        notice: "PocketBase is unavailable, so your changes are saved on this device.",
+        errorMessage: "Sync is offline right now.",
+      };
+    }
+
+    const remote = await this.remoteStore.saveNoteBody({
+      userId,
+      noteId,
+      markdown,
+      updatedAtClient,
+      now,
+    });
+
+    await this.noteBodiesStorage?.saveNoteBody({
+      userId,
+      noteId,
+      markdown: remote.markdown,
+      updatedAtClient: remote.updatedAtClient,
+      now,
+    });
+
+    return remote;
+  }
+
+  async primeRecentNoteCache({
+    userId,
+    noteBodies,
+    now = new Date(),
+  }: {
+    userId: string;
+    noteBodies: Array<{ noteId: string; markdown: string; updatedAtClient: string | null }>;
+    now?: Date;
+  }): Promise<void> {
+    await Promise.all(
+      noteBodies.map((note) =>
+        this.noteBodiesStorage?.saveNoteBody({
+          userId,
+          noteId: note.noteId,
+          markdown: note.markdown,
+          updatedAtClient: note.updatedAtClient,
+          now,
+        }),
+      ),
+    );
+    const count = await this.noteBodiesStorage?.countUserBodies?.({ userId });
+    if (typeof count === "number") {
+      console.debug("[persistence] indexeddb recent note bodies", count);
+    }
+  }
+
+  async evictExpiredCachedBodies({
+    userId,
+    now = new Date(),
+  }: {
+    userId?: string;
+    now?: Date;
+  }): Promise<void> {
+    await this.noteBodiesStorage?.evictExpired({ userId, now });
   }
 }

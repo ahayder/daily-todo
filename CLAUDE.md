@@ -1,4 +1,4 @@
-# DailyTodoApp — Claude Brain File
+# DailyTodo — Claude Brain File
 
 > This file is the single source of truth for AI-assisted development on DailyTodoApp.
 > Read this before making any UI, architectural, or design decisions.
@@ -7,7 +7,7 @@
 
 ## Project Overview
 
-**DailyTodoApp** is a personal productivity web app combining a daily journal (note-taking with markdown + drawing) and a structured todo list, organized by day. It lives at `localhost:5005` during development.
+**DailyTodo** is a personal productivity app with a Next.js web UI and Tauri desktop shell, combining a daily journal (note-taking with markdown + drawing) and a structured todo list, organized by day. It lives at `localhost:5005` during development.
 
 The core metaphor is a **physical desk notebook** — warm, calm, analog in feel, but with the efficiency of a digital tool. Think Bear Notes meets a bullet journal.
 
@@ -22,9 +22,11 @@ The core metaphor is a **physical desk notebook** — warm, calm, analog in feel
 | Styling | Tailwind CSS v4 + shadcn/ui |
 | Component Lib | shadcn/ui (Radix primitives), @base-ui/react |
 | Markdown Editor | Tiptap (ProseMirror-based, Notion-like) |
-| Drawing | Native Canvas API (custom DrawingOverlay component) |
+| Drawing | Excalidraw embedded inside Tiptap node views |
 | State | React useReducer + Context (AppProvider) |
+| Auth | PocketBase email/password auth + verification/reset flows |
 | Persistence | PocketBase sync + local cache (`src/lib/persistence.ts`, PocketBase collections + browser cache) |
+| Desktop Shell | Tauri 2 + native updater |
 | Icons | lucide-react |
 | Animation | tw-animate-css |
 | Testing | Vitest + @testing-library/react |
@@ -37,25 +39,34 @@ The core metaphor is a **physical desk notebook** — warm, calm, analog in feel
 ```
 src/
 ├── app/
-│   ├── layout.tsx          # Root layout with AppProvider + font setup
+│   ├── layout.tsx          # Root layout with providers + font setup
 │   ├── page.tsx            # Root redirect → /daily
 │   ├── daily/page.tsx      # Daily view page
-│   └── notes/page.tsx      # Notes view page
+│   ├── notes/page.tsx      # Notes view page
+│   ├── planner/page.tsx    # Weekly planner page
+│   └── auth/reset/page.tsx # PocketBase password reset landing page
 ├── components/
+│   ├── providers.tsx       # Tooltip + desktop updater + auth + app providers
+│   ├── auth-context.tsx    # PocketBase auth session state and actions
 │   ├── app-context.tsx     # AppState, AppAction, appReducer, AppProvider
-│   ├── top-navbar.tsx      # Top bar: app name + nav pills + theme toggle
+│   ├── auth-gate.tsx       # Sign-in / register / password reset entry screen
+│   ├── top-navbar.tsx      # Top bar: nav pills + sync status + updater + theme toggle
 │   ├── sidebar.tsx         # Left sidebar: date tree (daily) / notes list (notes)
 │   ├── workspace.tsx       # Shell: top-nav + sidebar + main panel
 │   ├── daily-view.tsx      # Two-column: note pane + todo pane (inline task inputs)
 │   ├── notes-view.tsx      # Full-width note with title + editor
-│   ├── markdown-editor.tsx # Tiptap editor wrapper (no toolbar, content-first)
-│   └── drawing-overlay.tsx # Canvas-based drawing layer (pen/eraser)
+│   ├── planner-view.tsx    # Weekly planner board and event editor
+│   ├── markdown-editor.tsx # Tiptap editor wrapper with toolbar, bubble menu, slash command
+│   ├── desktop-update-provider.tsx # Tauri updater state + dialogs
+│   └── editor/             # Tiptap extensions, toolbar, bubble menu, Excalidraw node views
 └── lib/
     ├── types.ts            # All TypeScript types (Todo, DailyPage, NoteDoc, etc.)
     ├── store.ts            # Pure state factories + selectors (groupTodosByPriority, etc.)
     ├── persistence.ts      # persistence types, normalization, metadata helpers
     ├── local-cache-storage.ts # browser cache envelope for assembled AppState
-    ├── pocketbase/        # PocketBase auth + persistence repositories
+    ├── auth.ts             # auth repository contract
+    ├── pocketbase/         # PocketBase auth + persistence repositories
+    ├── split-persistence-repository.ts # cache-first repository wrapper for split sync
     ├── date.ts             # Date formatting helpers
     └── schema.ts           # Zod validation for persisted state
 ```
@@ -79,12 +90,14 @@ Todo      { id, text, priority(1|2|3), done, createdAt }
 ### Key Behaviors
 
 - **Carryover**: When a new day is created (`ensureDailyPageForDate`), all incomplete todos AND the markdown from the previous day are copied forward automatically.
+- **Authentication**: The workspace is auth-gated. Anonymous users see `AuthGate`, unverified users see `VerificationPendingScreen`, and authenticated users load their synced workspace.
 - **Persistence**: `AppProvider` hydrates an assembled `AppState`, keeps a browser cache for fast startup/offline support, and syncs through PocketBase when authenticated.
-- **Drawing**: Canvas overlay sits `position: absolute; inset: 0; z-index: 4` over the editor. `pointer-events: none` when disabled, `pointer-events: auto` when enabled.
-- **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization. No toolbar — content-first like Notion.
+- **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
+- **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
-- **Navigation**: Top navbar with Daily/Notes pills. Theme toggle (Sun/Moon/Monitor cycle) in top-right.
+- **Navigation**: Top navbar with Daily/Notes/Planner pills, sync status, desktop updater entry point, and theme toggle.
 - **Sync model**: PocketBase stores top-level entities in separate collections (`daily_pages`, `notes`, `planner_presets`, `workspace_state`) while nested child structures remain embedded JSON inside those parent records. Legacy `app_state_snapshots` is retained temporarily for migration/rollback safety.
+- **Desktop builds**: The Tauri shell supports in-app update checks and installation on supported desktop platforms.
 
 ---
 
@@ -194,7 +207,7 @@ Ordered by priority. Check off as completed.
 - [x] **#1 Fix todo form overflow** — Replaced with inline task inputs per priority group
 - [x] **#2 Empty state for priority groups** — Shows "No tasks yet" in muted italic
 - [x] **#3 Remove redundant Add button** — Completely removed; inline inputs handle everything
-- [x] **#4 Relocate Draw mode toggle** — Already outside the editor DOM (Tiptap has no toolbar)
+- [x] **#4 Relocate Draw controls** — Drawing actions now live in the editor toolbar / embedded drawing UI rather than inside legacy overlay chrome
 
 ### 🟡 Medium Priority — Friction Points
 
@@ -202,7 +215,7 @@ Ordered by priority. Check off as completed.
 - [x] **#6 Meaningful priority labels** — Using colored left-border accent + "Critical" / "Important" / "Someday" labels
 - [x] **#7 Task count badge** — Shows count pill next to group title when tasks exist
 - [x] **#8 Clearer nav active state** — Top navbar uses filled pill style with shadow
-- [ ] **#9 Markdown toolbar tooltips** — N/A: Tiptap has no toolbar
+- [x] **#9 Markdown toolbar tooltips** — Toolbar and editor commands are now present in the Tiptap editing surface
 - [x] **#10 Notes view full-height stretch** — Uses `min-height: calc(100vh - 52px - 3rem)`
 - [x] **#11 Note delete confirmation** — AlertDialog wraps delete button
 
@@ -220,11 +233,13 @@ Ordered by priority. Check off as completed.
 
 ## Known Technical Notes
 
-- **Tiptap editor** uses `@tiptap/react` with `immediatelyRender: false` for Next.js SSR compatibility. Uses `tiptap-markdown` for markdown round-trip.
-- **Drawing canvas** does not resize on window resize — the canvas dimensions are set once on mount from `parentElement.clientWidth/Height`. A `ResizeObserver` would fix this.
+- **Tiptap editor** uses `@tiptap/react` with `immediatelyRender: false` for Next.js SSR compatibility. Uses `tiptap-markdown` for markdown round-trip and hosts custom editor UI such as the toolbar, bubble menu, slash command, and drawing node.
+- **Drawing** is Excalidraw-based now, not the old canvas overlay. Embedded boards are serialized into the note document, and legacy tldraw payloads are intentionally treated as read-only migration-era content.
 - **Persistence is hybrid** — PocketBase is the source of truth for synced content, while the browser keeps a per-user assembled cache for fast warm startup, offline fallback, and device-local UI preferences.
+- **Authentication** is PocketBase-backed — email/password sign-in, registration, email verification, and password reset are part of the expected product flow.
 - **Device-local UI state** — values like theme mode, sidebar collapsed state, and focus mode remain local-only and should not be moved into synced PocketBase records unless there is a strong cross-device reason.
 - **Hybrid storage strategy** — use scalar/relation fields for ownership, ids, titles, timestamps, and other queryable atoms; use JSON fields for nested parent-owned structures such as daily todos, planner day order, planner days/events, and small UI arrays.
+- **Desktop updater** lives in the Tauri shell — updater logic and release workflow are part of the product architecture, not a one-off script.
 - **shadcn/ui** components live in `src/components/ui/`. Generate new ones with `npx shadcn@latest add <component>`.
 - **Tailwind v4 & CSS Cascade Layers (CRITICAL)**: Because Tailwind v4 relies entirely on native `@layer` (theme, base, components, utilities), **NEVER write unlayered CSS resets or component styles in globals.css**. Unlayered CSS rules (like `* { padding:0; }`) automatically overpower all layered utilities across the entire app, destroying component padding and spacing system.
   - **Do**: Always wrap custom global resets in `@layer base { ... }`.

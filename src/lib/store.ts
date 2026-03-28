@@ -3,6 +3,7 @@ import type {
   AppState,
   DailyPage,
   NoteDoc,
+  NoteFolder,
   PlannerDay,
   PlannerDayKey,
   PlannerEvent,
@@ -39,6 +40,8 @@ const DEFAULT_DAY_TITLES: Record<PlannerDayKey, string> = {
   sunday: "Reset Sunday",
 };
 
+export const DEFAULT_NOTES_FOLDER_ID = "note-folder-default";
+
 export function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
@@ -62,11 +65,33 @@ export function createTodo(text: string, priority: Priority, parentId?: string):
   };
 }
 
-export function createNoteDoc(title = "Untitled Note"): NoteDoc {
+export function createNoteDoc(
+  title = "Untitled Note",
+  folderId: string | null = DEFAULT_NOTES_FOLDER_ID,
+): NoteDoc {
   return {
     id: makeId("note"),
     title,
+    folderId,
     markdown: "",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function createNoteFolder(name = "New Folder", parentId: string | null = null): NoteFolder {
+  return {
+    id: makeId("note-folder"),
+    name,
+    parentId,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function createDefaultNotesFolder(): NoteFolder {
+  return {
+    id: DEFAULT_NOTES_FOLDER_ID,
+    name: "Notes",
+    parentId: null,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -137,6 +162,7 @@ export function createPlannerEvent(input: {
 
 export function createInitialState(todayISO: string): AppState {
   const starterNote = createNoteDoc("Quick Notes");
+  const defaultNotesFolder = createDefaultNotesFolder();
   const starterPlanner = createPlannerPreset();
   return {
     dailyPages: {
@@ -145,21 +171,106 @@ export function createInitialState(todayISO: string): AppState {
     notesDocs: {
       [starterNote.id]: starterNote,
     },
+    noteFolders: {
+      [defaultNotesFolder.id]: defaultNotesFolder,
+    },
     plannerPresets: {
       [starterPlanner.id]: starterPlanner,
     },
     uiState: {
       selectedDailyDate: todayISO,
       selectedNoteId: starterNote.id,
+      selectedNoteFolderId: defaultNotesFolder.id,
       selectedPlannerPresetId: starterPlanner.id,
       isSidebarCollapsed: false,
+      dailyTaskPaneWidth: 500,
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
+      expandedNoteFolders: [defaultNotesFolder.id],
       lastView: "daily",
-      themeMode: "system",
+      themeMode: "dark",
       categoryTheme: "normal",
       isFocusMode: false,
       focusedTodoId: null,
+    },
+  };
+}
+
+export function ensureNoteState(state: AppState): AppState {
+  const existingFolders = state.noteFolders ?? {};
+  const defaultFolder =
+    existingFolders[DEFAULT_NOTES_FOLDER_ID] ?? createDefaultNotesFolder();
+  const nextFolders: Record<string, NoteFolder> = {
+    ...existingFolders,
+    [DEFAULT_NOTES_FOLDER_ID]: defaultFolder,
+  };
+
+  let notesChanged = false;
+  const nextNotesDocs = Object.fromEntries(
+    Object.entries(state.notesDocs).map(([noteId, note]) => {
+      const nextFolderId =
+        note.folderId && nextFolders[note.folderId] ? note.folderId : DEFAULT_NOTES_FOLDER_ID;
+
+      if (nextFolderId !== note.folderId) {
+        notesChanged = true;
+      }
+
+      return [
+        noteId,
+        {
+          ...note,
+          folderId: nextFolderId,
+        },
+      ];
+    }),
+  );
+
+  const selectedNoteId =
+    state.uiState.selectedNoteId && nextNotesDocs[state.uiState.selectedNoteId]
+      ? state.uiState.selectedNoteId
+      : null;
+  const selectedNoteFolderId = selectedNoteId
+    ? nextNotesDocs[selectedNoteId].folderId
+    : state.uiState.selectedNoteFolderId && nextFolders[state.uiState.selectedNoteFolderId]
+      ? state.uiState.selectedNoteFolderId
+      : DEFAULT_NOTES_FOLDER_ID;
+  const selectedFolderIdForExpansion = selectedNoteId
+    ? nextNotesDocs[selectedNoteId].folderId
+    : selectedNoteFolderId;
+  const expandedNoteFolders = Array.from(
+    new Set(
+      (state.uiState.expandedNoteFolders ?? []).filter((folderId) => Boolean(nextFolders[folderId])),
+    ),
+  );
+
+  let currentFolderId: string | null = selectedFolderIdForExpansion;
+  while (currentFolderId && nextFolders[currentFolderId]) {
+    if (!expandedNoteFolders.includes(currentFolderId)) {
+      expandedNoteFolders.push(currentFolderId);
+    }
+    currentFolderId = nextFolders[currentFolderId].parentId;
+  }
+
+  if (
+    !notesChanged &&
+    existingFolders[DEFAULT_NOTES_FOLDER_ID] &&
+    state.uiState.selectedNoteFolderId === selectedNoteFolderId &&
+    state.uiState.selectedNoteId === selectedNoteId &&
+    (state.uiState.expandedNoteFolders ?? []).length === expandedNoteFolders.length &&
+    (state.uiState.expandedNoteFolders ?? []).every((folderId) => expandedNoteFolders.includes(folderId))
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    notesDocs: nextNotesDocs,
+    noteFolders: nextFolders,
+    uiState: {
+      ...state.uiState,
+      selectedNoteId,
+      selectedNoteFolderId,
+      expandedNoteFolders,
     },
   };
 }

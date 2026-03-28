@@ -94,6 +94,39 @@ export function createMockPersistenceRepository(
         errorMessage: null,
       };
     }),
+    loadNoteBody: vi.fn(async ({ noteId }) => ({
+      markdown: currentState.notesDocs[noteId]?.markdown ?? "",
+      status: "ready" as const,
+      source: "remote" as const,
+      updatedAtClient: currentState.notesDocs[noteId]?.updatedAt ?? null,
+      notice: null,
+      errorMessage: null,
+    })),
+    saveNoteBody: vi.fn(async ({ noteId, markdown, updatedAtClient }) => {
+      if (currentState.notesDocs[noteId]) {
+        currentState = {
+          ...currentState,
+          notesDocs: {
+            ...currentState.notesDocs,
+            [noteId]: {
+              ...currentState.notesDocs[noteId],
+              markdown,
+              updatedAt: updatedAtClient,
+            },
+          },
+        };
+      }
+
+      return {
+        markdown,
+        updatedAtClient,
+        status: "synced" as const,
+        notice: null,
+        errorMessage: null,
+      };
+    }),
+    primeRecentNoteCache: vi.fn(async () => {}),
+    evictExpiredCachedBodies: vi.fn(async () => {}),
     clearUserData: vi.fn(async () => {}),
   };
 

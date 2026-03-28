@@ -31,10 +31,14 @@ describe("TopNavbar", () => {
           dispatch={dispatch}
           sync={{
             status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
             lastSyncedAt: "2026-03-10T08:00:00.000Z",
             notice: null,
             errorMessage: null,
             hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -42,6 +46,11 @@ describe("TopNavbar", () => {
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(screen.getByText(/Last saved/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Theme:/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign out/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Toggle Focus Mode")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Category labels:/)).not.toBeInTheDocument();
 
     rerender(
       <AuthProvider repository={auth.repository}>
@@ -50,10 +59,14 @@ describe("TopNavbar", () => {
           dispatch={dispatch}
           sync={{
             status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
             lastSyncedAt: "2026-03-10T08:00:00.000Z",
             notice: null,
             errorMessage: null,
             hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -63,7 +76,7 @@ describe("TopNavbar", () => {
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
   });
 
-  test("dispatches sidebar toggle action", async () => {
+  test("shows plain text saving status", () => {
     const dispatch = vi.fn();
     const auth = createMockAuthRepository({
       userId: "user_1",
@@ -79,11 +92,15 @@ describe("TopNavbar", () => {
           state={state}
           dispatch={dispatch}
           sync={{
-            status: "synced",
+            status: "syncing",
+            indicator: "saving",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
             lastSyncedAt: "2026-03-10T08:00:00.000Z",
             notice: null,
             errorMessage: null,
-            hasPendingChanges: false,
+            hasPendingChanges: true,
+            hasUnsyncedChanges: true,
+            isSaving: true,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -91,11 +108,10 @@ describe("TopNavbar", () => {
       </AuthProvider>,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Collapse sidebar" }));
-    expect(dispatch).toHaveBeenCalledWith({ type: "toggle-sidebar-collapsed" });
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
   });
 
-  test("opens sync panel and retries manually", async () => {
+  test("forces sync immediately when the sync icon is clicked", async () => {
     const dispatch = vi.fn();
     const retrySync = vi.fn(async () => {});
     const auth = createMockAuthRepository({
@@ -112,11 +128,15 @@ describe("TopNavbar", () => {
           state={state}
           dispatch={dispatch}
           sync={{
-            status: "offline",
+            status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
             lastSyncedAt: "2026-03-10T08:00:00.000Z",
-            notice: "Saved on this device until PocketBase comes back.",
-            errorMessage: "Sync is offline right now.",
-            hasPendingChanges: true,
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
             persistenceAvailable: true,
           }}
           retrySync={retrySync}
@@ -124,10 +144,42 @@ describe("TopNavbar", () => {
       </AuthProvider>,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Open sync status" }));
-    expect(await screen.findByText(/Last sync:/)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Retry now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Force sync now" }));
     expect(retrySync).toHaveBeenCalled();
+  });
+
+  test("shows relative saved message even when latest local changes are not yet synced", () => {
+    const dispatch = vi.fn();
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const state = createInitialState("2026-03-10");
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <TopNavbar
+          state={state}
+          dispatch={dispatch}
+          sync={{
+            status: "offline",
+            indicator: "unsynced",
+            lastSavedAt: "2026-03-10T08:12:00.000Z",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: "PocketBase is unavailable, so your changes are saved on this device.",
+            errorMessage: "Sync is offline right now.",
+            hasPendingChanges: true,
+            hasUnsyncedChanges: true,
+            isSaving: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
+      </AuthProvider>,
+    );
+
+    expect(screen.getByText(/Last saved/)).toBeInTheDocument();
   });
 });

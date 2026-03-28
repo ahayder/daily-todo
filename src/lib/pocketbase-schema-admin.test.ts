@@ -44,6 +44,7 @@ describe("buildSchemaDefinitions", () => {
     expect(names).toEqual([
       "daily_pages",
       "notes",
+      "note_folders",
       "planner_presets",
       "workspace_state",
       "app_state_snapshots",
@@ -104,7 +105,7 @@ describe("mergeCollectionDefinition", () => {
   });
 
   test("preserves extra unknown fields while applying managed fields", () => {
-    const desired = buildSchemaDefinitions({ usersCollectionId: "users_1" })[2];
+    const desired = buildSchemaDefinitions({ usersCollectionId: "users_1" })[3];
     const existing = createBaseCollection({
       id: "planner_1",
       name: desired.name,
@@ -147,8 +148,8 @@ describe("applyPocketBaseSchema", () => {
       logger: { log: vi.fn(), error: vi.fn() } as unknown as Console,
     });
 
-    expect(summary.created).toHaveLength(5);
-    expect(create).toHaveBeenCalledTimes(5);
+    expect(summary.created).toHaveLength(6);
+    expect(create).toHaveBeenCalledTimes(6);
   });
 
   test("updates existing collection with drift and preserves unchanged ones", async () => {

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { X } from "lucide-react";
 import { DailyView } from "@/components/daily-view";
 import { NotesView } from "@/components/notes-view";
 import { PlannerView } from "@/components/planner-view";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { useAppState } from "@/components/app-context";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ViewMode } from "@/lib/types";
 
 type Props = {
@@ -14,8 +16,9 @@ type Props = {
 };
 
 export function Workspace({ forcedView }: Props) {
-  const { state, dispatch, sync, retrySync } = useAppState();
+  const { state, dispatch, notes, sync, retrySync } = useAppState();
   const activeView = forcedView ?? state.uiState.lastView;
+  const isFocusMode = state.uiState.isFocusMode;
 
   useEffect(() => {
     if (forcedView && forcedView !== state.uiState.lastView) {
@@ -25,19 +28,42 @@ export function Workspace({ forcedView }: Props) {
 
   return (
     <div className="app-shell">
-      <TopNavbar
-        state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
-        dispatch={dispatch}
-        sync={sync}
-        retrySync={retrySync}
-      />
+      {isFocusMode ? (
+        <div className="focus-mode-close">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "set-focus-mode", isFocus: false })}
+                aria-label="Close Focus Mode"
+                className="focus-mode-close-btn"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="text-xs">
+              Close Focus Mode
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ) : null}
+      {!isFocusMode ? (
+        <TopNavbar
+          state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
+          dispatch={dispatch}
+          sync={sync}
+          retrySync={retrySync}
+        />
+      ) : null}
       <div
         className={state.uiState.isSidebarCollapsed ? "app-body app-body--sidebar-collapsed" : "app-body"}
       >
-        {!state.uiState.isFocusMode && (
+        {!isFocusMode && (
           <Sidebar
             state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
             dispatch={dispatch}
+            sync={sync}
+            retrySync={retrySync}
           />
         )}
         <main className="main-panel">
@@ -46,7 +72,7 @@ export function Workspace({ forcedView }: Props) {
           ) : activeView === "planner" ? (
             <PlannerView state={state} dispatch={dispatch} />
           ) : (
-            <NotesView state={state} dispatch={dispatch} />
+            <NotesView state={state} dispatch={dispatch} notes={notes} />
           )}
         </main>
       </div>

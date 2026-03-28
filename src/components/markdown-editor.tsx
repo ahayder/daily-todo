@@ -5,7 +5,6 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import Underline from "@tiptap/extension-underline";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { DrawingNode } from "./editor/drawing-node";
@@ -34,7 +33,6 @@ export function MarkdownEditor({ value, onChange }: Props) {
       TaskItem.configure({
         nested: true,
       }),
-      Underline,
       Markdown.configure({
         html: true,
         transformPastedText: true,

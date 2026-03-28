@@ -1,4 +1,5 @@
 import { createBrowserLocalCacheStorage } from "@/lib/local-cache-storage";
+import { createRecentNoteBodiesStorage } from "@/lib/recent-note-bodies-storage";
 import {
   APP_STATE_VERSION,
   compareTimestamps,
@@ -6,9 +7,12 @@ import {
   extractLocalOnlyUIState,
   extractSyncableUIState,
   getMaxTimestamp,
+  getNoteSummary,
   mergeUiState,
   normalizeAppState,
   seedAppState,
+  type NoteBodyLoadResult,
+  type NoteBodySaveResult,
   type PersistenceConflictResolution,
   type PersistenceLoadResult,
   type PersistenceMetadata,
@@ -21,7 +25,7 @@ import {
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
-import type { AppState, DailyPage, NoteDoc, PlannerPreset } from "@/lib/types";
+import type { AppState, DailyPage, NoteDoc, NoteFolder, NoteSummary, PlannerPreset } from "@/lib/types";
 
 const WORKSPACE_RECORD_KEY = "workspace_state:self";
 
@@ -48,7 +52,18 @@ type PocketBaseNoteRecord = {
   owner: string;
   note_id?: string;
   title?: string;
+  folder_id?: string | null;
   markdown?: string;
+  updated?: string;
+  updated_at_client?: string;
+};
+
+type PocketBaseNoteFolderRecord = {
+  id: string;
+  owner: string;
+  folder_id?: string;
+  name?: string;
+  parent_folder_id?: string | null;
   updated?: string;
   updated_at_client?: string;
 };
@@ -69,6 +84,7 @@ type PocketBaseWorkspaceStateRecord = {
   owner: string;
   selected_daily_date?: string | null;
   selected_note_id?: string | null;
+  selected_note_folder_id?: string | null;
   selected_planner_preset_id?: string | null;
   expanded_years_json?: unknown;
   expanded_months_json?: unknown;
@@ -79,7 +95,8 @@ type PocketBaseWorkspaceStateRecord = {
 
 type SyncRecordValue =
   | { key: string; kind: "daily_page"; value: DailyPage }
-  | { key: string; kind: "note"; value: NoteDoc }
+  | { key: string; kind: "note"; value: NoteSummary }
+  | { key: string; kind: "note_folder"; value: NoteFolder }
   | { key: string; kind: "planner_preset"; value: PlannerPreset }
   | { key: string; kind: "workspace_state"; value: SyncableUIState };
 
@@ -151,7 +168,15 @@ function getSyncRecordValuesFromState(state: AppState): Record<string, SyncRecor
     values[`note:${noteId}`] = {
       key: `note:${noteId}`,
       kind: "note",
-      value: note,
+      value: getNoteSummary(note),
+    };
+  }
+
+  for (const [folderId, folder] of Object.entries(state.noteFolders)) {
+    values[`note_folder:${folderId}`] = {
+      key: `note_folder:${folderId}`,
+      kind: "note_folder",
+      value: folder,
     };
   }
 
@@ -180,6 +205,7 @@ function assembleStateFromValues(
   const fallbackState = localState ?? seedAppState(now);
   const dailyPages: Record<string, DailyPage> = {};
   const notesDocs: Record<string, NoteDoc> = {};
+  const noteFolders: Record<string, NoteFolder> = {};
   const plannerPresets: Record<string, PlannerPreset> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
 
@@ -190,7 +216,15 @@ function assembleStateFromValues(
     }
 
     if (record.kind === "note") {
-      notesDocs[record.value.id] = record.value;
+      notesDocs[record.value.id] = {
+        ...record.value,
+        markdown: undefined,
+      };
+      continue;
+    }
+
+    if (record.kind === "note_folder") {
+      noteFolders[record.value.id] = record.value;
       continue;
     }
 
@@ -206,6 +240,7 @@ function assembleStateFromValues(
     {
       dailyPages,
       notesDocs,
+      noteFolders,
       plannerPresets,
       uiState: mergeUiState(
         syncableUiState,
@@ -586,6 +621,106 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     }
   }
 
+  async loadNoteBody({
+    userId,
+    noteId,
+  }: {
+    userId: string;
+    noteId: string;
+  }): Promise<NoteBodyLoadResult> {
+    try {
+      const client = getPocketBaseClient();
+      const record = await client
+        .collection("notes")
+        .getFirstListItem<PocketBaseNoteRecord>(`owner="${userId}" && note_id="${noteId}"`);
+
+      return {
+        markdown: record.markdown ?? "",
+        status: "ready",
+        source: "remote",
+        updatedAtClient: record.updated_at_client ?? record.updated ?? null,
+        notice: null,
+        errorMessage: null,
+      };
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return {
+          markdown: "",
+          status: "ready",
+          source: "remote",
+          updatedAtClient: null,
+          notice: null,
+          errorMessage: null,
+        };
+      }
+
+      return {
+        markdown: null,
+        status: "stale-offline",
+        source: "none",
+        updatedAtClient: null,
+        notice: "This note isn’t cached on this device yet.",
+        errorMessage: "Connect to the internet to load this note.",
+      };
+    }
+  }
+
+  async saveNoteBody({
+    userId,
+    noteId,
+    markdown,
+    updatedAtClient,
+  }: {
+    userId: string;
+    noteId: string;
+    markdown: string;
+    updatedAtClient: string;
+  }): Promise<NoteBodySaveResult> {
+    try {
+      const client = getPocketBaseClient();
+      const existing = await getFirstByFilter<PocketBaseNoteRecord>(
+        "notes",
+        `owner="${userId}" && note_id="${noteId}"`,
+      );
+
+      if (existing) {
+        await client.collection("notes").update(existing.id, {
+          owner: userId,
+          note_id: noteId,
+          title: existing.title ?? "",
+          folder_id: existing.folder_id ?? null,
+          markdown,
+          updated_at_client: updatedAtClient,
+        });
+      } else {
+        await client.collection("notes").create({
+          owner: userId,
+          note_id: noteId,
+          title: "Untitled Note",
+          folder_id: null,
+          markdown,
+          updated_at_client: updatedAtClient,
+        });
+      }
+
+      return {
+        markdown,
+        updatedAtClient,
+        status: "synced",
+        notice: null,
+        errorMessage: null,
+      };
+    } catch {
+      return {
+        markdown,
+        updatedAtClient,
+        status: "offline",
+        notice: "PocketBase is unavailable, so your changes are saved on this device.",
+        errorMessage: "Sync is offline right now.",
+      };
+    }
+  }
+
   private async reconcileSplitState(
     userId: string,
     remote: SplitWorkspacePayload,
@@ -687,11 +822,14 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     now: Date,
   ): Promise<SplitWorkspacePayload> {
     const client = getPocketBaseClient();
-    const [dailyPages, notes, plannerPresets, workspaceState] = await Promise.all([
+    const [dailyPages, notes, noteFolders, plannerPresets, workspaceState] = await Promise.all([
       client
         .collection("daily_pages")
         .getFullList<PocketBaseDailyPageRecord>({ filter: `owner="${userId}"` }),
       client.collection("notes").getFullList<PocketBaseNoteRecord>({ filter: `owner="${userId}"` }),
+      client
+        .collection("note_folders")
+        .getFullList<PocketBaseNoteFolderRecord>({ filter: `owner="${userId}"` }),
       client
         .collection("planner_presets")
         .getFullList<PocketBasePlannerPresetRecord>({ filter: `owner="${userId}"` }),
@@ -721,10 +859,10 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of notes) {
       if (!record.note_id) continue;
-      const value: NoteDoc = {
+      const value: NoteSummary = {
         id: record.note_id,
-        title: record.title ?? "Untitled Note",
-        markdown: record.markdown ?? "",
+        title: record.title ?? "",
+        folderId: record.folder_id ?? null,
         updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
       };
       const key = `note:${record.note_id}`;
@@ -732,6 +870,25 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       records[key] = createRecordMetadata(
         key,
         "note",
+        value,
+        record.updated ?? null,
+        record.updated_at_client ?? null,
+      );
+    }
+
+    for (const record of noteFolders) {
+      if (!record.folder_id) continue;
+      const value: NoteFolder = {
+        id: record.folder_id,
+        name: record.name ?? "New Folder",
+        parentId: record.parent_folder_id ?? null,
+        updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
+      };
+      const key = `note_folder:${record.folder_id}`;
+      values[key] = { key, kind: "note_folder", value };
+      records[key] = createRecordMetadata(
+        key,
+        "note_folder",
         value,
         record.updated ?? null,
         record.updated_at_client ?? null,
@@ -762,6 +919,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       const value: SyncableUIState = {
         selectedDailyDate: workspaceState.selected_daily_date ?? null,
         selectedNoteId: workspaceState.selected_note_id ?? null,
+        selectedNoteFolderId: workspaceState.selected_note_folder_id ?? null,
         selectedPlannerPresetId: workspaceState.selected_planner_preset_id ?? null,
         expandedYears: safeArray(workspaceState.expanded_years_json),
         expandedMonths: safeArray(workspaceState.expanded_months_json),
@@ -785,6 +943,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       hasData:
         dailyPages.length > 0 ||
         notes.length > 0 ||
+        noteFolders.length > 0 ||
         plannerPresets.length > 0 ||
         Boolean(workspaceState),
     };
@@ -822,13 +981,34 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         owner: userId,
         note_id: record.value.id,
         title: record.value.title,
-        markdown: record.value.markdown,
+        folder_id: record.value.folderId,
+        markdown: existing?.markdown ?? "",
         updated_at_client: updatedAtClient,
       };
       if (existing) {
         await client.collection("notes").update(existing.id, payload);
       } else {
         await client.collection("notes").create(payload);
+      }
+      return;
+    }
+
+    if (record.kind === "note_folder") {
+      const existing = await getFirstByFilter<PocketBaseNoteFolderRecord>(
+        "note_folders",
+        `owner="${userId}" && folder_id="${record.value.id}"`,
+      );
+      const payload = {
+        owner: userId,
+        folder_id: record.value.id,
+        name: record.value.name,
+        parent_folder_id: record.value.parentId,
+        updated_at_client: updatedAtClient,
+      };
+      if (existing) {
+        await client.collection("note_folders").update(existing.id, payload);
+      } else {
+        await client.collection("note_folders").create(payload);
       }
       return;
     }
@@ -862,6 +1042,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       owner: userId,
       selected_daily_date: record.value.selectedDailyDate,
       selected_note_id: record.value.selectedNoteId,
+      selected_note_folder_id: record.value.selectedNoteFolderId,
       selected_planner_preset_id: record.value.selectedPlannerPresetId,
       expanded_years_json: record.value.expandedYears,
       expanded_months_json: record.value.expandedMonths,
@@ -900,6 +1081,17 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       return;
     }
 
+    if (record.kind === "note_folder") {
+      const existing = await getFirstByFilter<PocketBaseNoteFolderRecord>(
+        "note_folders",
+        `owner="${userId}" && folder_id="${record.value.id}"`,
+      );
+      if (existing) {
+        await client.collection("note_folders").delete(existing.id);
+      }
+      return;
+    }
+
     if (record.kind === "planner_preset") {
       const existing = await getFirstByFilter<PocketBasePlannerPresetRecord>(
         "planner_presets",
@@ -925,5 +1117,6 @@ export function createPocketBasePersistenceRepository() {
   return new SplitPersistenceRepository(
     new PocketBaseSplitRemoteStore(),
     createBrowserLocalCacheStorage(),
+    createRecentNoteBodiesStorage(),
   );
 }

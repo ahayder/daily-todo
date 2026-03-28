@@ -2,6 +2,7 @@ import {
   APP_STATE_VERSION,
   LEGACY_LOCAL_STORAGE_KEY,
   createPersistenceMetadata,
+  stripNoteBodies,
   type PersistenceRecordMetadata,
   type LocalCacheStorage,
   tryParseAppState,
@@ -116,7 +117,13 @@ export function createBrowserLocalCacheStorage(): LocalCacheStorage {
       }
 
       try {
-        window.localStorage.setItem(getUserCacheStorageKey(userId), JSON.stringify(envelope));
+        const compactEnvelope = {
+          ...envelope,
+          state: stripNoteBodies(envelope.state),
+        };
+        const serialized = JSON.stringify(compactEnvelope);
+        window.localStorage.setItem(getUserCacheStorageKey(userId), serialized);
+        console.debug("[persistence] boot cache bytes", serialized.length);
         return {
           available: true,
         };

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
+  DEFAULT_NOTES_FOLDER_ID,
   createInitialState,
   createPlannerPreset,
   duplicatePlannerPreset,
   ensureDailyPageForDate,
+  ensureNoteState,
   ensurePlannerState,
   groupTodosByPriority,
 } from "@/lib/store";
@@ -65,6 +67,15 @@ describe("groupTodosByPriority", () => {
 });
 
 describe("planner state", () => {
+  test("seeds a default Notes folder in initial state", () => {
+    const state = createInitialState("2026-03-11");
+    const noteId = state.uiState.selectedNoteId!;
+
+    expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
+    expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID].name).toBe("Notes");
+    expect(state.notesDocs[noteId].folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
+  });
+
   test("seeds a default planner preset in initial state", () => {
     const state = createInitialState("2026-03-11");
     const presetIds = Object.keys(state.plannerPresets);
@@ -88,6 +99,29 @@ describe("planner state", () => {
 
     expect(Object.keys(repaired.plannerPresets)).toHaveLength(1);
     expect(repaired.uiState.selectedPlannerPresetId).toBeTruthy();
+  });
+
+  test("backfills the default Notes folder and moves orphaned notes into it", () => {
+    const state = createInitialState("2026-03-11");
+    const noteId = state.uiState.selectedNoteId!;
+    const repaired = ensureNoteState({
+      ...state,
+      noteFolders: {},
+      notesDocs: {
+        [noteId]: {
+          ...state.notesDocs[noteId],
+          folderId: null,
+        },
+      },
+      uiState: {
+        ...state.uiState,
+        selectedNoteFolderId: null,
+      },
+    });
+
+    expect(repaired.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
+    expect(repaired.notesDocs[noteId].folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
+    expect(repaired.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
   });
 
   test("duplicates a preset with separate day titles", () => {

@@ -7,7 +7,7 @@ import {
 } from "@/lib/persistence";
 import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
 import { SplitPersistenceRepository } from "@/lib/split-persistence-repository";
-import { createInitialState } from "@/lib/store";
+import { DEFAULT_NOTES_FOLDER_ID, createInitialState } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
 describe("normalizeAppState", () => {
@@ -29,14 +29,17 @@ describe("normalizeAppState", () => {
           note_1: {
             id: "note_1",
             title: "Quick Notes",
+            folderId: null,
             markdown: "",
             updatedAt: "2026-03-11T08:00:00.000Z",
           },
         },
+        noteFolders: {},
         plannerPresets: {},
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: "note_1",
+          selectedNoteFolderId: null,
           selectedPlannerPresetId: null,
           expandedYears: ["2026"],
           expandedMonths: ["2026-03"],
@@ -46,9 +49,13 @@ describe("normalizeAppState", () => {
       new Date("2026-03-11T08:00:00Z"),
     );
 
-    expect(state.uiState.themeMode).toBe("system");
+    expect(state.uiState.themeMode).toBe("dark");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
+    expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
+    expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
+    expect(state.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
+    expect(state.uiState.expandedNoteFolders).toContain(DEFAULT_NOTES_FOLDER_ID);
   });
 });
 
@@ -210,6 +217,7 @@ describe("SplitPersistenceRepository", () => {
         note_2: {
           id: "note_2",
           title: "From remote",
+          folderId: DEFAULT_NOTES_FOLDER_ID,
           markdown: "",
           updatedAt: "2026-03-11T08:05:00.000Z",
         },

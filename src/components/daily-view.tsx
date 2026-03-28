@@ -1,15 +1,29 @@
 "use client";
 
-import { useMemo, useState, type Dispatch } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type DOMAttributes,
+  type HTMLAttributes,
+} from "react";
 import { triggerCompletionConfettiFromElement } from "@/lib/confetti";
 import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { AppState, CategoryTheme, Priority } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
-import { CalendarDays, GripVertical, X, Plus, Target } from "lucide-react";
+import { Brain, CalendarDays, GripVertical, Pencil, X, Plus, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, differenceInDays } from "date-fns";
 import {
@@ -20,6 +34,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -32,6 +47,15 @@ import { CSS } from "@dnd-kit/utilities";
 type Props = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
+};
+
+type DropIndicatorPosition = "before" | "after";
+
+type DropIndicator = {
+  overId: string;
+  priority: Priority;
+  position: DropIndicatorPosition;
+  isGroup?: boolean;
 };
 
 type PriorityLabels = {
@@ -66,6 +90,69 @@ const CATEGORY_LABELS: Record<CategoryTheme, Record<Priority, PriorityLabels>> =
   },
 };
 
+const CATEGORY_CYCLE: CategoryTheme[] = ["normal", "adhd1", "adhd2"];
+const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
+  normal: "Labels: Normal",
+  adhd1: "Labels: ADHD 1",
+  adhd2: "Labels: ADHD 2",
+};
+const DAILY_TASK_PANE_DEFAULT_WIDTH = 500;
+const DAILY_TASK_PANE_MIN_WIDTH = 320;
+const DAILY_NOTE_PANE_MIN_WIDTH = 480;
+const DAILY_RESIZER_WIDTH = 6;
+
+export function getDropIndicatorPosition({
+  activeTop,
+  activeHeight,
+  overTop,
+  overHeight,
+}: {
+  activeTop: number;
+  activeHeight: number;
+  overTop: number;
+  overHeight: number;
+}): DropIndicatorPosition {
+  const activeCenterY = activeTop + activeHeight / 2;
+  const overCenterY = overTop + overHeight / 2;
+  return activeCenterY > overCenterY ? "after" : "before";
+}
+
+export function getDropInsertionIndex({
+  siblingIds,
+  activeId,
+  overId,
+  position,
+}: {
+  siblingIds: string[];
+  activeId: string;
+  overId: string;
+  position: DropIndicatorPosition;
+}) {
+  const overIndex = siblingIds.indexOf(overId);
+  if (overIndex === -1) {
+    return siblingIds.length;
+  }
+
+  const activeIndex = siblingIds.indexOf(activeId);
+
+  if (position === "before") {
+    if (activeIndex !== -1 && activeIndex < overIndex) {
+      return overIndex - 1;
+    }
+    return overIndex;
+  }
+
+  if (activeIndex !== -1 && activeIndex > overIndex) {
+    return overIndex + 1;
+  }
+
+  if (activeIndex !== -1 && activeIndex < overIndex) {
+    return overIndex;
+  }
+
+  return overIndex + 1;
+}
+
 function getPriorityMeta(theme: CategoryTheme, priority: Priority) {
   return {
     ...PRIORITY_COLORS[priority],
@@ -78,11 +165,13 @@ function InlineTaskInput({
   priority,
   meta,
   dispatch,
+  className,
 }: {
   date: string;
   priority: Priority;
   meta: ReturnType<typeof getPriorityMeta>;
   dispatch: Dispatch<AppAction>;
+  className?: string;
 }) {
   const [text, setText] = useState("");
   const [focused, setFocused] = useState(false);
@@ -98,7 +187,8 @@ function InlineTaskInput({
     <div
       className={cn(
         "inline-task-input",
-        focused && "inline-task-input--focused"
+        focused && "inline-task-input--focused",
+        className
       )}
     >
       <Plus
@@ -131,18 +221,24 @@ function EditableTaskItem({
   dispatch,
   onCelebrate,
   dragHandleProps,
+  dragSurfaceProps,
+  dropIndicatorPosition,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
   subtasks?: import("@/lib/types").Todo[];
   dispatch: Dispatch<AppAction>;
   onCelebrate?: (target: HTMLElement) => void;
-  dragHandleProps?: Record<string, unknown>;
+  dragHandleProps?: HTMLAttributes<HTMLDivElement>;
+  dragSurfaceProps?: DOMAttributes<HTMLDivElement>;
+  dropIndicatorPosition?: DropIndicatorPosition | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isTaskActive, setIsTaskActive] = useState(false);
   const [editText, setEditText] = useState(todo.text);
-  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskText, setSubtaskText] = useState("");
+  const [isSubtaskComposerVisible, setIsSubtaskComposerVisible] = useState(false);
+  const [isSubtaskFocused, setIsSubtaskFocused] = useState(false);
 
   const handleEditSubmit = () => {
     if (editText.trim() && editText !== todo.text) {
@@ -163,7 +259,8 @@ function EditableTaskItem({
         parentId: todo.id,
       });
       setSubtaskText("");
-      setIsAddingSubtask(false);
+      setIsSubtaskComposerVisible(false);
+      setIsSubtaskFocused(false);
     }
   };
 
@@ -179,8 +276,32 @@ function EditableTaskItem({
     }
   }, [todo.createdAt, date]);
 
+  const showSubtaskComposer =
+    !todo.parentId && (isSubtaskComposerVisible || isSubtaskFocused);
+  const showSubtaskAction = !todo.parentId && !isEditing && (isTaskActive || showSubtaskComposer);
+
   return (
-    <div className="flex flex-col w-full">
+    <div
+      className={cn(
+        "task-entry flex flex-col w-full",
+        dropIndicatorPosition === "before" && "task-entry--drop-before",
+        dropIndicatorPosition === "after" && "task-entry--drop-after",
+      )}
+      onMouseEnter={() => {
+        setIsTaskActive(true);
+      }}
+      onMouseLeave={() => {
+        setIsTaskActive(false);
+      }}
+      onFocusCapture={() => {
+        setIsTaskActive(true);
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsTaskActive(false);
+        }
+      }}
+    >
       <li className="task-item group">
         <Checkbox
           checked={todo.done}
@@ -193,68 +314,129 @@ function EditableTaskItem({
           className="task-checkbox"
         />
 
-      {isEditing ? (
-        <input
-          type="text"
-          className="flex-1 bg-transparent border-b border-[var(--brand)] outline-none text-[15px] px-1 py-0.5"
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          onBlur={handleEditSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleEditSubmit();
-            } else if (e.key === "Escape") {
-              setEditText(todo.text);
-              setIsEditing(false);
-            }
-          }}
-          autoFocus
-        />
-      ) : (
-        <span
-          className={cn("task-text cursor-text flex items-center gap-2", todo.done && "task-text--done")}
-          onDoubleClick={() => setIsEditing(true)}
-        >
-          {todo.text}
-          {isStale && !todo.done && (
-              <span 
-                className="inline-flex items-center rounded-sm bg-[var(--warning-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--warning)] tracking-wide"
-                title={`Created on ${todo.createdAt.split('T')[0]}`}
-              >
+        {isEditing ? (
+          <input
+            type="text"
+            className="flex-1 bg-transparent border-b border-[var(--brand)] outline-none text-[15px] px-1 py-0.5"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={handleEditSubmit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleEditSubmit();
+              } else if (e.key === "Escape") {
+                setEditText(todo.text);
+                setIsEditing(false);
+              }
+            }}
+            autoFocus
+          />
+        ) : (
+          <div
+            className="task-drag-surface"
+            {...dragSurfaceProps}
+          >
+            <span
+              className={cn("task-text flex items-center gap-2", todo.done && "task-text--done")}
+              onDoubleClick={() => setIsEditing(true)}
+            >
+              {todo.text}
+              {isStale && !todo.done && (
+                <span
+                  className="inline-flex items-center rounded-sm bg-[var(--warning-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--warning)] tracking-wide"
+                  title={`Created on ${todo.createdAt.split('T')[0]}`}
+                >
                   💤 Stale
-              </span>
-          )}
-        </span>
-      )}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
 
-      <div
-        className="cursor-grab hover:text-[var(--ink-900)] text-[var(--ink-700)] opacity-0 group-hover:opacity-30 transition-opacity duration-150 flex outline-none"
-        {...dragHandleProps}
-      >
-        <GripVertical className="h-3.5 w-3.5 flex-shrink-0" />
-      </div>
-      <button
-        type="button"
-        className="task-delete-btn mr-1 text-[var(--ink-500)] hover:text-[var(--brand)] opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={() => dispatch({ type: "set-focus-mode", isFocus: true, todoId: todo.id })}
-        aria-label="Focus on this task"
-      >
-        <Target className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        className="task-delete-btn"
-        onClick={() => dispatch({ type: "delete-todo", date, todoId: todo.id })}
-        aria-label="Delete task"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </li>
+        <div className="task-row-actions">
+          <div
+            className="task-row-action-grip"
+            {...dragHandleProps}
+          >
+            <GripVertical className="h-3.5 w-3.5 flex-shrink-0" />
+          </div>
+
+          {!isEditing ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="task-row-action-btn task-row-action-btn--edit"
+                  onClick={() => setIsEditing(true)}
+                  aria-label="Edit task"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Edit task
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="task-row-action-btn task-row-action-btn--focus"
+                onClick={() => dispatch({ type: "set-focus-mode", isFocus: true, todoId: todo.id })}
+                aria-label="Focus on this task"
+              >
+                <Target className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Focus on this task
+            </TooltipContent>
+          </Tooltip>
+
+          {showSubtaskAction ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="task-row-action-btn task-row-action-btn--subtask"
+                  onClick={() => {
+                    setIsSubtaskComposerVisible(true);
+                  }}
+                  aria-label="Add subtask"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Add subtask
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="task-row-action-btn task-row-action-btn--delete"
+                onClick={() => dispatch({ type: "delete-todo", date, todoId: todo.id })}
+                aria-label="Delete task"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Delete task
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </li>
 
       {/* Sub-tasks rendering */}
       {subtasks.length > 0 && (
-        <ul className="pl-6 mt-1 flex flex-col gap-1 w-full border-l border-[var(--ink-200)] ml-3 mb-2">
+        <ul className="subtask-list">
           {subtasks.map((subtodo) => (
             <EditableTaskItem
               key={subtodo.id}
@@ -268,18 +450,24 @@ function EditableTaskItem({
       )}
 
       {/* Inline Sub-task Input */}
-      {isAddingSubtask ? (
-        <div className="pl-6 mt-1 flex items-center gap-2 mb-2 w-full">
-            <div className="w-4 h-4 rounded-sm border border-[var(--ink-300)] flex-shrink-0" />
+      {showSubtaskComposer ? (
+        <div className="subtask-composer">
+            <div className="subtask-composer-checkbox" />
             <input
               type="text"
-              className="flex-1 bg-transparent border-b border-[var(--brand)] outline-none text-[14px] px-1 py-0.5"
-              placeholder="Add a sub-task..."
+              className="subtask-composer-input"
+              placeholder="Add a subtask"
               value={subtaskText}
               onChange={(e) => setSubtaskText(e.target.value)}
+              onFocus={() => {
+                setIsSubtaskComposerVisible(true);
+                setIsSubtaskFocused(true);
+              }}
               onBlur={() => {
+                  setIsSubtaskFocused(false);
+
                   if (!subtaskText.trim()) {
-                      setIsAddingSubtask(false);
+                      setIsSubtaskComposerVisible(false);
                   } else {
                       handleAddSubtask();
                   }
@@ -289,26 +477,15 @@ function EditableTaskItem({
                   e.preventDefault();
                   handleAddSubtask();
                 } else if (e.key === "Escape") {
-                  setIsAddingSubtask(false);
+                  setIsSubtaskComposerVisible(false);
+                  setIsSubtaskFocused(false);
                   setSubtaskText("");
                 }
               }}
               autoFocus
             />
         </div>
-      ) : (
-        !todo.parentId && (
-        <div className="pl-6 flex mb-2 w-full">
-            <button
-                type="button"
-                className="text-xs text-[var(--ink-500)] hover:text-[var(--brand)] flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => setIsAddingSubtask(true)}
-            >
-                <Plus className="h-3 w-3" /> Add sub-task
-            </button>
-        </div>
-        )
-      )}
+      ) : null}
     </div>
   );
 }
@@ -319,12 +496,14 @@ function SortableTaskItem({
   subtasks,
   dispatch,
   onCelebrate,
+  dropIndicatorPosition,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
   subtasks: import("@/lib/types").Todo[];
   dispatch: Dispatch<AppAction>;
   onCelebrate?: (target: HTMLElement) => void;
+  dropIndicatorPosition?: DropIndicatorPosition | null;
 }) {
   const {
     attributes,
@@ -353,6 +532,8 @@ function SortableTaskItem({
         dispatch={dispatch}
         onCelebrate={onCelebrate}
         dragHandleProps={{ ...attributes, ...listeners }}
+        dragSurfaceProps={listeners}
+        dropIndicatorPosition={dropIndicatorPosition}
       />
     </div>
   );
@@ -363,6 +544,8 @@ export function DailyView({ state, dispatch }: Props) {
   const page = date ? state.dailyPages[date] : null;
   const isFocusMode = state.uiState.isFocusMode;
   const focusedTodoId = state.uiState.focusedTodoId;
+  const layoutRef = useRef<HTMLElement | null>(null);
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -379,21 +562,135 @@ export function DailyView({ state, dispatch }: Props) {
     () => groupTodosByPriority(page?.todos ?? []),
     [page?.todos]
   );
+  const categoryTheme = state.uiState.categoryTheme;
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+  const [isResizeHandleHovered, setIsResizeHandleHovered] = useState(false);
+  const [isResizingTaskPane, setIsResizingTaskPane] = useState(false);
+
+  const clampTaskPaneWidth = (proposedWidth: number) => {
+    const layoutWidth = layoutRef.current?.getBoundingClientRect().width ?? 0;
+    const maxWidth =
+      layoutWidth > 0
+        ? Math.max(
+            DAILY_TASK_PANE_MIN_WIDTH,
+            layoutWidth - DAILY_NOTE_PANE_MIN_WIDTH - DAILY_RESIZER_WIDTH,
+          )
+        : proposedWidth;
+
+    return Math.min(maxWidth, Math.max(DAILY_TASK_PANE_MIN_WIDTH, proposedWidth));
+  };
+
+  const taskPaneWidth = Math.max(
+    DAILY_TASK_PANE_MIN_WIDTH,
+    state.uiState.dailyTaskPaneWidth ?? DAILY_TASK_PANE_DEFAULT_WIDTH,
+  );
+
+  const clearDropIndicator = () => {
+    setDropIndicator(null);
+  };
+
+  useEffect(() => {
+    if (!isResizingTaskPane) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState) {
+        return;
+      }
+
+      const deltaX = event.clientX - resizeState.startX;
+      dispatch({
+        type: "set-daily-task-pane-width",
+        width: clampTaskPaneWidth(resizeState.startWidth - deltaX),
+      });
+    };
+
+    const stopResizing = () => {
+      resizeStateRef.current = null;
+      setIsResizingTaskPane(false);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [dispatch, isResizingTaskPane]);
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) {
+      clearDropIndicator();
+      return;
+    }
+
+    const overId = String(over.id);
+
+    if (overId.startsWith("priority-group-")) {
+      const priority = Number.parseInt(overId.replace("priority-group-", ""), 10) as Priority;
+      setDropIndicator({
+        overId,
+        priority,
+        position: "before",
+        isGroup: true,
+      });
+      return;
+    }
+
+    const priority = over.data.current?.priority as Priority | undefined;
+    if (!priority) {
+      clearDropIndicator();
+      return;
+    }
+
+    const translatedRect = active.rect.current.translated;
+    const position = translatedRect
+      ? getDropIndicatorPosition({
+          activeTop: translatedRect.top,
+          activeHeight: translatedRect.height,
+          overTop: over.rect.top,
+          overHeight: over.rect.height,
+        })
+      : "before";
+
+    setDropIndicator({
+      overId,
+      priority,
+      position,
+    });
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || !date) return;
+    if (!over || !date) {
+      clearDropIndicator();
+      return;
+    }
 
     const activeId = active.id as string;
-    const overId = over.id as string;
-
     const activePriority = active.data.current?.priority as Priority;
+    const indicator = dropIndicator;
+    clearDropIndicator();
 
-    // Dropping on another task
-    if (activeId !== overId && over.data.current) {
-      const targetPriority = over.data.current.priority as Priority;
-      const targetList = grouped[targetPriority];
-      const newIndex = targetList.findIndex((t) => t.id === overId);
+    if (indicator && !indicator.isGroup && activeId !== indicator.overId) {
+      const targetPriority = indicator.priority;
+      const targetList = grouped[targetPriority].filter((todo) => !todo.parentId);
+      const newIndex = getDropInsertionIndex({
+        siblingIds: targetList.map((todo) => todo.id),
+        activeId,
+        overId: indicator.overId,
+        position: indicator.position,
+      });
 
       dispatch({
         type: "move-todo-priority",
@@ -402,19 +699,22 @@ export function DailyView({ state, dispatch }: Props) {
         newPriority: targetPriority,
         newIndex,
       });
-    } else if (overId.startsWith("priority-group-")) {
-      // Dropping on an empty group container
-      const targetPriority = parseInt(overId.replace("priority-group-", ""), 10) as Priority;
+    } else if (indicator?.isGroup) {
+      const targetPriority = indicator.priority;
       if (activePriority !== targetPriority) {
-          dispatch({
-              type: "move-todo-priority",
-              date,
-              todoId: activeId,
-              newPriority: targetPriority,
-              newIndex: grouped[targetPriority].length, 
-            });
+        dispatch({
+          type: "move-todo-priority",
+          date,
+          todoId: activeId,
+          newPriority: targetPriority,
+          newIndex: grouped[targetPriority].filter((todo) => !todo.parentId).length,
+        });
       }
     }
+  };
+
+  const handleDragCancel = () => {
+    clearDropIndicator();
   };
 
   if (!page || !date) {
@@ -457,6 +757,7 @@ export function DailyView({ state, dispatch }: Props) {
             
             <div className="mb-12 flex flex-col items-center text-center">
                 <Badge
+                    className="text-[15px] px-3 py-1"
                     style={{
                     backgroundColor: `var(${meta.softVar})`,
                     color: `var(${meta.accentVar})`,
@@ -467,7 +768,7 @@ export function DailyView({ state, dispatch }: Props) {
                     {meta.label}
                 </Badge>
                 
-                <h1 className="text-4xl font-bold text-[var(--ink-900)] tracking-tight mb-4 leading-tight">
+                <h1 className="text-5xl font-bold text-[var(--ink-900)] tracking-tight mb-5 leading-[1.08]">
                     {focusedTodo.text}
                 </h1>
                 
@@ -482,25 +783,28 @@ export function DailyView({ state, dispatch }: Props) {
                           dispatch({ type: "toggle-todo", date, todoId: focusedTodo.id });
                         }}
                         className={cn(
-                            "px-6 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-all shadow-sm",
+                            "px-7 py-3 rounded-full font-medium text-[16px] flex items-center gap-2.5 transition-all shadow-sm",
                             focusedTodo.done 
                                 ? "bg-[var(--brand)] text-[var(--paper)] border border-[var(--brand)]" 
                                 : "bg-[var(--paper-strong)] border border-[var(--line)] text-[var(--ink-900)] hover:border-[var(--brand)] hover:text-[var(--brand)] hover:bg-[var(--brand-soft)]"
                         )}
                     >
-                        <Checkbox checked={focusedTodo.done} className="pointer-events-none" />
+                        <Checkbox
+                          checked={focusedTodo.done}
+                          className={cn("task-checkbox pointer-events-none", focusedTodo.done && "border-current")}
+                        />
                         {focusedTodo.done ? "Completed" : "Mark Complete"}
                     </button>
                 </div>
             </div>
 
             <div className="w-full bg-[var(--paper-strong)] rounded-xl border border-[var(--line)] shadow-sm p-6">
-                <h3 className="text-sm font-semibold text-[var(--ink-900)] uppercase tracking-wider mb-4">
+                <h3 className="text-[15px] font-semibold text-[var(--ink-900)] uppercase tracking-[0.12em] mb-4">
                     Sub-tasks
                 </h3>
                 <ul className="flex flex-col gap-2 w-full">
                     {subtasks.length === 0 ? (
-                         <li className="text-[var(--ink-700)] text-sm italic">No sub-tasks.</li>
+                         <li className="text-[var(--ink-700)] text-[15px] italic">No sub-tasks.</li>
                     ) : (
                         subtasks.map((subtodo) => (
                             <EditableTaskItem
@@ -536,7 +840,13 @@ export function DailyView({ state, dispatch }: Props) {
   }
 
   return (
-    <section className="daily-layout">
+    <section
+      ref={layoutRef}
+      className="daily-layout"
+      style={{
+        gridTemplateColumns: `minmax(0, 1fr) ${DAILY_RESIZER_WIDTH}px minmax(${DAILY_TASK_PANE_MIN_WIDTH}px, clamp(${DAILY_TASK_PANE_MIN_WIDTH}px, ${taskPaneWidth}px, calc(100% - ${DAILY_NOTE_PANE_MIN_WIDTH}px - ${DAILY_RESIZER_WIDTH}px)))`,
+      }}
+    >
       {/* Note Pane */}
       <div className="note-pane">
         <div className="note-header">
@@ -557,87 +867,202 @@ export function DailyView({ state, dispatch }: Props) {
         </div>
       </div>
 
+      <button
+        type="button"
+        aria-label="Resize task pane"
+        data-testid="task-pane-resizer"
+        className={cn(
+          "daily-resize-rail",
+          isResizeHandleHovered && "daily-resize-rail--hovered",
+          isResizingTaskPane && "daily-resize-rail--dragging",
+        )}
+        onMouseEnter={() => setIsResizeHandleHovered(true)}
+        onMouseLeave={() => setIsResizeHandleHovered(false)}
+        onFocus={() => setIsResizeHandleHovered(true)}
+        onBlur={() => setIsResizeHandleHovered(false)}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          resizeStateRef.current = {
+            startX: event.clientX,
+            startWidth: taskPaneWidth,
+          };
+          setIsResizingTaskPane(true);
+        }}
+      >
+        <span className="daily-resize-handle" aria-hidden="true" />
+      </button>
+
       {/* Todo Pane */}
       <div className="todo-pane">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="priority-groups">
-            {([1, 2, 3] as const).map((priorityLevel) => {
-              const todosInPriority = grouped[priorityLevel];
-              const parentTodos = todosInPriority.filter((t) => !t.parentId);
-              const meta = getPriorityMeta(state.uiState.categoryTheme, priorityLevel);
-
-              return (
-                <div key={priorityLevel} className="priority-group">
-                {/* Group header */}
-                <div
-                  className="priority-group-header"
-                  style={{
-                    borderLeftColor: `var(${meta.accentVar})`,
-                    backgroundColor: `var(${meta.softVar})`,
-                  }}
-                >
-                  <h3 className="text-[13px] font-semibold text-[var(--ink-900)]">
-                    {meta.label}
-                  </h3>
-                  {parentTodos.length > 0 && (
-                    <Badge
-                      className="priority-count-badge"
-                      style={{
-                        backgroundColor: `var(${meta.softVar})`,
-                        color: `var(${meta.accentVar})`,
-                        borderColor: `color-mix(in srgb, var(${meta.accentVar}) 30%, transparent)`,
-                      }}
-                    >
-                      {parentTodos.length}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Task items */}
-                <SortableContext
-                  id={`priority-group-${priorityLevel}`}
-                  items={parentTodos.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="task-list flex-1 min-h-[30px]">
-                    {parentTodos.map((parentTodo) => {
-                      const subtasks = todosInPriority.filter(
-                        (t) => t.parentId === parentTodo.id
-                      );
-                      return (
-                        <SortableTaskItem
-                          key={parentTodo.id}
-                          todo={parentTodo}
-                          date={date}
-                          subtasks={subtasks}
-                          dispatch={dispatch}
-                          onCelebrate={triggerCompletionConfettiFromElement}
-                        />
-                      );
-                    })}
-
-                    {parentTodos.length === 0 && (
-                      <li className="task-empty">No tasks yet</li>
-                    )}
-                  </ul>
-                </SortableContext>
-
-                {/* Inline add task */}
-                <InlineTaskInput
-                  date={date}
-                  priority={priorityLevel}
-                  meta={meta}
-                  dispatch={dispatch}
-                />
-              </div>
-            );
-          })}
+        <div className="todo-pane-header">
+          <div className="flex min-w-0 flex-col">
+            <h2 className="text-[17px] font-semibold text-[var(--ink-900)] leading-[1.35]">Tasks</h2>
+            <p className="text-xs text-[var(--ink-700)]">Plan the day from here.</p>
           </div>
-        </DndContext>
+
+          <div className="todo-pane-actions">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch({ type: "set-focus-mode", isFocus: !state.uiState.isFocusMode });
+                  }}
+                  aria-label="Toggle Focus Mode"
+                  className={cn(
+                    "todo-pane-action-btn",
+                    state.uiState.isFocusMode && "todo-pane-action-btn--active"
+                  )}
+                >
+                  <Target className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {state.uiState.isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIndex = CATEGORY_CYCLE.indexOf(categoryTheme);
+                    const next = CATEGORY_CYCLE[(currentIndex + 1) % CATEGORY_CYCLE.length];
+                    dispatch({ type: "set-category-theme", theme: next });
+                  }}
+                  aria-label={`Category labels: ${categoryTheme}`}
+                  className="todo-pane-action-btn"
+                >
+                  <Brain className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {CATEGORY_TOOLTIP[categoryTheme]}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        <ScrollArea className="todo-pane-scroll" data-testid="task-pane-scroll">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragOver={handleDragOver}
+            onDragCancel={handleDragCancel}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="priority-groups">
+              {([1, 2, 3] as const).map((priorityLevel) => {
+                const todosInPriority = grouped[priorityLevel];
+                const parentTodos = todosInPriority.filter((t) => !t.parentId);
+                const meta = getPriorityMeta(state.uiState.categoryTheme, priorityLevel);
+
+                return (
+                  <div key={priorityLevel} className="priority-group">
+                  {/* Group header */}
+                  <div
+                    className="priority-group-header"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, var(${meta.softVar}) 72%, var(--paper-strong))`,
+                    }}
+                  >
+                    <div className="priority-group-header-content">
+                      <div className="priority-group-header-title-row">
+                        <h3 className="text-[15px] font-semibold leading-[1.3] text-[var(--ink-900)]">
+                          {meta.label}
+                        </h3>
+                        {parentTodos.length > 0 && (
+                          <Badge
+                            className="priority-count-badge"
+                            style={{
+                              backgroundColor: `color-mix(in srgb, var(${meta.softVar}) 48%, var(--paper-strong))`,
+                              color: `var(${meta.accentVar})`,
+                              borderColor: `color-mix(in srgb, var(${meta.accentVar}) 24%, var(--paper-strong))`,
+                            }}
+                          >
+                            {parentTodos.length}
+                          </Badge>
+                        )}
+                      </div>
+                      <span
+                        className="priority-group-header-accent"
+                        aria-hidden="true"
+                        style={{ backgroundColor: `var(${meta.accentVar})` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Task items */}
+                  <SortableContext
+                    id={`priority-group-${priorityLevel}`}
+                    items={parentTodos.map((t) => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul
+                      className={cn(
+                        "task-list flex-1 min-h-[30px]",
+                        dropIndicator?.isGroup &&
+                          dropIndicator.priority === priorityLevel &&
+                          "task-list--drop-target",
+                      )}
+                    >
+                      {parentTodos.length === 0 && (
+                        <li>
+                          <InlineTaskInput
+                            date={date}
+                            priority={priorityLevel}
+                            meta={meta}
+                            dispatch={dispatch}
+                            className="inline-task-input--in-list inline-task-input--at-top"
+                          />
+                        </li>
+                      )}
+
+                      {parentTodos.map((parentTodo) => {
+                        const subtasks = todosInPriority.filter(
+                          (t) => t.parentId === parentTodo.id
+                        );
+                        return (
+                          <SortableTaskItem
+                            key={parentTodo.id}
+                            todo={parentTodo}
+                            date={date}
+                            subtasks={subtasks}
+                            dispatch={dispatch}
+                            onCelebrate={triggerCompletionConfettiFromElement}
+                            dropIndicatorPosition={
+                              dropIndicator?.overId === parentTodo.id
+                                ? dropIndicator.position
+                                : null
+                            }
+                          />
+                        );
+                      })}
+
+                      {parentTodos.length > 0 && (
+                        <li>
+                          <InlineTaskInput
+                            date={date}
+                            priority={priorityLevel}
+                            meta={meta}
+                            dispatch={dispatch}
+                            className="inline-task-input--in-list inline-task-input--at-bottom"
+                          />
+                        </li>
+                      )}
+
+                      {parentTodos.length === 0 && (
+                        <li className="task-empty">No tasks yet</li>
+                      )}
+                    </ul>
+                  </SortableContext>
+                </div>
+              );
+            })}
+            </div>
+          </DndContext>
+        </ScrollArea>
       </div>
     </section>
   );

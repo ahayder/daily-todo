@@ -1,7 +1,12 @@
 import { toISODate } from "@/lib/date";
 import { appStateSchema } from "@/lib/schema";
-import { createInitialState, ensureDailyPageForDate, ensurePlannerState } from "@/lib/store";
-import type { AppState, UIState } from "@/lib/types";
+import {
+  createInitialState,
+  ensureDailyPageForDate,
+  ensureNoteState,
+  ensurePlannerState,
+} from "@/lib/store";
+import type { AppState, CachedNoteBody, NoteSummary, UIState } from "@/lib/types";
 
 export const APP_STATE_VERSION = 1;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
@@ -16,6 +21,7 @@ export type PersistenceConflictResolution =
 export type PersistenceRecordKind =
   | "daily_page"
   | "note"
+  | "note_folder"
   | "planner_preset"
   | "workspace_state";
 
@@ -40,6 +46,23 @@ export type PersistenceMetadata = {
 export type CachedAppStateEnvelope = {
   state: AppState;
   metadata: PersistenceMetadata;
+};
+
+export type NoteBodyLoadResult = {
+  markdown: string | null;
+  status: "ready" | "stale-offline" | "error";
+  source: "local" | "remote" | "none";
+  updatedAtClient: string | null;
+  notice: string | null;
+  errorMessage: string | null;
+};
+
+export type NoteBodySaveResult = {
+  markdown: string;
+  updatedAtClient: string;
+  status: PersistenceStatus;
+  notice: string | null;
+  errorMessage: string | null;
 };
 
 export type PersistenceLoadResult = {
@@ -82,6 +105,7 @@ export type SyncableUIState = Pick<
   UIState,
   | "selectedDailyDate"
   | "selectedNoteId"
+  | "selectedNoteFolderId"
   | "selectedPlannerPresetId"
   | "expandedYears"
   | "expandedMonths"
@@ -91,10 +115,12 @@ export type SyncableUIState = Pick<
 export type LocalOnlyUIState = Pick<
   UIState,
   | "isSidebarCollapsed"
+  | "dailyTaskPaneWidth"
   | "themeMode"
   | "categoryTheme"
   | "isFocusMode"
   | "focusedTodoId"
+  | "expandedNoteFolders"
 >;
 
 export type PersistenceRepository = {
@@ -109,6 +135,24 @@ export type PersistenceRepository = {
     baseMetadata: PersistenceMetadata;
     now?: Date;
   }): Promise<PersistenceSaveResult>;
+  loadNoteBody(input: {
+    userId: string;
+    noteId: string;
+    now?: Date;
+  }): Promise<NoteBodyLoadResult>;
+  saveNoteBody(input: {
+    userId: string;
+    noteId: string;
+    markdown: string;
+    updatedAtClient: string;
+    now?: Date;
+  }): Promise<NoteBodySaveResult>;
+  primeRecentNoteCache(input: {
+    userId: string;
+    noteBodies: Array<{ noteId: string; markdown: string; updatedAtClient: string | null }>;
+    now?: Date;
+  }): Promise<void>;
+  evictExpiredCachedBodies(input: { userId?: string; now?: Date }): Promise<void>;
   clearUserData(input: { userId: string }): Promise<void>;
 };
 
@@ -126,6 +170,21 @@ export type RemoteAppStateStore = {
     updatedAtClient: string;
     knownRemoteUpdatedAt: string | null;
   }): Promise<RemoteSnapshot>;
+};
+
+export type RecentNoteBodiesStorage = {
+  loadNoteBody(input: { userId: string; noteId: string; now?: Date }): Promise<CachedNoteBody | null>;
+  saveNoteBody(input: {
+    userId: string;
+    noteId: string;
+    markdown: string;
+    updatedAtClient: string | null;
+    now?: Date;
+  }): Promise<CachedNoteBody>;
+  deleteNoteBody(input: { userId: string; noteId: string }): Promise<void>;
+  clearUserData(input: { userId: string }): Promise<void>;
+  evictExpired(input: { userId?: string; now?: Date }): Promise<void>;
+  countUserBodies?(input: { userId: string }): Promise<number>;
 };
 
 export function createPersistenceMetadata(
@@ -167,12 +226,16 @@ function normalizeLegacyState(parsed: unknown): unknown {
       themeMode?: unknown;
       lastView?: unknown;
       selectedPlannerPresetId?: unknown;
+      selectedNoteFolderId?: unknown;
       isSidebarCollapsed?: unknown;
+      dailyTaskPaneWidth?: unknown;
       categoryTheme?: unknown;
       isFocusMode?: unknown;
       focusedTodoId?: unknown;
+      expandedNoteFolders?: unknown;
     };
     plannerPresets?: unknown;
+    noteFolders?: unknown;
   };
 
   if (!candidate.uiState || typeof candidate.uiState !== "object") {
@@ -183,7 +246,7 @@ function normalizeLegacyState(parsed: unknown): unknown {
   const normalizedThemeMode =
     themeMode === "light" || themeMode === "dark" || themeMode === "system"
       ? themeMode
-      : "system";
+      : "dark";
 
   const normalizedLastView =
     candidate.uiState.lastView === "daily" ||
@@ -198,6 +261,8 @@ function normalizeLegacyState(parsed: unknown): unknown {
       candidate.plannerPresets && typeof candidate.plannerPresets === "object"
         ? candidate.plannerPresets
         : {},
+    noteFolders:
+      candidate.noteFolders && typeof candidate.noteFolders === "object" ? candidate.noteFolders : {},
     uiState: {
       ...candidate.uiState,
       themeMode: normalizedThemeMode,
@@ -207,10 +272,19 @@ function normalizeLegacyState(parsed: unknown): unknown {
         candidate.uiState.selectedPlannerPresetId === null
           ? candidate.uiState.selectedPlannerPresetId
           : null,
+      selectedNoteFolderId:
+        typeof candidate.uiState.selectedNoteFolderId === "string" ||
+        candidate.uiState.selectedNoteFolderId === null
+          ? candidate.uiState.selectedNoteFolderId
+          : null,
       isSidebarCollapsed:
         typeof candidate.uiState.isSidebarCollapsed === "boolean"
           ? candidate.uiState.isSidebarCollapsed
           : false,
+      dailyTaskPaneWidth:
+        typeof candidate.uiState.dailyTaskPaneWidth === "number"
+          ? candidate.uiState.dailyTaskPaneWidth
+          : 500,
       categoryTheme:
         candidate.uiState.categoryTheme === "adhd1" ||
         candidate.uiState.categoryTheme === "adhd2" ||
@@ -224,6 +298,9 @@ function normalizeLegacyState(parsed: unknown): unknown {
         candidate.uiState.focusedTodoId === null
           ? candidate.uiState.focusedTodoId
           : null,
+      expandedNoteFolders: Array.isArray(candidate.uiState.expandedNoteFolders)
+        ? candidate.uiState.expandedNoteFolders.filter((value): value is string => typeof value === "string")
+        : [],
     },
   };
 }
@@ -241,18 +318,23 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
   }
 
   return ensureDailyPageForDate(
-    ensurePlannerState({
-      ...validated.data,
-      uiState: {
-        ...validated.data.uiState,
-        themeMode: validated.data.uiState.themeMode ?? "system",
-        categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
-        isFocusMode: validated.data.uiState.isFocusMode ?? false,
-        focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
-        selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
-        isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
-      },
-    }),
+    ensureNoteState(
+      ensurePlannerState({
+        ...validated.data,
+        uiState: {
+          ...validated.data.uiState,
+          themeMode: validated.data.uiState.themeMode ?? "dark",
+          categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
+          isFocusMode: validated.data.uiState.isFocusMode ?? false,
+          focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
+          expandedNoteFolders: validated.data.uiState.expandedNoteFolders ?? [],
+          selectedNoteFolderId: validated.data.uiState.selectedNoteFolderId ?? null,
+          selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
+          isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
+          dailyTaskPaneWidth: validated.data.uiState.dailyTaskPaneWidth ?? 500,
+        },
+      }),
+    ),
     toISODate(now),
   );
 }
@@ -265,6 +347,7 @@ export function extractSyncableUIState(uiState: UIState): SyncableUIState {
   return {
     selectedDailyDate: uiState.selectedDailyDate,
     selectedNoteId: uiState.selectedNoteId,
+    selectedNoteFolderId: uiState.selectedNoteFolderId,
     selectedPlannerPresetId: uiState.selectedPlannerPresetId,
     expandedYears: uiState.expandedYears,
     expandedMonths: uiState.expandedMonths,
@@ -275,10 +358,12 @@ export function extractSyncableUIState(uiState: UIState): SyncableUIState {
 export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
   return {
     isSidebarCollapsed: uiState.isSidebarCollapsed,
+    dailyTaskPaneWidth: uiState.dailyTaskPaneWidth,
     themeMode: uiState.themeMode,
     categoryTheme: uiState.categoryTheme,
     isFocusMode: uiState.isFocusMode,
     focusedTodoId: uiState.focusedTodoId,
+    expandedNoteFolders: uiState.expandedNoteFolders,
   };
 }
 
@@ -291,6 +376,30 @@ export function mergeUiState(
     ...fallback,
     ...syncable,
     ...localOnly,
+  };
+}
+
+export function stripNoteBodies(state: AppState): AppState {
+  return {
+    ...state,
+    notesDocs: Object.fromEntries(
+      Object.entries(state.notesDocs).map(([noteId, note]) => [
+        noteId,
+        {
+          ...note,
+          markdown: undefined,
+        },
+      ]),
+    ),
+  };
+}
+
+export function getNoteSummary(note: NoteSummary | { id: string; title: string; folderId: string | null; updatedAt: string }) {
+  return {
+    id: note.id,
+    title: note.title,
+    folderId: note.folderId,
+    updatedAt: note.updatedAt,
   };
 }
 
