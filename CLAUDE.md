@@ -87,7 +87,6 @@ Todo      { id, text, priority(1|2|3), done, createdAt }
 
 > **Design style name: Warm Minimalism**
 > **Component library:** shadcn/ui
-> **Design system skill:** `.claude/skills/design-system/SKILL.md`
 
 ### Why Warm Minimalism
 
@@ -156,10 +155,21 @@ Use Tailwind's default scale. Preferred spacings:
 - Between priority group cards: `gap-3` (12px)
 
 ### Border Radius
-
 - Cards / panes: `rounded-2xl` (16px)
 - Inputs / buttons: `rounded-lg` (10px)
 - Badges / pills: `rounded-full`
+
+### UX & Component Rules
+- **Hover states**: Every interactive element must have a clear hover state.
+- **Destructive actions**: Always require an `AlertDialog` confirmation.
+- **Icon buttons**: Must have both an `aria-label` and a `Tooltip` wrapper.
+- **Motion**: Duration 150ms-200ms. Never exceed 300ms. Never use bounce or spring animations.
+
+### Accessibility
+- Maintain WCAG AA contrast (4.5:1 normal, 3:1 large).
+- Focus indicator: `outline: 2px solid var(--brand); outline-offset: 2px`.
+- Never rely on color alone to convey meaning (e.g. priority colors must have a text label).
+- Respect `prefers-reduced-motion`.
 
 ### Shadows
 

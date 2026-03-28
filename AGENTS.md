@@ -26,4 +26,4 @@ Do not update `AGENTS.md` for normal project-guidance/content changes; those bel
 ## Local Skill Reference
 
 Skill documentation is discoverable from the canonical source and local path:
-- `./.claude/skills/`
+- `./.agents/skills/`

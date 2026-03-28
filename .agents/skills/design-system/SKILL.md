@@ -1,177 +1,191 @@
-# Skill: Warm Minimalism Design System
-
-**Read this skill** before making any visual, typographic, color, or motion decision in DailyTodoApp.
-
+---
+name: design-system
+description: Apply the DailyTodoApp Warm Minimalism design system when changing UI, styling, component visuals, layout, typography, color, spacing, motion, or accessibility. Use this skill before making any visual or interaction decision so new work stays consistent with the product's warm notebook-like interface.
 ---
 
-## Quick Rules
+# Design System
 
-1. All colors via CSS variables — never raw hex in JSX or Tailwind
-2. One font family (`font-body`, sans-serif) — no serifs anywhere
-3. `rounded-2xl` for containers, `rounded-[10px]` for interactive elements, `rounded-full` for badges
-4. Warm shadows only — never Tailwind's default `shadow-*`
-5. Hover states on every interactive element — no exceptions
-6. Shadcn components must be generated before use: `npx shadcn@latest add <name>`
-7. Destructive actions always need `AlertDialog` confirmation
-8. Icon-only buttons always need `Tooltip` + `aria-label`
-9. The editor is Tiptap (Notion-like) — no visible toolbar, content-first
-10. Navigation lives in the top navbar, not the sidebar
+Use this skill for any DailyTodoApp work that changes the interface or interaction design.
 
----
+This skill translates the canonical rules in `CLAUDE.md` into a compact working checklist for implementation. If this file and `CLAUDE.md` ever disagree, follow `CLAUDE.md`.
 
-## Brand Identity
+## When To Use
 
-**Style:** Warm Minimalism — *"A paper notebook that learned to code."*
+Use this skill when you are:
 
-| Trait | Description |
-|---|---|
-| **Calm** | Uses space to breathe, not noise to communicate |
-| **Focused** | One thing at a time. UI steps back so user's thoughts step forward |
-| **Warm** | Feels like a well-worn notebook, not a cold dashboard |
-| **Honest** | Flat surfaces, real labels, no decorative chrome |
-| **Quiet** | Interactions are subtle. Nothing bounces |
+- building or restyling pages, components, dialogs, forms, nav, cards, or lists
+- choosing colors, spacing, typography, borders, shadows, or motion
+- adding shadcn/ui components or adjusting existing component chrome
+- reviewing UI work for consistency with the app's established visual language
 
----
+Do not use this skill for purely non-visual backend, data, or infrastructure work.
 
-## Color Tokens
+## Working Rules
+
+Before editing UI:
+
+1. Read the relevant UI sections in `CLAUDE.md`.
+2. Preserve the existing Warm Minimalism direction instead of inventing a new style.
+3. Prefer reusing existing tokens and patterns over introducing new visual treatments.
+4. When asked to remove visual styling, simplify or delete the original rule instead of layering an override when possible.
+
+## Visual Direction
+
+The app should feel like a physical desk notebook translated into software:
+
+- warm, calm, and minimal
+- flat and honest rather than flashy or decorative
+- spacious and breathable rather than dense
+- sans-serif throughout, with hierarchy coming from size and weight
+
+Avoid anything that feels like a generic dashboard.
+
+## Non-Negotiables
+
+- Use CSS custom properties for colors. Do not hardcode hex colors in JSX or Tailwind utilities.
+- Use the `font-body` sans-serif stack everywhere in the product UI. No serif fonts.
+- Use `rounded-2xl` for panes/cards, `rounded-lg` or about `10px` for controls, and `rounded-full` for pills/badges.
+- Use warm-tinted shadows only. Do not use default Tailwind shadow presets unless they are mapped to the warm shadow tokens.
+- Every interactive element needs a clear hover state.
+- Icon-only buttons need both `aria-label` and `Tooltip`.
+- Destructive actions need `AlertDialog` confirmation.
+- Tiptap stays content-first with no visible toolbar.
+- Primary navigation belongs in the top navbar, not the sidebar.
+
+## Core Tokens
+
+Use these semantic tokens rather than raw colors:
 
 ```css
-/* Light → Dark */
---paper:         #faf8f4  →  #16191f     /* page background */
---paper-strong:  #ffffff  →  #1e2228     /* card/pane surface */
---line:          #e8e2d9  →  #2d3340     /* all borders */
---ink-900:       #1f2430  →  #e8e2d9     /* primary text */
---ink-700:       #40495e  →  #8c95a6     /* secondary/muted text */
---brand:         #2f6d62  →  #5ea89d     /* accent */
---brand-soft:    #d9ece8  →  #1e3533     /* accent bg tint */
---warn:          #b8422e  →  #d45a44     /* destructive */
+/* light mode */
+--paper: #faf8f4;
+--paper-strong: #ffffff;
+--line: #d9d1c5;
+--ink-900: #1f2430;
+--ink-700: #40495e;
+--brand: #2f6d62;
+--brand-soft: #d9ece8;
+--warn: #b8422e;
 
-/* Priority system */
---priority-1:       #c0392b / #d45a44    /* Critical — dusty red */
---priority-1-soft:  #f9e8e6 / #2a1715
---priority-2:       #c07c30 / #d4963a    /* Important — amber */
---priority-2-soft:  #fdf3e3 / #271f0d
---priority-3:       #4a7c59 / #5a9c6e    /* Someday — sage */
---priority-3-soft:  #e8f4ec / #101f15
+/* dark mode */
+--paper: #16191f;
+--paper-strong: #1e2228;
+--line: #2d3340;
+--ink-900: #e8e2d9;
+--ink-700: #8c95a6;
+--brand: #3d8c7f;
+--brand-soft: #1e3533;
+--warn: #d45a44;
+
+/* priority colors */
+--priority-1: #c0392b;
+--priority-1-soft: #f9e8e6;
+--priority-2: #c07c30;
+--priority-2-soft: #fdf3e3;
+--priority-3: #4a7c59;
+--priority-3-soft: #e8f4ec;
 ```
 
-In Tailwind: `bg-[var(--paper)]`, `text-[var(--ink-900)]`, `border-[var(--line)]`
+Typical Tailwind usage:
 
-**Rules:**
-- One accent (`--brand`), used sparingly: active states, primary buttons, checkbox checks
-- Never hardcode hex values — always use CSS custom properties
-- Never use Tailwind's `gray-*` palette
-- Color communicates meaning only: priority, state, danger
-
----
+- `bg-[var(--paper)]`
+- `bg-[var(--paper-strong)]`
+- `text-[var(--ink-900)]`
+- `text-[var(--ink-700)]`
+- `border-[var(--line)]`
 
 ## Typography
 
-```
-All roles:   font-body — "Source Sans 3", Inter, DM Sans, system-ui, sans-serif
-Monospace:   font-mono — JetBrains Mono, Fira Code, ui-monospace
-```
+Use one font family across the interface:
 
-| Element | Size | Weight |
-|---|---|---|
-| Note title (Notes view) | 28px / 1.75rem | 700 |
-| Date header (Daily view) | 18px / text-lg | 600 |
-| Section heading | 13px | 600 |
-| Body / task text | 13.5px | 400 |
-| Secondary / hint | 11-12px | 400 |
-| Nav pills | 13px | 500 |
-
-Line-height: 1.7 for body, 1.3 for headings. No serifs.
-
----
-
-## Spacing & Layout
-
-```
-App shell:     [top-navbar 52px] / [sidebar 260px | flex-1 content]
-Daily layout:  [flex-1 note pane] | [380px todo pane]
-Notes layout:  [flex-1 full-width note]
-Main padding:  p-6 (1.5rem)
+```text
+font-body: "Source Sans 3", Inter, DM Sans, system-ui, sans-serif
+font-mono: JetBrains Mono, Fira Code, ui-monospace
 ```
 
-Preferred spacings: `gap-2` (8px) between list items, `gap-3` (12px) between priority groups, `p-5` (1.25rem) sidebar padding.
+Hierarchy should stay simple:
 
-**Rule:** When in doubt, add more space. Cramped UIs feel anxious.
+- note title: `text-2xl font-semibold`
+- date header: `text-lg font-semibold`
+- section label: `text-sm font-semibold`
+- body and todo text: `text-sm font-normal`
 
----
+## Layout And Spacing
 
-## Shape & Elevation
+Preferred spacing rhythm:
 
-| Element | Radius |
-|---|---|
-| Cards / panes | 16px (`rounded-2xl`) |
-| Inputs / buttons / nav pills | 7-10px |
-| Badges / pills | 9999px (`rounded-full`) |
-| Priority groups | 14px |
+- section padding: `p-4`
+- card padding: `p-3` to `p-4`
+- list gaps: `gap-2`
+- section gaps: `gap-4`
+- priority-group gaps: `gap-3`
 
-Shadows: Warm-tinted only, defined as `--surface-shadow` in CSS.
-
----
-
-## Motion
-
-- **Duration:** 150ms for hover/focus, 200ms for reveals, never > 300ms
-- **Easing:** `ease` or `ease-in-out`. Never bounce/spring
-- **Approved:** `fadeIn`, `slideUp`, `scaleIn` keyframes in globals.css
-- No scale transforms on buttons. No animations for animation's sake.
-
----
+Rule of thumb: if the layout feels cramped, increase space before adding decoration.
 
 ## Component Patterns
 
-### Top Navbar
-- Height: 52px, backdrop-blur, border-bottom
-- Nav pills: pill-shaped tabs with active state bg + shadow
-- Theme toggle: icon cycle button (Sun → Moon → Monitor)
+### Navbar
+
+- height around `52px`
+- nav pills show active state with filled background and subtle warm shadow
+- theme toggle stays in the top-right
 
 ### Sidebar
-- Clean tree with `ChevronRight` icons (rotate 90° when open)
-- Today button: `--brand-soft` bg, `--brand` text, hover fills fully
-- Notes list: title + date, active state `--brand-soft`
 
-### Priority Group
-- Left-border accent (3px, group color)
-- Header bg uses `--priority-N-soft`
-- Count badge: `rounded-full`, accent color
+- clean tree/list presentation with clear hover states
+- "Today" uses `--brand-soft` background and `--brand` text
+- active note/date states should be obvious but soft
 
-### Inline Task Input (Apple Reminders style)
-- Lives at the bottom of each priority group
-- `+` icon in group's accent color
-- Transparent input, placeholder in muted text
-- Enter to submit, auto-clears
+### Priority Groups
 
-### Tiptap Editor
-- No visible toolbar — content-first
-- Placeholder: "Start writing…" in `--ink-700` at 35% opacity
-- Styled via `.tiptap-editor` class in globals.css
-- Markdown serialization via `tiptap-markdown` extension
+- use a left-border accent in the group color
+- use `--priority-N-soft` for the group header tint
+- show the count badge as a pill when items exist
 
----
+### Inline Task Input
 
-## Anti-Patterns
+- keep it at the bottom of each priority group
+- use the group's accent color for the add affordance
+- keep the input visually light and content-first
 
-| Pattern | Why it breaks the design |
-|---|---|
-| Glassmorphism (heavy) | Too decorative |
-| Gradient fills on components | Only on page body |
-| Saturated/bright colors | Use desaturated tonal palette |
-| Bold icon strokes | Use default 1.5 stroke width |
-| Bounce/spring animations | Contradicts calm personality |
-| True black (`#000`) dark mode | Use warm dark blue-gray |
-| Serif fonts | Stay sans-serif |
-| Visible editor toolbars | Content-first, toolbar-free |
+### Editor
 
----
+- no visible toolbar
+- use the `.tiptap-editor` styling hooks already in the app
+- placeholder text should be subtle and quiet
+
+## Motion
+
+- hover/focus: about `150ms`
+- reveals: about `200ms`
+- never exceed `300ms` without a strong reason
+- use calm easing such as `ease` or `ease-in-out`
+- respect `prefers-reduced-motion`
+
+Do not use bouncy or playful motion.
 
 ## Accessibility
 
-- Text/background: WCAG AA (4.5:1 normal, 3:1 large)
-- Focus indicator: `outline: 2px solid var(--brand); outline-offset: 2px`
-- Icon-only buttons: `aria-label` + `Tooltip`
-- Priority color paired with text label
-- Respect `prefers-reduced-motion`
+- maintain WCAG AA contrast
+- use a visible focus ring such as `2px solid var(--brand)` with offset
+- never rely on color alone for priority or status
+- pair icon-only affordances with accessible labels
+
+## Anti-Patterns
+
+Avoid these unless the user explicitly requests a deliberate departure:
+
+- cool grays or pure white replacing the warm paper palette
+- bright saturated accent colors
+- glassmorphism or heavy chrome
+- gradients on components
+- true black dark mode
+- serif typography
+- bounce or spring-heavy animation
+- visible editor toolbars
+
+## Implementation Notes
+
+- Generate new shadcn/ui primitives before use: `npx shadcn@latest add <component>`
+- Keep new UI aligned with existing `src/components/ui/` usage
+- If you need a new token or pattern, add it only when the current system truly cannot express the requirement

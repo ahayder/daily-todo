@@ -1,10 +1,15 @@
 import { useReducer } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+import confetti from "canvas-confetti";
 import { DailyView } from "@/components/daily-view";
 import { appReducer } from "@/components/app-context";
 import { createInitialState } from "@/lib/store";
+
+vi.mock("canvas-confetti", () => ({
+  default: vi.fn(() => Promise.resolve()),
+}));
 
 vi.mock("@/components/markdown-editor", () => ({
   MarkdownEditor: () => <div data-testid="markdown-editor" />,
@@ -32,10 +37,11 @@ describe("DailyView", () => {
     render(<Harness />);
 
     const checkbox = screen.getByRole("checkbox");
-    await userEvent.click(checkbox);
+    fireEvent.click(checkbox);
 
     const taskText = screen.getByText("Task one");
     expect(taskText).toHaveClass("task-text--done");
+    expect(confetti).toHaveBeenCalledTimes(4);
   });
 
   test("uses enter to add without an Add button", async () => {

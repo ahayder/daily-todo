@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type Dispatch } from "react";
-import confetti from "canvas-confetti";
+import { triggerCompletionConfettiFromElement } from "@/lib/confetti";
 import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
 import { MarkdownEditor } from "@/components/markdown-editor";
@@ -380,25 +380,6 @@ export function DailyView({ state, dispatch }: Props) {
     [page?.todos]
   );
 
-  const triggerCompletionConfetti = (target: HTMLElement) => {
-    const rect = target.getBoundingClientRect();
-    const origin = {
-      x: (rect.left + rect.width / 2) / window.innerWidth,
-      y: (rect.top + rect.height / 2) / window.innerHeight,
-    };
-
-    void confetti({
-      particleCount: 70,
-      spread: 70,
-      startVelocity: 34,
-      ticks: 180,
-      scalar: 0.9,
-      disableForReducedMotion: true,
-      colors: ["#2f6d62", "#c0392b", "#c07c30", "#4a7c59", "#d6b98b"],
-      origin,
-    });
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || !date) return;
@@ -495,7 +476,7 @@ export function DailyView({ state, dispatch }: Props) {
                         type="button"
                         onClick={(event) => {
                           if (!focusedTodo.done) {
-                            triggerCompletionConfetti(event.currentTarget);
+                            triggerCompletionConfettiFromElement(event.currentTarget);
                           }
 
                           dispatch({ type: "toggle-todo", date, todoId: focusedTodo.id });
@@ -527,7 +508,7 @@ export function DailyView({ state, dispatch }: Props) {
                             todo={subtodo}
                             date={date}
                             dispatch={dispatch}
-                            onCelebrate={triggerCompletionConfetti}
+                            onCelebrate={triggerCompletionConfettiFromElement}
                             />
                         ))
                     )}
@@ -634,7 +615,7 @@ export function DailyView({ state, dispatch }: Props) {
                           date={date}
                           subtasks={subtasks}
                           dispatch={dispatch}
-                          onCelebrate={triggerCompletionConfetti}
+                          onCelebrate={triggerCompletionConfettiFromElement}
                         />
                       );
                     })}
