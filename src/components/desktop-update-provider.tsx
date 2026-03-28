@@ -509,21 +509,21 @@ function DesktopUpdateDialog() {
               </div>
             ) : null}
             {errorMessage ? (
-              <p className="rounded-xl border border-[color-mix(in_srgb,var(--warn)_25%,transparent)] bg-[color-mix(in_srgb,var(--warn)_7%,transparent)] px-3 py-2 text-sm text-[var(--warn)]">
+              <p className="rounded-lg border border-[color-mix(in_srgb,var(--warn)_25%,transparent)] bg-[color-mix(in_srgb,var(--warn)_7%,transparent)] px-4 py-3 text-sm text-[var(--warn)] leading-relaxed">
                 {errorMessage}
               </p>
             ) : null}
             {releaseNotes ? (
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-700)]">
+              <div className="rounded-xl border border-[var(--line)] bg-[var(--paper)] px-4 py-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-700)]">
                   Release Notes
                 </p>
-                <p className="max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-[var(--ink-900)]">
+                <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-sm text-[var(--ink-900)] leading-relaxed">
                   {releaseNotes}
                 </p>
               </div>
             ) : null}
-            <p className="text-xs text-[var(--ink-700)]">
+            <p className="text-[13px] text-[var(--ink-700)] leading-relaxed pt-1">
               This personal macOS build is unsigned for public distribution, so Gatekeeper may ask
               you to approve the app again in Privacy & Security after install.
             </p>

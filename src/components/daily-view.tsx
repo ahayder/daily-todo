@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type Dispatch } from "react";
+import confetti from "canvas-confetti";
 import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
 import { MarkdownEditor } from "@/components/markdown-editor";
@@ -128,12 +129,14 @@ function EditableTaskItem({
   date,
   subtasks = [],
   dispatch,
+  onCelebrate,
   dragHandleProps,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
   subtasks?: import("@/lib/types").Todo[];
   dispatch: Dispatch<AppAction>;
+  onCelebrate?: (target: HTMLElement) => void;
   dragHandleProps?: Record<string, unknown>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -180,10 +183,15 @@ function EditableTaskItem({
     <div className="flex flex-col w-full">
       <li className="task-item group">
         <Checkbox
-        checked={todo.done}
-        onCheckedChange={() => dispatch({ type: "toggle-todo", date, todoId: todo.id })}
-        className="task-checkbox"
-      />
+          checked={todo.done}
+          onClick={(event) => {
+            if (!todo.done) {
+              onCelebrate?.(event.currentTarget as HTMLElement);
+            }
+          }}
+          onCheckedChange={() => dispatch({ type: "toggle-todo", date, todoId: todo.id })}
+          className="task-checkbox"
+        />
 
       {isEditing ? (
         <input
@@ -253,6 +261,7 @@ function EditableTaskItem({
               todo={subtodo}
               date={date}
               dispatch={dispatch}
+              onCelebrate={onCelebrate}
             />
           ))}
         </ul>
@@ -309,11 +318,13 @@ function SortableTaskItem({
   date,
   subtasks,
   dispatch,
+  onCelebrate,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
   subtasks: import("@/lib/types").Todo[];
   dispatch: Dispatch<AppAction>;
+  onCelebrate?: (target: HTMLElement) => void;
 }) {
   const {
     attributes,
@@ -340,6 +351,7 @@ function SortableTaskItem({
         date={date}
         subtasks={subtasks}
         dispatch={dispatch}
+        onCelebrate={onCelebrate}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
@@ -367,6 +379,25 @@ export function DailyView({ state, dispatch }: Props) {
     () => groupTodosByPriority(page?.todos ?? []),
     [page?.todos]
   );
+
+  const triggerCompletionConfetti = (target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const origin = {
+      x: (rect.left + rect.width / 2) / window.innerWidth,
+      y: (rect.top + rect.height / 2) / window.innerHeight,
+    };
+
+    void confetti({
+      particleCount: 70,
+      spread: 70,
+      startVelocity: 34,
+      ticks: 180,
+      scalar: 0.9,
+      disableForReducedMotion: true,
+      colors: ["#2f6d62", "#c0392b", "#c07c30", "#4a7c59", "#d6b98b"],
+      origin,
+    });
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -443,7 +474,7 @@ export function DailyView({ state, dispatch }: Props) {
       <section className="flex flex-col items-center justify-center h-full w-full bg-[var(--surface)] overflow-y-auto">
         <div className="w-full max-w-2xl px-8 py-12 flex flex-col items-center">
             
-            <div className="mb-8 flex flex-col items-center text-center">
+            <div className="mb-12 flex flex-col items-center text-center">
                 <Badge
                     style={{
                     backgroundColor: `var(${meta.softVar})`,
@@ -461,13 +492,19 @@ export function DailyView({ state, dispatch }: Props) {
                 
                 <div className="flex items-center gap-4">
                     <button 
-                         type="button"
-                        onClick={() => dispatch({ type: "toggle-todo", date, todoId: focusedTodo.id })}
+                        type="button"
+                        onClick={(event) => {
+                          if (!focusedTodo.done) {
+                            triggerCompletionConfetti(event.currentTarget);
+                          }
+
+                          dispatch({ type: "toggle-todo", date, todoId: focusedTodo.id });
+                        }}
                         className={cn(
                             "px-6 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-all shadow-sm",
                             focusedTodo.done 
                                 ? "bg-[var(--brand)] text-[var(--paper)] border border-[var(--brand)]" 
-                                : "bg-[var(--paper-strong)] border border-[var(--line)] text-[var(--ink-700)] hover:border-[var(--brand)] hover:text-[var(--brand)] hover:bg-[var(--brand-soft)]"
+                                : "bg-[var(--paper-strong)] border border-[var(--line)] text-[var(--ink-900)] hover:border-[var(--brand)] hover:text-[var(--brand)] hover:bg-[var(--brand-soft)]"
                         )}
                     >
                         <Checkbox checked={focusedTodo.done} className="pointer-events-none" />
@@ -477,12 +514,12 @@ export function DailyView({ state, dispatch }: Props) {
             </div>
 
             <div className="w-full bg-[var(--paper-strong)] rounded-xl border border-[var(--line)] shadow-sm p-6">
-                <h3 className="text-sm font-semibold text-[var(--ink-700)] uppercase tracking-wider mb-4">
+                <h3 className="text-sm font-semibold text-[var(--ink-900)] uppercase tracking-wider mb-4">
                     Sub-tasks
                 </h3>
                 <ul className="flex flex-col gap-2 w-full">
                     {subtasks.length === 0 ? (
-                         <li className="text-[var(--ink-700)] text-sm italic opacity-60">No sub-tasks.</li>
+                         <li className="text-[var(--ink-700)] text-sm italic">No sub-tasks.</li>
                     ) : (
                         subtasks.map((subtodo) => (
                             <EditableTaskItem
@@ -490,6 +527,7 @@ export function DailyView({ state, dispatch }: Props) {
                             todo={subtodo}
                             date={date}
                             dispatch={dispatch}
+                            onCelebrate={triggerCompletionConfetti}
                             />
                         ))
                     )}
@@ -596,6 +634,7 @@ export function DailyView({ state, dispatch }: Props) {
                           date={date}
                           subtasks={subtasks}
                           dispatch={dispatch}
+                          onCelebrate={triggerCompletionConfetti}
                         />
                       );
                     })}

@@ -209,3 +209,7 @@ Ordered by priority. Check off as completed.
 - **Drawing canvas** does not resize on window resize — the canvas dimensions are set once on mount from `parentElement.clientWidth/Height`. A `ResizeObserver` would fix this.
 - **State is localStorage-only** — no backend, no sync. All data lives in `dailytodo.v1` key.
 - **shadcn/ui** components live in `src/components/ui/`. Generate new ones with `npx shadcn@latest add <component>`.
+- **Tailwind v4 & CSS Cascade Layers (CRITICAL)**: Because Tailwind v4 relies entirely on native `@layer` (theme, base, components, utilities), **NEVER write unlayered CSS resets or component styles in globals.css**. Unlayered CSS rules (like `* { padding:0; }`) automatically overpower all layered utilities across the entire app, destroying component padding and spacing system.
+  - **Do**: Always wrap custom global resets in `@layer base { ... }`.
+  - **Do**: Put custom component CSS in `@layer components { ... }` or use exact Tailwind utilities.
+  - **Don't**: Write naked CSS selectors outside of Tailwind layers in `globals.css` unless deliberately intending to override the entire Tailwind layer system.
