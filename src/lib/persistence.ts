@@ -1,10 +1,32 @@
 import { toISODate } from "@/lib/date";
 import { appStateSchema } from "@/lib/schema";
-import { createInitialState, ensureDailyPageForDate, ensurePlannerState, STORAGE_KEY } from "@/lib/store";
+import { createInitialState, ensureDailyPageForDate, ensurePlannerState } from "@/lib/store";
 import type { AppState } from "@/lib/types";
+
+export const APP_STATE_VERSION = 1;
+export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
+
+export type PersistenceStatus = "idle" | "loading" | "synced" | "offline" | "error";
+
+export type PersistenceRepository = {
+  load(input: { userId: string; now?: Date }): Promise<AppState>;
+  save(input: { userId: string; state: AppState }): Promise<void>;
+};
+
+export type LocalCacheStorage = {
+  loadCached(input: { userId: string; now?: Date }): AppState | null;
+  saveCached(input: { userId: string; state: AppState }): void;
+  clearCached(input: { userId: string }): void;
+};
+
+export type RemoteAppStateStore = {
+  loadSnapshot(input: { userId: string }): Promise<unknown | null>;
+  saveSnapshot(input: { userId: string; state: AppState }): Promise<void>;
+};
 
 function normalizeLegacyState(parsed: unknown): unknown {
   if (!parsed || typeof parsed !== "object") return parsed;
+
   const candidate = parsed as {
     uiState?: {
       themeMode?: unknown;
@@ -55,31 +77,20 @@ function normalizeLegacyState(parsed: unknown): unknown {
   };
 }
 
-export function loadAppState(now = new Date()): AppState {
-  const todayISO = toISODate(now);
+export function seedAppState(now = new Date()): AppState {
+  return createInitialState(toISODate(now));
+}
 
-  if (typeof window === "undefined") {
-    return createInitialState(todayISO);
+export function tryParseAppState(input: unknown, now = new Date()): AppState | null {
+  const parsed = normalizeLegacyState(input);
+  const validated = appStateSchema.safeParse(parsed);
+
+  if (!validated.success) {
+    return null;
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const seeded = createInitialState(todayISO);
-    saveAppState(seeded);
-    return seeded;
-  }
-
-  try {
-    const parsed = normalizeLegacyState(JSON.parse(raw));
-    const validated = appStateSchema.safeParse(parsed);
-
-    if (!validated.success) {
-      const fallback = createInitialState(todayISO);
-      saveAppState(fallback);
-      return fallback;
-    }
-
-    const normalizedState = ensurePlannerState({
+  return ensureDailyPageForDate(
+    ensurePlannerState({
       ...validated.data,
       uiState: {
         ...validated.data.uiState,
@@ -90,25 +101,11 @@ export function loadAppState(now = new Date()): AppState {
         selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
         isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
       },
-    });
-
-    const rolled = ensureDailyPageForDate(
-      normalizedState,
-      todayISO,
-    );
-    saveAppState(rolled);
-    return rolled;
-  } catch {
-    const fallback = createInitialState(todayISO);
-    saveAppState(fallback);
-    return fallback;
-  }
+    }),
+    toISODate(now),
+  );
 }
 
-export function saveAppState(state: AppState): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function normalizeAppState(input: unknown, now = new Date()): AppState {
+  return tryParseAppState(input, now) ?? seedAppState(now);
 }

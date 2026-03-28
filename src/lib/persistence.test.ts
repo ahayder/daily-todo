@@ -1,125 +1,25 @@
-import { beforeEach, describe, expect, test } from "vitest";
-import { loadAppState } from "@/lib/persistence";
-import { STORAGE_KEY } from "@/lib/store";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { createBrowserLocalCacheStorage, getUserCacheStorageKey } from "@/lib/local-cache-storage";
+import {
+  LEGACY_LOCAL_STORAGE_KEY,
+  normalizeAppState,
+} from "@/lib/persistence";
+import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
+import { createInitialState } from "@/lib/store";
+import type { AppState } from "@/lib/types";
 
-describe("loadAppState", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  test("seeds initial state when empty", () => {
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
+describe("normalizeAppState", () => {
+  test("seeds initial state when payload is empty", () => {
+    const state = normalizeAppState(null, new Date("2026-03-11T08:00:00Z"));
 
     expect(state.dailyPages["2026-03-11"]).toBeDefined();
     expect(Object.keys(state.notesDocs).length).toBeGreaterThan(0);
     expect(Object.keys(state.plannerPresets).length).toBeGreaterThan(0);
-    expect(state.uiState.themeMode).toBe("system");
-    expect(state.uiState.isSidebarCollapsed).toBe(false);
   });
 
-  test("falls back when schema is invalid", () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ broken: true }));
-
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
-
-    expect(state.dailyPages["2026-03-11"]).toBeDefined();
-    expect(state.uiState.lastView).toBe("daily");
-  });
-
-  test("normalizes missing themeMode to system", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {
-          note_1: {
-            id: "note_1",
-            title: "Quick Notes",
-            markdown: "",
-            updatedAt: "2026-03-11T08:00:00.000Z",
-          },
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: "note_1",
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "daily",
-        },
-      }),
-    );
-
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
-    expect(state.uiState.themeMode).toBe("system");
-  });
-
-  test("normalizes invalid themeMode to system", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {
-          note_1: {
-            id: "note_1",
-            title: "Quick Notes",
-            markdown: "",
-            updatedAt: "2026-03-11T08:00:00.000Z",
-          },
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: "note_1",
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "daily",
-          themeMode: "sepia",
-        },
-      }),
-    );
-
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
-    expect(state.uiState.themeMode).toBe("system");
-  });
-
-  test("backfills planner state for older payloads", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {
-          note_1: {
-            id: "note_1",
-            title: "Quick Notes",
-            markdown: "",
-            updatedAt: "2026-03-11T08:00:00.000Z",
-          },
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: "note_1",
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "daily",
-        },
-      }),
-    );
-
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
-
-    expect(Object.keys(state.plannerPresets)).toHaveLength(1);
-    expect(state.uiState.selectedPlannerPresetId).toBeTruthy();
-  });
-
-  test("normalizes missing sidebar state to expanded", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
+  test("normalizes missing themeMode and sidebar state", () => {
+    const state = normalizeAppState(
+      {
         dailyPages: {
           "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
         },
@@ -140,10 +40,105 @@ describe("loadAppState", () => {
           expandedMonths: ["2026-03"],
           lastView: "daily",
         },
-      }),
+      },
+      new Date("2026-03-11T08:00:00Z"),
     );
 
-    const state = loadAppState(new Date("2026-03-11T08:00:00"));
+    expect(state.uiState.themeMode).toBe("system");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
+    expect(Object.keys(state.plannerPresets)).toHaveLength(1);
+  });
+});
+
+describe("browser local cache", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  test("loads user-scoped cached state", () => {
+    const cache = createBrowserLocalCacheStorage();
+    const state = createInitialState("2026-03-11");
+
+    window.localStorage.setItem(getUserCacheStorageKey("user_1"), JSON.stringify(state));
+
+    expect(
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") })?.uiState
+        .selectedDailyDate,
+    ).toBe("2026-03-11");
+  });
+
+  test("falls back to the legacy cache key during migration", () => {
+    const cache = createBrowserLocalCacheStorage();
+    const state = createInitialState("2026-03-11");
+
+    window.localStorage.setItem(LEGACY_LOCAL_STORAGE_KEY, JSON.stringify(state));
+
+    expect(
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") })?.uiState
+        .selectedDailyDate,
+    ).toBe("2026-03-11");
+  });
+});
+
+describe("SnapshotPersistenceRepository", () => {
+  test("returns the remote snapshot when available and updates cache", async () => {
+    const state = createInitialState("2026-03-11");
+    const cache = {
+      loadCached: vi.fn(() => null),
+      saveCached: vi.fn(),
+      clearCached: vi.fn(),
+    };
+    const remote = {
+      loadSnapshot: vi.fn(async () => state),
+      saveSnapshot: vi.fn(async () => {}),
+    };
+
+    const repository = new SnapshotPersistenceRepository(remote, cache);
+    const loaded = await repository.load({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") });
+
+    expect(remote.loadSnapshot).toHaveBeenCalledWith({ userId: "user_1" });
+    expect(cache.saveCached).toHaveBeenCalledWith({ userId: "user_1", state: loaded });
+  });
+
+  test("falls back to cached state and backfills remote when remote is empty", async () => {
+    const cached = createInitialState("2026-03-11");
+    const cache = {
+      loadCached: vi.fn(() => cached),
+      saveCached: vi.fn(),
+      clearCached: vi.fn(),
+    };
+    const remote = {
+      loadSnapshot: vi.fn(async () => null),
+      saveSnapshot: vi.fn(async () => {}),
+    };
+
+    const repository = new SnapshotPersistenceRepository(remote, cache);
+    const loaded = await repository.load({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") });
+
+    expect(loaded).toEqual(cached);
+    expect(remote.saveSnapshot).toHaveBeenCalledWith({ userId: "user_1", state: cached });
+  });
+
+  test("writes cache before remote on save", async () => {
+    const state = createInitialState("2026-03-11");
+    const calls: string[] = [];
+    const cache = {
+      loadCached: vi.fn(() => null),
+      saveCached: vi.fn(({ state: nextState }: { state: AppState }) => {
+        calls.push(`cache:${nextState.uiState.selectedDailyDate}`);
+      }),
+      clearCached: vi.fn(),
+    };
+    const remote = {
+      loadSnapshot: vi.fn(async () => null),
+      saveSnapshot: vi.fn(async ({ state: nextState }: { state: AppState }) => {
+        calls.push(`remote:${nextState.uiState.selectedDailyDate}`);
+      }),
+    };
+
+    const repository = new SnapshotPersistenceRepository(remote, cache);
+    await repository.save({ userId: "user_1", state });
+
+    expect(calls).toEqual(["cache:2026-03-11", "remote:2026-03-11"]);
   });
 });

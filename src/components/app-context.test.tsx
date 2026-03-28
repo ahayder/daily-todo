@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { AuthProvider } from "@/components/auth-context";
 import { AppProvider, appReducer, useAppState } from "@/components/app-context";
 import { createInitialState } from "@/lib/store";
+import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 type MatchMediaController = {
   setMatches: (value: boolean) => void;
@@ -53,6 +55,27 @@ function Harness() {
       </button>
     </div>
   );
+}
+
+function renderWithProviders() {
+  const auth = createMockAuthRepository({
+    userId: "user_1",
+    email: "test@example.com",
+    accessToken: "token_1",
+  });
+  const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+
+  return {
+    auth,
+    persistence,
+    ...render(
+      <AuthProvider repository={auth.repository}>
+        <AppProvider repository={persistence.repository}>
+          <Harness />
+        </AppProvider>
+      </AuthProvider>,
+    ),
+  };
 }
 
 describe("appReducer theme mode", () => {
@@ -144,11 +167,8 @@ describe("AppProvider theme class behavior", () => {
 
   test("applies dark class for explicit dark and removes for light", async () => {
     installMatchMedia(false);
-    render(
-      <AppProvider>
-        <Harness />
-      </AppProvider>,
-    );
+    renderWithProviders();
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
 
     await userEvent.click(screen.getByRole("button", { name: "dark" }));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
@@ -159,11 +179,8 @@ describe("AppProvider theme class behavior", () => {
 
   test("system mode follows matchMedia and updates on preference change", async () => {
     const media = installMatchMedia(false);
-    render(
-      <AppProvider>
-        <Harness />
-      </AppProvider>,
-    );
+    renderWithProviders();
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
 
     await userEvent.click(screen.getByRole("button", { name: "system" }));
     expect(document.documentElement.classList.contains("dark")).toBe(false);
@@ -173,5 +190,59 @@ describe("AppProvider theme class behavior", () => {
     });
 
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  test("renders auth gate until the user signs in", async () => {
+    const auth = createMockAuthRepository(null);
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <AppProvider repository={persistence.repository}>
+          <Harness />
+        </AppProvider>
+      </AuthProvider>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Sign in to your DailyTodo workspace" }),
+    ).toBeInTheDocument();
+    expect(persistence.repository.load).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText("Email"), "test@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "password123");
+    await userEvent.click(screen.getAllByRole("button", { name: "Sign in" })[1]);
+
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
+    expect(persistence.repository.load).toHaveBeenCalledWith({
+      userId: "user_1",
+      now: expect.any(Date),
+    });
+  });
+
+  test("keeps editing available when persistence save fails", async () => {
+    installMatchMedia(false);
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      accessToken: "token_1",
+    });
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    persistence.repository.save = vi.fn(async () => {
+      throw new Error("network down");
+    });
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <AppProvider repository={persistence.repository}>
+          <Harness />
+        </AppProvider>
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
+
+    await userEvent.click(screen.getByRole("button", { name: "dark" }));
+    expect(screen.getByTestId("theme-mode")).toHaveTextContent("dark");
   });
 });

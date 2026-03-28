@@ -6,6 +6,7 @@ const todoSchema = z.object({
   priority: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   done: z.boolean(),
   createdAt: z.string(),
+  parentId: z.string().optional(),
 });
 
 const dailyPageSchema = z.object({

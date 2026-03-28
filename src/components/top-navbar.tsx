@@ -13,8 +13,10 @@ import {
   LoaderCircle,
   RefreshCw,
   Check,
+  LogOut,
 } from "lucide-react";
 import { useSyncExternalStore, type Dispatch } from "react";
+import { useAuth } from "@/components/auth-context";
 import { useDesktopUpdate } from "@/components/desktop-update-provider";
 import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
 import type { AppAction } from "@/components/app-context";
@@ -48,6 +50,7 @@ const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
 
 export function TopNavbar({ state, dispatch }: Props) {
   const desktopUpdate = useDesktopUpdate();
+  const { session, signOut } = useAuth();
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -256,6 +259,23 @@ export function TopNavbar({ state, dispatch }: Props) {
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             {themeMode === "light" ? "Light mode" : themeMode === "dark" ? "Dark mode" : "System theme"}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                void signOut();
+              }}
+              aria-label="Sign out"
+              className="theme-cycle-btn"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {session?.email ? `Sign out (${session.email})` : "Sign out"}
           </TooltipContent>
         </Tooltip>
       </div>

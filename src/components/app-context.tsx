@@ -6,22 +6,22 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useReducer,
+  useRef,
+  useState,
   type Dispatch,
   type ReactNode,
 } from "react";
-import { toISODate } from "@/lib/date";
-import { loadAppState, saveAppState } from "@/lib/persistence";
+import { AuthGate } from "@/components/auth-gate";
+import { useAuth } from "@/components/auth-context";
 import {
   createPlannerEvent,
   createPlannerPreset,
   createNoteDoc,
   createTodo,
   duplicatePlannerPreset,
-  ensureDailyPageForDate,
-  ensurePlannerState,
   getSortedDailyDates,
 } from "@/lib/store";
+import { seedAppState, type PersistenceRepository } from "@/lib/persistence";
 import type {
   AppState,
   CategoryTheme,
@@ -615,13 +615,62 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, undefined, () =>
-    ensureDailyPageForDate(ensurePlannerState(loadAppState()), toISODate(new Date())),
+type AppProviderProps = {
+  children: ReactNode;
+  repository: PersistenceRepository;
+};
+
+export function AppProvider({ children, repository }: AppProviderProps) {
+  const { session, status: authStatus } = useAuth();
+  const [state, setState] = useState<AppState | null>(null);
+  const saveSnapshotRef = useRef<string | null>(null);
+  const themeMode = state?.uiState.themeMode;
+
+  const dispatch = useMemo<Dispatch<AppAction>>(
+    () => (action) => {
+      setState((current) => (current ? appReducer(current, action) : current));
+    },
+    [],
   );
 
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !session) {
+      saveSnapshotRef.current = null;
+      return;
+    }
+
+    let mounted = true;
+
+    const hydrate = async () => {
+      try {
+        const nextState = await repository.load({
+          userId: session.userId,
+          now: new Date(),
+        });
+        if (!mounted) {
+          return;
+        }
+
+        saveSnapshotRef.current = JSON.stringify(nextState);
+        setState(nextState);
+      } catch {
+        if (!mounted) {
+          return;
+        }
+
+        setState(seedAppState(new Date()));
+      }
+    };
+
+    void hydrate();
+
+    return () => {
+      mounted = false;
+    };
+  }, [authStatus, repository, session]);
+
   useLayoutEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !state) return;
 
     const root = document.documentElement;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
@@ -651,13 +700,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       query.removeEventListener("change", handleChange);
     };
-  }, [state.uiState.themeMode]);
+  }, [state, themeMode]);
 
   useEffect(() => {
-    saveAppState(state);
-  }, [state]);
+    if (!session || !state) {
+      return;
+    }
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+    const nextSnapshot = JSON.stringify(state);
+    if (nextSnapshot === saveSnapshotRef.current) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void repository
+        .save({
+          userId: session.userId,
+          state,
+        })
+        .then(() => {
+          saveSnapshotRef.current = nextSnapshot;
+        })
+        .catch(() => {
+          // The repository already keeps the local cache safe; editing should continue locally.
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [repository, session, state]);
+
+  const value = useMemo(() => (state ? { state, dispatch } : null), [dispatch, state]);
+
+  if (authStatus === "loading") {
+    return <AppLoadingScreen label="Restoring your workspace" />;
+  }
+
+  if (authStatus === "anonymous") {
+    return <AuthGate />;
+  }
+
+  if (!state) {
+    return <AppLoadingScreen label="Loading your notes and todos" />;
+  }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -692,4 +778,16 @@ export function useAppState(): AppContextValue {
   }
 
   return context;
+}
+
+function AppLoadingScreen({ label }: { label: string }) {
+  return (
+    <main className="auth-screen">
+      <section className="auth-card auth-card--loading">
+        <div className="app-logo auth-card__logo" aria-hidden="true" />
+        <p className="auth-card__eyebrow">DailyTodo</p>
+        <h1 className="auth-card__title">{label}</h1>
+      </section>
+    </main>
+  );
 }

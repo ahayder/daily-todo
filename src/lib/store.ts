@@ -12,7 +12,6 @@ import type {
   Todo,
 } from "@/lib/types";
 
-export const STORAGE_KEY = "dailytodo.v1";
 export const PLANNER_DAY_ORDER: PlannerDayKey[] = [
   "monday",
   "tuesday",
