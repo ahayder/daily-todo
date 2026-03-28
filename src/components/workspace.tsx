@@ -14,7 +14,7 @@ type Props = {
 };
 
 export function Workspace({ forcedView }: Props) {
-  const { state, dispatch } = useAppState();
+  const { state, dispatch, sync, retrySync } = useAppState();
   const activeView = forcedView ?? state.uiState.lastView;
 
   useEffect(() => {
@@ -28,6 +28,8 @@ export function Workspace({ forcedView }: Props) {
       <TopNavbar
         state={{ ...state, uiState: { ...state.uiState, lastView: activeView } }}
         dispatch={dispatch}
+        sync={sync}
+        retrySync={retrySync}
       />
       <div
         className={state.uiState.isSidebarCollapsed ? "app-body app-body--sidebar-collapsed" : "app-body"}

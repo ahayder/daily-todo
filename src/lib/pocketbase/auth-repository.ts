@@ -4,6 +4,7 @@ import { getPocketBaseClient } from "@/lib/pocketbase/client";
 type PocketBaseAuthRecord = {
   id: string;
   email?: string;
+  verified?: boolean;
 };
 
 function toSession(
@@ -17,6 +18,7 @@ function toSession(
   return {
     userId: record.id,
     email: record.email ?? "",
+    isVerified: Boolean(record.verified),
     accessToken: token,
   };
 }
@@ -83,6 +85,22 @@ export function createPocketBaseAuthRepository(): AuthRepository {
     async requestPasswordReset({ email }: { email: string }) {
       const client = getPocketBaseClient();
       await client.collection("users").requestPasswordReset(email);
+    },
+    async requestEmailVerification(input) {
+      const client = getPocketBaseClient();
+      const email =
+        input?.email?.trim() ||
+        ((client.authStore.record as PocketBaseAuthRecord | null | undefined)?.email ?? "");
+
+      if (!email) {
+        throw new Error("We couldn’t find an email address for verification.");
+      }
+
+      await client.collection("users").requestVerification(email);
+    },
+    async confirmPasswordReset({ token, password, passwordConfirm }) {
+      const client = getPocketBaseClient();
+      await client.collection("users").confirmPasswordReset(token, password, passwordConfirm);
     },
     async signOut() {
       try {

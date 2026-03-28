@@ -6,6 +6,10 @@ import { AppProvider, appReducer, useAppState } from "@/components/app-context";
 import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/daily",
+}));
+
 type MatchMediaController = {
   setMatches: (value: boolean) => void;
 };
@@ -61,6 +65,7 @@ function renderWithProviders() {
   const auth = createMockAuthRepository({
     userId: "user_1",
     email: "test@example.com",
+    isVerified: true,
     accessToken: "token_1",
   });
   const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
@@ -225,6 +230,7 @@ describe("AppProvider theme class behavior", () => {
     const auth = createMockAuthRepository({
       userId: "user_1",
       email: "test@example.com",
+      isVerified: true,
       accessToken: "token_1",
     });
     const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));

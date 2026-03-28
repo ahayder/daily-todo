@@ -2,34 +2,45 @@
 
 import Link from "next/link";
 import {
-  Sun,
-  Moon,
-  Monitor,
   Brain,
-  Target,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Check,
+  CloudOff,
   Download,
   LoaderCircle,
-  RefreshCw,
-  Check,
   LogOut,
+  Monitor,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  Sun,
+  Target,
+  TriangleAlert,
 } from "lucide-react";
-import { useSyncExternalStore, type Dispatch } from "react";
+import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
+import type { AppAction } from "@/components/app-context";
 import { useAuth } from "@/components/auth-context";
 import { useDesktopUpdate } from "@/components/desktop-update-provider";
-import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
-import type { AppAction } from "@/components/app-context";
-import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { AppState, CategoryTheme, ThemeMode } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
+  sync: {
+    status: "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
+    lastSyncedAt: string | null;
+    notice: string | null;
+    errorMessage: string | null;
+    hasPendingChanges: boolean;
+    persistenceAvailable: boolean;
+  };
+  retrySync: () => Promise<void>;
 };
 
 const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
@@ -39,18 +50,33 @@ const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
 };
 
 const THEME_CYCLE: ThemeMode[] = ["light", "dark", "system"];
-
 const CATEGORY_CYCLE: CategoryTheme[] = ["normal", "adhd1", "adhd2"];
-
 const CATEGORY_TOOLTIP: Record<CategoryTheme, string> = {
   normal: "Labels: Normal",
   adhd1: "Labels: ADHD 1",
   adhd2: "Labels: ADHD 2",
 };
 
-export function TopNavbar({ state, dispatch }: Props) {
+function formatLastSynced(lastSyncedAt: string | null) {
+  if (!lastSyncedAt) return "Not synced yet";
+
+  const date = new Date(lastSyncedAt);
+  if (Number.isNaN(date.getTime())) return "Not synced yet";
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   const desktopUpdate = useDesktopUpdate();
   const { session, signOut } = useAuth();
+  const [isSyncPanelOpen, setIsSyncPanelOpen] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -103,9 +129,50 @@ export function TopNavbar({ state, dispatch }: Props) {
           ? Check
           : RefreshCw;
 
+  const syncPresentation = useMemo(() => {
+    if (sync.status === "syncing" || sync.status === "loading") {
+      return {
+        label: "Syncing…",
+        detail: sync.notice ?? "Saving your latest changes to PocketBase.",
+        icon: LoaderCircle,
+        tone: "text-[var(--brand)] bg-[var(--brand-soft)] border-[color:color-mix(in_srgb,var(--brand)_18%,transparent)]",
+        animate: true,
+      };
+    }
+
+    if (sync.status === "offline") {
+      return {
+        label: "Offline",
+        detail: sync.notice ?? "Saved on this device until PocketBase comes back.",
+        icon: CloudOff,
+        tone: "text-[var(--ink-700)] bg-[color:color-mix(in_srgb,var(--ink-700)_8%,transparent)] border-[var(--line)]",
+        animate: false,
+      };
+    }
+
+    if (sync.status === "error") {
+      return {
+        label: "Sync needs attention",
+        detail: sync.errorMessage ?? "Changes may not persist yet.",
+        icon: TriangleAlert,
+        tone: "text-[var(--warn)] bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] border-[color:color-mix(in_srgb,var(--warn)_16%,transparent)]",
+        animate: false,
+      };
+    }
+
+    return {
+      label: "Synced",
+      detail: sync.notice ?? "Your workspace is up to date.",
+      icon: Check,
+      tone: "text-[var(--brand)] bg-[color:color-mix(in_srgb,var(--brand-soft)_70%,white)] border-[color:color-mix(in_srgb,var(--brand)_18%,transparent)]",
+      animate: false,
+    };
+  }, [sync.errorMessage, sync.notice, sync.status]);
+
+  const SyncIcon = syncPresentation.icon;
+
   return (
     <header className="top-navbar">
-      {/* Left: App name */}
       <div className="flex items-center gap-2.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -128,16 +195,12 @@ export function TopNavbar({ state, dispatch }: Props) {
         </span>
       </div>
 
-      {/* Center: View tabs */}
       <nav className="nav-pills" role="tablist" aria-label="Main navigation">
         <Link
           href="/daily"
           role="tab"
           aria-selected={isDaily}
-          className={cn(
-            "nav-pill",
-            isDaily && "nav-pill--active",
-          )}
+          className={cn("nav-pill", isDaily && "nav-pill--active")}
           onClick={() => dispatch({ type: "set-view", view: "daily" })}
         >
           Daily
@@ -146,10 +209,7 @@ export function TopNavbar({ state, dispatch }: Props) {
           href="/notes"
           role="tab"
           aria-selected={isNotes}
-          className={cn(
-            "nav-pill",
-            isNotes && "nav-pill--active",
-          )}
+          className={cn("nav-pill", isNotes && "nav-pill--active")}
           onClick={() => dispatch({ type: "set-view", view: "notes" })}
         >
           Notes
@@ -158,18 +218,71 @@ export function TopNavbar({ state, dispatch }: Props) {
           href="/planner"
           role="tab"
           aria-selected={isPlanner}
-          className={cn(
-            "nav-pill",
-            isPlanner && "nav-pill--active",
-          )}
+          className={cn("nav-pill", isPlanner && "nav-pill--active")}
           onClick={() => dispatch({ type: "set-view", view: "planner" })}
         >
           Planner
         </Link>
       </nav>
 
-      {/* Right: toggles */}
-      <div className="flex items-center gap-1">
+      <div className="relative flex items-center gap-1">
+        <button
+          type="button"
+          aria-label="Open sync status"
+          onClick={() => setIsSyncPanelOpen((current) => !current)}
+          className={cn(
+            "inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition",
+            syncPresentation.tone,
+          )}
+        >
+          <SyncIcon className={cn("h-3.5 w-3.5", syncPresentation.animate && "animate-spin")} />
+          <span>{syncPresentation.label}</span>
+        </button>
+
+        {isSyncPanelOpen ? (
+          <div className="absolute top-11 right-0 z-30 w-72 rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_96%,white)] p-4 shadow-[0_24px_80px_rgba(31,36,48,0.12)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--ink-900)]">{syncPresentation.label}</p>
+                <p className="text-xs leading-5 text-[var(--ink-700)]">{syncPresentation.detail}</p>
+              </div>
+              <SyncIcon className={cn("mt-0.5 h-4 w-4 shrink-0", syncPresentation.animate && "animate-spin", sync.status === "error" ? "text-[var(--warn)]" : "text-[var(--brand)]")} />
+            </div>
+
+            <div className="mt-4 space-y-2 rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper)_65%,white)] p-3 text-xs text-[var(--ink-700)]">
+              <p>Last sync: {formatLastSynced(sync.lastSyncedAt)}</p>
+              <p>{sync.persistenceAvailable ? "Local cache is available on this device." : "Local cache is unavailable on this device."}</p>
+              <p>{sync.hasPendingChanges ? "There are unsynced changes waiting to be retried." : "No unsynced local changes are waiting."}</p>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className="rounded-full px-2 py-1 text-xs font-semibold text-[var(--ink-700)] transition hover:bg-[color:color-mix(in_srgb,var(--ink-700)_6%,transparent)] hover:text-[var(--ink-900)]"
+                onClick={() => setIsSyncPanelOpen(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={isRetrying}
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[color:color-mix(in_srgb,var(--brand)_86%,black)] disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    setIsRetrying(true);
+                    await retrySync();
+                  } finally {
+                    setIsRetrying(false);
+                  }
+                }}
+              >
+                {isRetrying ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Retry now
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {showDesktopUpdater ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -187,7 +300,8 @@ export function TopNavbar({ state, dispatch }: Props) {
                 className={cn(
                   "theme-cycle-btn relative",
                   desktopUpdate.isUpdateAvailable && "bg-[var(--brand-soft)] text-[var(--brand)]",
-                  desktopUpdate.phase === "error" && "bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] text-[var(--warn)]",
+                  desktopUpdate.phase === "error" &&
+                    "bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] text-[var(--warn)]",
                 )}
               >
                 <DesktopUpdateIcon
@@ -210,6 +324,7 @@ export function TopNavbar({ state, dispatch }: Props) {
             </TooltipContent>
           </Tooltip>
         ) : null}
+
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -218,7 +333,10 @@ export function TopNavbar({ state, dispatch }: Props) {
                 dispatch({ type: "set-focus-mode", isFocus: !state.uiState.isFocusMode });
               }}
               aria-label="Toggle Focus Mode"
-              className={cn("theme-cycle-btn", state.uiState.isFocusMode && "text-[var(--brand)] bg-[var(--brand-soft)]")}
+              className={cn(
+                "theme-cycle-btn",
+                state.uiState.isFocusMode && "bg-[var(--brand-soft)] text-[var(--brand)]",
+              )}
             >
               <Target className="h-4 w-4" />
             </button>
@@ -227,6 +345,7 @@ export function TopNavbar({ state, dispatch }: Props) {
             {state.uiState.isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
           </TooltipContent>
         </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -246,6 +365,7 @@ export function TopNavbar({ state, dispatch }: Props) {
             {CATEGORY_TOOLTIP[categoryTheme]}
           </TooltipContent>
         </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -258,20 +378,33 @@ export function TopNavbar({ state, dispatch }: Props) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
-            {themeMode === "light" ? "Light mode" : themeMode === "dark" ? "Dark mode" : "System theme"}
+            {themeMode === "light"
+              ? "Light mode"
+              : themeMode === "dark"
+                ? "Dark mode"
+                : "System theme"}
           </TooltipContent>
         </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => {
-                void signOut();
+              onClick={async () => {
+                try {
+                  setIsSigningOut(true);
+                  if (sync.hasPendingChanges) {
+                    await retrySync();
+                  }
+                  await signOut();
+                } finally {
+                  setIsSigningOut(false);
+                }
               }}
               aria-label="Sign out"
               className="theme-cycle-btn"
             >
-              <LogOut className="h-4 w-4" />
+              {isSigningOut ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">

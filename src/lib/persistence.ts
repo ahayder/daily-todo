@@ -6,23 +6,114 @@ import type { AppState } from "@/lib/types";
 export const APP_STATE_VERSION = 1;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
-export type PersistenceStatus = "idle" | "loading" | "synced" | "offline" | "error";
+export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
+export type PersistenceSource = "seed" | "local" | "remote" | "ephemeral";
+export type PersistenceConflictResolution =
+  | "none"
+  | "local-overwrote-remote"
+  | "remote-overwrote-local";
+
+export type PersistenceMetadata = {
+  stateVersion: number;
+  lastLocalMutationAt: string | null;
+  lastRemoteUpdatedAt: string | null;
+  lastRemoteUpdatedAtClient: string | null;
+};
+
+export type CachedAppStateEnvelope = {
+  state: AppState;
+  metadata: PersistenceMetadata;
+};
+
+export type PersistenceLoadResult = {
+  state: AppState;
+  source: PersistenceSource;
+  status: PersistenceStatus;
+  metadata: PersistenceMetadata;
+  conflictResolution: PersistenceConflictResolution;
+  notice: string | null;
+  errorMessage: string | null;
+  persistenceAvailable: boolean;
+};
+
+export type PersistenceSaveResult = {
+  status: PersistenceStatus;
+  metadata: PersistenceMetadata;
+  conflictResolution: PersistenceConflictResolution;
+  notice: string | null;
+  errorMessage: string | null;
+};
+
+export type LocalCacheLoadResult = {
+  envelope: CachedAppStateEnvelope | null;
+  available: boolean;
+};
+
+export type LocalCacheWriteResult = {
+  available: boolean;
+};
+
+export type RemoteSnapshot = {
+  state: unknown;
+  stateVersion: number;
+  updatedAt: string | null;
+  updatedAtClient: string | null;
+};
 
 export type PersistenceRepository = {
-  load(input: { userId: string; now?: Date }): Promise<AppState>;
-  save(input: { userId: string; state: AppState }): Promise<void>;
+  load(input: { userId: string; now?: Date }): Promise<PersistenceLoadResult>;
+  save(input: {
+    userId: string;
+    state: AppState;
+    baseMetadata: PersistenceMetadata;
+    now?: Date;
+  }): Promise<PersistenceSaveResult>;
+  clearUserData(input: { userId: string }): Promise<void>;
 };
 
 export type LocalCacheStorage = {
-  loadCached(input: { userId: string; now?: Date }): AppState | null;
-  saveCached(input: { userId: string; state: AppState }): void;
-  clearCached(input: { userId: string }): void;
+  loadCached(input: { userId: string; now?: Date }): LocalCacheLoadResult;
+  saveCached(input: { userId: string; envelope: CachedAppStateEnvelope }): LocalCacheWriteResult;
+  clearCached(input: { userId: string }): LocalCacheWriteResult;
 };
 
 export type RemoteAppStateStore = {
-  loadSnapshot(input: { userId: string }): Promise<unknown | null>;
-  saveSnapshot(input: { userId: string; state: AppState }): Promise<void>;
+  loadSnapshot(input: { userId: string }): Promise<RemoteSnapshot | null>;
+  saveSnapshot(input: {
+    userId: string;
+    state: AppState;
+    updatedAtClient: string;
+    knownRemoteUpdatedAt: string | null;
+  }): Promise<RemoteSnapshot>;
 };
+
+export function createPersistenceMetadata(
+  overrides: Partial<PersistenceMetadata> = {},
+): PersistenceMetadata {
+  return {
+    stateVersion: APP_STATE_VERSION,
+    lastLocalMutationAt: null,
+    lastRemoteUpdatedAt: null,
+    lastRemoteUpdatedAtClient: null,
+    ...overrides,
+  };
+}
+
+export function compareTimestamps(left: string | null, right: string | null): number {
+  if (!left && !right) return 0;
+  if (!left) return -1;
+  if (!right) return 1;
+
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+
+  if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) return 0;
+  if (Number.isNaN(leftTime)) return -1;
+  if (Number.isNaN(rightTime)) return 1;
+  if (leftTime === rightTime) return 0;
+
+  return leftTime > rightTime ? 1 : -1;
+}
 
 function normalizeLegacyState(parsed: unknown): unknown {
   if (!parsed || typeof parsed !== "object") return parsed;

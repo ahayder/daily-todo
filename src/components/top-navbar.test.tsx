@@ -17,6 +17,7 @@ describe("TopNavbar", () => {
     const auth = createMockAuthRepository({
       userId: "user_1",
       email: "test@example.com",
+      isVerified: true,
       accessToken: "token_1",
     });
     const dailyState = createInitialState("2026-03-10");
@@ -25,14 +26,38 @@ describe("TopNavbar", () => {
 
     const { rerender } = render(
       <AuthProvider repository={auth.repository}>
-        <TopNavbar state={dailyState} dispatch={dispatch} />
+        <TopNavbar
+          state={dailyState}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
 
     rerender(
       <AuthProvider repository={auth.repository}>
-        <TopNavbar state={plannerState} dispatch={dispatch} />
+        <TopNavbar
+          state={plannerState}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
@@ -43,17 +68,66 @@ describe("TopNavbar", () => {
     const auth = createMockAuthRepository({
       userId: "user_1",
       email: "test@example.com",
+      isVerified: true,
       accessToken: "token_1",
     });
     const state = createInitialState("2026-03-10");
 
     render(
       <AuthProvider repository={auth.repository}>
-        <TopNavbar state={state} dispatch={dispatch} />
+        <TopNavbar
+          state={state}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
       </AuthProvider>,
     );
 
     await userEvent.click(await screen.findByRole("button", { name: "Collapse sidebar" }));
     expect(dispatch).toHaveBeenCalledWith({ type: "toggle-sidebar-collapsed" });
+  });
+
+  test("opens sync panel and retries manually", async () => {
+    const dispatch = vi.fn();
+    const retrySync = vi.fn(async () => {});
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const state = createInitialState("2026-03-10");
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <TopNavbar
+          state={state}
+          dispatch={dispatch}
+          sync={{
+            status: "offline",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: "Saved on this device until PocketBase comes back.",
+            errorMessage: "Sync is offline right now.",
+            hasPendingChanges: true,
+            persistenceAvailable: true,
+          }}
+          retrySync={retrySync}
+        />
+      </AuthProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Open sync status" }));
+    expect(await screen.findByText(/Last sync:/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Retry now" }));
+    expect(retrySync).toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createBrowserLocalCacheStorage, getUserCacheStorageKey } from "@/lib/local-cache-storage";
 import {
   LEGACY_LOCAL_STORAGE_KEY,
+  createPersistenceMetadata,
   normalizeAppState,
 } from "@/lib/persistence";
 import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
@@ -59,11 +60,17 @@ describe("browser local cache", () => {
     const cache = createBrowserLocalCacheStorage();
     const state = createInitialState("2026-03-11");
 
-    window.localStorage.setItem(getUserCacheStorageKey("user_1"), JSON.stringify(state));
+    window.localStorage.setItem(
+      getUserCacheStorageKey("user_1"),
+      JSON.stringify({
+        state,
+        metadata: createPersistenceMetadata(),
+      }),
+    );
 
     expect(
-      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") })?.uiState
-        .selectedDailyDate,
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope?.state
+        .uiState.selectedDailyDate,
     ).toBe("2026-03-11");
   });
 
@@ -74,8 +81,8 @@ describe("browser local cache", () => {
     window.localStorage.setItem(LEGACY_LOCAL_STORAGE_KEY, JSON.stringify(state));
 
     expect(
-      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") })?.uiState
-        .selectedDailyDate,
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope?.state
+        .uiState.selectedDailyDate,
     ).toBe("2026-03-11");
   });
 });
@@ -84,61 +91,110 @@ describe("SnapshotPersistenceRepository", () => {
   test("returns the remote snapshot when available and updates cache", async () => {
     const state = createInitialState("2026-03-11");
     const cache = {
-      loadCached: vi.fn(() => null),
-      saveCached: vi.fn(),
-      clearCached: vi.fn(),
+      loadCached: vi.fn(() => ({ envelope: null, available: true })),
+      saveCached: vi.fn(() => ({ available: true })),
+      clearCached: vi.fn(() => ({ available: true })),
     };
     const remote = {
-      loadSnapshot: vi.fn(async () => state),
-      saveSnapshot: vi.fn(async () => {}),
+      loadSnapshot: vi.fn(async () => ({
+        state,
+        stateVersion: 1,
+        updatedAt: "2026-03-11T08:00:01.000Z",
+        updatedAtClient: "2026-03-11T08:00:00.000Z",
+      })),
+      saveSnapshot: vi.fn(),
     };
 
     const repository = new SnapshotPersistenceRepository(remote, cache);
-    const loaded = await repository.load({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") });
+    const loaded = await repository.load({
+      userId: "user_1",
+      now: new Date("2026-03-11T08:00:00Z"),
+    });
 
+    expect(loaded.source).toBe("remote");
+    expect(loaded.status).toBe("synced");
     expect(remote.loadSnapshot).toHaveBeenCalledWith({ userId: "user_1" });
-    expect(cache.saveCached).toHaveBeenCalledWith({ userId: "user_1", state: loaded });
+    expect(cache.saveCached).toHaveBeenCalledWith({
+      userId: "user_1",
+      envelope: {
+        state: loaded.state,
+        metadata: loaded.metadata,
+      },
+    });
   });
 
   test("falls back to cached state and backfills remote when remote is empty", async () => {
     const cached = createInitialState("2026-03-11");
     const cache = {
-      loadCached: vi.fn(() => cached),
-      saveCached: vi.fn(),
-      clearCached: vi.fn(),
+      loadCached: vi.fn(() => ({
+        envelope: {
+          state: cached,
+          metadata: createPersistenceMetadata({
+            lastLocalMutationAt: "2026-03-11T08:00:00.000Z",
+          }),
+        },
+        available: true,
+      })),
+      saveCached: vi.fn(() => ({ available: true })),
+      clearCached: vi.fn(() => ({ available: true })),
     };
     const remote = {
       loadSnapshot: vi.fn(async () => null),
-      saveSnapshot: vi.fn(async () => {}),
+      saveSnapshot: vi.fn(async () => ({
+        state: cached,
+        stateVersion: 1,
+        updatedAt: "2026-03-11T08:00:01.000Z",
+        updatedAtClient: "2026-03-11T08:00:00.000Z",
+      })),
     };
 
     const repository = new SnapshotPersistenceRepository(remote, cache);
-    const loaded = await repository.load({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") });
+    const loaded = await repository.load({
+      userId: "user_1",
+      now: new Date("2026-03-11T08:00:00Z"),
+    });
 
-    expect(loaded).toEqual(cached);
-    expect(remote.saveSnapshot).toHaveBeenCalledWith({ userId: "user_1", state: cached });
+    expect(loaded.state).toEqual(cached);
+    expect(remote.saveSnapshot).toHaveBeenCalledWith({
+      userId: "user_1",
+      state: cached,
+      updatedAtClient: "2026-03-11T08:00:00.000Z",
+      knownRemoteUpdatedAt: null,
+    });
   });
 
   test("writes cache before remote on save", async () => {
     const state = createInitialState("2026-03-11");
     const calls: string[] = [];
     const cache = {
-      loadCached: vi.fn(() => null),
-      saveCached: vi.fn(({ state: nextState }: { state: AppState }) => {
-        calls.push(`cache:${nextState.uiState.selectedDailyDate}`);
+      loadCached: vi.fn(() => ({ envelope: null, available: true })),
+      saveCached: vi.fn(({ envelope }: { envelope: { state: AppState } }) => {
+        calls.push(`cache:${envelope.state.uiState.selectedDailyDate}`);
+        return { available: true };
       }),
-      clearCached: vi.fn(),
+      clearCached: vi.fn(() => ({ available: true })),
     };
     const remote = {
       loadSnapshot: vi.fn(async () => null),
       saveSnapshot: vi.fn(async ({ state: nextState }: { state: AppState }) => {
         calls.push(`remote:${nextState.uiState.selectedDailyDate}`);
+        return {
+          state: nextState,
+          stateVersion: 1,
+          updatedAt: "2026-03-11T08:00:01.000Z",
+          updatedAtClient: "2026-03-11T08:00:00.000Z",
+        };
       }),
     };
 
     const repository = new SnapshotPersistenceRepository(remote, cache);
-    await repository.save({ userId: "user_1", state });
+    await repository.save({
+      userId: "user_1",
+      state,
+      baseMetadata: createPersistenceMetadata(),
+      now: new Date("2026-03-11T08:00:00Z"),
+    });
 
-    expect(calls).toEqual(["cache:2026-03-11", "remote:2026-03-11"]);
+    expect(calls).toEqual(["cache:2026-03-11", "remote:2026-03-11", "cache:2026-03-11"]);
   });
 });

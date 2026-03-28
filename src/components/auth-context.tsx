@@ -16,15 +16,24 @@ import type {
   RegisterInput,
   SignInInput,
 } from "@/lib/auth";
+import { requiresEmailVerification } from "@/lib/auth-config";
 
 type AuthContextValue = {
   status: AuthStatus;
   session: AuthSession | null;
   error: string | null;
   notice: string | null;
+  pendingVerificationEmail: string | null;
   signIn: (input: SignInInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  requestEmailVerification: () => Promise<void>;
   requestPasswordReset: (input: { email: string }) => Promise<void>;
+  confirmPasswordReset: (input: {
+    token: string;
+    password: string;
+    passwordConfirm: string;
+  }) => Promise<void>;
+  clearTransientState: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -38,6 +47,12 @@ function getErrorMessage(error: unknown): string {
   return "Authentication failed. Please try again.";
 }
 
+function getStatusForSession(session: AuthSession | null): AuthStatus {
+  if (!session) return "anonymous";
+  if (!requiresEmailVerification()) return "authenticated";
+  return session.isVerified ? "authenticated" : "verification-pending";
+}
+
 export function AuthProvider({
   children,
   repository,
@@ -49,6 +64,7 @@ export function AuthProvider({
   const [session, setSession] = useState<AuthSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,7 +78,8 @@ export function AuthProvider({
 
         startTransition(() => {
           setSession(nextSession);
-          setStatus(nextSession ? "authenticated" : "anonymous");
+          setPendingVerificationEmail(nextSession?.isVerified ? null : nextSession?.email ?? null);
+          setStatus(getStatusForSession(nextSession));
         });
       } catch (nextError) {
         if (!mounted) {
@@ -71,6 +88,7 @@ export function AuthProvider({
 
         startTransition(() => {
           setSession(null);
+          setPendingVerificationEmail(null);
           setStatus("anonymous");
           setError(getErrorMessage(nextError));
           setNotice(null);
@@ -87,7 +105,8 @@ export function AuthProvider({
 
       startTransition(() => {
         setSession(nextSession);
-        setStatus(nextSession ? "authenticated" : "anonymous");
+        setPendingVerificationEmail(nextSession?.isVerified ? null : nextSession?.email ?? null);
+        setStatus(getStatusForSession(nextSession));
         if (!nextSession) {
           setError(null);
           setNotice(null);
@@ -107,16 +126,25 @@ export function AuthProvider({
       session,
       error,
       notice,
+      pendingVerificationEmail,
       async signIn(input) {
         setError(null);
         setNotice(null);
 
         try {
           const nextSession = await repository.signIn(input);
+          const verificationRequired = requiresEmailVerification();
           startTransition(() => {
             setSession(nextSession);
-            setStatus("authenticated");
-            setNotice(null);
+            setPendingVerificationEmail(
+              verificationRequired && !nextSession.isVerified ? nextSession.email : null,
+            );
+            setStatus(getStatusForSession(nextSession));
+            setNotice(
+              verificationRequired && !nextSession.isVerified
+                ? "Verify your email to open your synced workspace."
+                : null,
+            );
           });
         } catch (nextError) {
           const message = getErrorMessage(nextError);
@@ -133,15 +161,46 @@ export function AuthProvider({
 
         try {
           const nextSession = await repository.register(input);
+          if (requiresEmailVerification()) {
+            await repository.requestEmailVerification({ email: nextSession.email });
+            await repository.signOut();
+
+            startTransition(() => {
+              setSession(null);
+              setPendingVerificationEmail(nextSession.email);
+              setStatus("verification-pending");
+              setNotice("Check your email for a verification link before signing in.");
+            });
+            return;
+          }
+
           startTransition(() => {
             setSession(nextSession);
+            setPendingVerificationEmail(null);
             setStatus("authenticated");
+            setNotice(null);
           });
         } catch (nextError) {
           const message = getErrorMessage(nextError);
           startTransition(() => {
             setError(message);
             setStatus("anonymous");
+          });
+          throw nextError;
+        }
+      },
+      async requestEmailVerification() {
+        setError(null);
+
+        try {
+          await repository.requestEmailVerification({ email: pendingVerificationEmail ?? undefined });
+          startTransition(() => {
+            setNotice("We sent a fresh verification email.");
+          });
+        } catch (nextError) {
+          const message = getErrorMessage(nextError);
+          startTransition(() => {
+            setError(message);
           });
           throw nextError;
         }
@@ -163,17 +222,44 @@ export function AuthProvider({
           throw nextError;
         }
       },
+      async confirmPasswordReset(input) {
+        setError(null);
+        setNotice(null);
+
+        try {
+          await repository.confirmPasswordReset(input);
+          startTransition(() => {
+            setStatus("anonymous");
+            setSession(null);
+            setPendingVerificationEmail(null);
+            setNotice("Your password has been reset. Sign in with the new password.");
+          });
+        } catch (nextError) {
+          const message = getErrorMessage(nextError);
+          startTransition(() => {
+            setError(message);
+          });
+          throw nextError;
+        }
+      },
+      clearTransientState() {
+        startTransition(() => {
+          setError(null);
+          setNotice(null);
+        });
+      },
       async signOut() {
         await repository.signOut();
         startTransition(() => {
           setSession(null);
+          setPendingVerificationEmail(null);
           setStatus("anonymous");
           setError(null);
           setNotice(null);
         });
       },
     }),
-    [error, notice, repository, session, status],
+    [error, notice, pendingVerificationEmail, repository, session, status],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

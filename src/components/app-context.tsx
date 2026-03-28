@@ -11,8 +11,10 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { AuthGate } from "@/components/auth-gate";
 import { useAuth } from "@/components/auth-context";
+import { VerificationPendingScreen } from "@/components/verification-pending-screen";
 import {
   createPlannerEvent,
   createPlannerPreset,
@@ -21,7 +23,13 @@ import {
   duplicatePlannerPreset,
   getSortedDailyDates,
 } from "@/lib/store";
-import { seedAppState, type PersistenceRepository } from "@/lib/persistence";
+import {
+  createPersistenceMetadata,
+  seedAppState,
+  type PersistenceMetadata,
+  type PersistenceRepository,
+  type PersistenceStatus,
+} from "@/lib/persistence";
 import type {
   AppState,
   CategoryTheme,
@@ -611,6 +619,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 type AppContextValue = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
+  sync: {
+    status: PersistenceStatus;
+    lastSyncedAt: string | null;
+    notice: string | null;
+    errorMessage: string | null;
+    hasPendingChanges: boolean;
+    persistenceAvailable: boolean;
+  };
+  retrySync: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -622,9 +639,20 @@ type AppProviderProps = {
 
 export function AppProvider({ children, repository }: AppProviderProps) {
   const { session, status: authStatus } = useAuth();
+  const pathname = usePathname();
   const [state, setState] = useState<AppState | null>(null);
   const saveSnapshotRef = useRef<string | null>(null);
+  const metadataRef = useRef<PersistenceMetadata>(createPersistenceMetadata());
+  const dirtySnapshotRef = useRef<string | null>(null);
+  const lastAuthenticatedUserIdRef = useRef<string | null>(null);
   const themeMode = state?.uiState.themeMode;
+  const [syncStatus, setSyncStatus] = useState<PersistenceStatus>("idle");
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [persistenceAvailable, setPersistenceAvailable] = useState(true);
+
+  const isPublicAuthRoute = pathname.startsWith("/auth/reset");
 
   const dispatch = useMemo<Dispatch<AppAction>>(
     () => (action) => {
@@ -634,8 +662,27 @@ export function AppProvider({ children, repository }: AppProviderProps) {
   );
 
   useEffect(() => {
+    if (session?.userId) {
+      lastAuthenticatedUserIdRef.current = session.userId;
+    }
+  }, [session?.userId]);
+
+  useEffect(() => {
     if (authStatus !== "authenticated" || !session) {
+      if (authStatus === "anonymous" && lastAuthenticatedUserIdRef.current) {
+        void repository.clearUserData({ userId: lastAuthenticatedUserIdRef.current });
+        lastAuthenticatedUserIdRef.current = null;
+      }
+
       saveSnapshotRef.current = null;
+       dirtySnapshotRef.current = null;
+      metadataRef.current = createPersistenceMetadata();
+      setState(null);
+      setSyncStatus("idle");
+      setSyncNotice(null);
+      setSyncError(null);
+      setLastSyncedAt(null);
+      setPersistenceAvailable(true);
       return;
     }
 
@@ -643,7 +690,8 @@ export function AppProvider({ children, repository }: AppProviderProps) {
 
     const hydrate = async () => {
       try {
-        const nextState = await repository.load({
+        setSyncStatus("loading");
+        const result = await repository.load({
           userId: session.userId,
           now: new Date(),
         });
@@ -651,14 +699,24 @@ export function AppProvider({ children, repository }: AppProviderProps) {
           return;
         }
 
-        saveSnapshotRef.current = JSON.stringify(nextState);
-        setState(nextState);
+        const snapshot = JSON.stringify(result.state);
+        saveSnapshotRef.current = snapshot;
+        dirtySnapshotRef.current = null;
+        metadataRef.current = result.metadata;
+        setState(result.state);
+        setSyncStatus(result.status);
+        setSyncNotice(result.notice);
+        setSyncError(result.errorMessage);
+        setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+        setPersistenceAvailable(result.persistenceAvailable);
       } catch {
         if (!mounted) {
           return;
         }
 
         setState(seedAppState(new Date()));
+        setSyncStatus("error");
+        setSyncError("We couldn’t restore your workspace.");
       }
     };
 
@@ -703,38 +761,153 @@ export function AppProvider({ children, repository }: AppProviderProps) {
   }, [state, themeMode]);
 
   useEffect(() => {
-    if (!session || !state) {
+    if (!session || !state || authStatus !== "authenticated") {
       return;
     }
 
     const nextSnapshot = JSON.stringify(state);
     if (nextSnapshot === saveSnapshotRef.current) {
+      dirtySnapshotRef.current = null;
       return;
     }
+
+    dirtySnapshotRef.current = nextSnapshot;
+    setSyncStatus((current) => (current === "offline" ? "offline" : "syncing"));
 
     const timer = window.setTimeout(() => {
       void repository
         .save({
           userId: session.userId,
           state,
+          baseMetadata: metadataRef.current,
+          now: new Date(),
         })
-        .then(() => {
-          saveSnapshotRef.current = nextSnapshot;
+        .then((result) => {
+          metadataRef.current = result.metadata;
+          setSyncStatus(result.status);
+          setSyncNotice(result.notice);
+          setSyncError(result.errorMessage);
+          setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+          if (result.status === "synced") {
+            saveSnapshotRef.current = nextSnapshot;
+            dirtySnapshotRef.current = null;
+          }
         })
         .catch(() => {
-          // The repository already keeps the local cache safe; editing should continue locally.
+          setSyncStatus("error");
+          setSyncError("We couldn’t sync right now.");
         });
-    }, 250);
+    }, 750);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [repository, session, state]);
+  }, [authStatus, repository, session, state]);
 
-  const value = useMemo(() => (state ? { state, dispatch } : null), [dispatch, state]);
+  const retrySync = async () => {
+    if (!session || !state || authStatus !== "authenticated") {
+      return;
+    }
+
+    setSyncStatus("syncing");
+    const nextSnapshot = JSON.stringify(state);
+    const result = await repository.save({
+      userId: session.userId,
+      state,
+      baseMetadata: metadataRef.current,
+      now: new Date(),
+    });
+
+    metadataRef.current = result.metadata;
+    setSyncStatus(result.status);
+    setSyncNotice(result.notice);
+    setSyncError(result.errorMessage);
+    setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+    if (result.status === "synced") {
+      saveSnapshotRef.current = nextSnapshot;
+      dirtySnapshotRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!session || authStatus !== "authenticated") {
+      return;
+    }
+
+    const flushIfNeeded = () => {
+      if (!state || !dirtySnapshotRef.current) {
+        return;
+      }
+
+      void repository
+        .save({
+          userId: session.userId,
+          state,
+          baseMetadata: metadataRef.current,
+          now: new Date(),
+        })
+        .then((result) => {
+          metadataRef.current = result.metadata;
+          setSyncStatus(result.status);
+          setSyncNotice(result.notice);
+          setSyncError(result.errorMessage);
+          setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
+          if (result.status === "synced") {
+            saveSnapshotRef.current = dirtySnapshotRef.current;
+            dirtySnapshotRef.current = null;
+          }
+        })
+        .catch(() => {
+          setSyncStatus("error");
+          setSyncError("We couldn’t sync before leaving the page.");
+        });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushIfNeeded();
+      }
+    };
+
+    window.addEventListener("pagehide", flushIfNeeded);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", flushIfNeeded);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [authStatus, repository, session, state]);
+
+  const value = useMemo(
+    () =>
+      state
+        ? {
+            state,
+            dispatch,
+            sync: {
+              status: syncStatus,
+              lastSyncedAt,
+              notice: syncNotice,
+              errorMessage: syncError,
+              hasPendingChanges: dirtySnapshotRef.current !== null,
+              persistenceAvailable,
+            },
+            retrySync,
+          }
+        : null,
+    [dispatch, lastSyncedAt, persistenceAvailable, state, syncError, syncNotice, syncStatus],
+  );
+
+  if (isPublicAuthRoute) {
+    return children;
+  }
 
   if (authStatus === "loading") {
     return <AppLoadingScreen label="Restoring your workspace" />;
+  }
+
+  if (authStatus === "verification-pending") {
+    return <VerificationPendingScreen />;
   }
 
   if (authStatus === "anonymous") {
