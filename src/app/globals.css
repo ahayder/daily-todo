@@ -67,7 +67,9 @@
 html,
 body {
   width: 100%;
+  height: 100%;
   min-height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -120,15 +122,17 @@ select {
 .app-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
 .auth-screen {
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   display: grid;
   place-items: center;
   padding: 2rem;
+  overflow: auto;
 }
 
 .auth-card {
@@ -226,6 +230,7 @@ select {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .app-body--sidebar-collapsed {
@@ -545,7 +550,7 @@ select {
   display: flex;
   flex-direction: column;
   padding: 0;
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
   min-width: 0;
 }
@@ -555,8 +560,9 @@ select {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
   gap: 0;
-  min-height: calc(100vh - 52px);
-  height: calc(100vh - 52px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   animation: fadeIn 200ms ease forwards;
 }
 
@@ -572,11 +578,13 @@ select {
   box-shadow: var(--surface-shadow);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .notes-layout {
-  min-height: calc(100vh - 52px);
-  height: calc(100vh - 52px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .note-header,
@@ -593,12 +601,23 @@ select {
 .editor-layer {
   position: relative;
   flex: 1;
-  min-height: 300px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ─── Tiptap Editor ───────────────────────────── */
 .tiptap-wrapper {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+}
+
+.tiptap-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .tiptap-editor {
@@ -751,6 +770,7 @@ select {
   box-shadow: var(--surface-shadow);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .priority-groups {
@@ -1001,6 +1021,8 @@ select {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  min-height: 0;
+  overflow: auto;
 }
 
 .empty-view {
@@ -1095,7 +1117,7 @@ select {
 
   .daily-layout {
     grid-template-columns: 1fr;
-    min-height: auto;
+    min-height: 0;
   }
 }
 
@@ -1524,8 +1546,8 @@ select {
   display: flex;
   flex: 1;
   width: 100%;
-  min-height: calc(100vh - 52px - 1.5rem);
-  height: calc(100vh - 52px - 1.5rem);
+  min-height: 0;
+  height: 100%;
   animation: fadeIn 220ms ease forwards;
 }
 

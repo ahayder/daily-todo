@@ -74,9 +74,9 @@ export function MarkdownEditor({ value, onChange }: Props) {
   }, [value, editor]);
 
   return (
-    <div className="tiptap-wrapper flex flex-col h-full w-full">
+    <div className="tiptap-wrapper h-full w-full">
       <EditorToolbar editor={editor} />
-      <div className="relative flex-1">
+      <div className="tiptap-content">
         <EditorBubbleMenu editor={editor} />
         <EditorContent editor={editor} className="flex-1" />
       </div>

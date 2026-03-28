@@ -17,6 +17,12 @@ import type {
   SignInInput,
 } from "@/lib/auth";
 import { requiresEmailVerification } from "@/lib/auth-config";
+import {
+  createDevelopmentWorkspaceSession,
+  getDevelopmentWorkspaceEnabled,
+  isDevelopmentWorkspaceSession,
+  setDevelopmentWorkspaceEnabled,
+} from "@/lib/dev-mode";
 
 type AuthContextValue = {
   status: AuthStatus;
@@ -33,6 +39,7 @@ type AuthContextValue = {
     password: string;
     passwordConfirm: string;
   }) => Promise<void>;
+  enterDevelopmentWorkspace: () => void;
   clearTransientState: () => void;
   signOut: () => Promise<void>;
 };
@@ -70,6 +77,22 @@ export function AuthProvider({
     let mounted = true;
 
     const hydrate = async () => {
+      if (getDevelopmentWorkspaceEnabled()) {
+        const nextSession = createDevelopmentWorkspaceSession();
+        if (!mounted) {
+          return;
+        }
+
+        startTransition(() => {
+          setSession(nextSession);
+          setPendingVerificationEmail(null);
+          setStatus("authenticated");
+          setError(null);
+          setNotice("Development workspace is active on this device.");
+        });
+        return;
+      }
+
       try {
         const nextSession = await repository.getSession();
         if (!mounted) {
@@ -99,6 +122,10 @@ export function AuthProvider({
     void hydrate();
 
     const unsubscribe = repository.onAuthStateChange?.((nextSession) => {
+      if (getDevelopmentWorkspaceEnabled()) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -128,6 +155,7 @@ export function AuthProvider({
       notice,
       pendingVerificationEmail,
       async signIn(input) {
+        setDevelopmentWorkspaceEnabled(false);
         setError(null);
         setNotice(null);
 
@@ -156,6 +184,7 @@ export function AuthProvider({
         }
       },
       async register(input) {
+        setDevelopmentWorkspaceEnabled(false);
         setError(null);
         setNotice(null);
 
@@ -242,6 +271,17 @@ export function AuthProvider({
           throw nextError;
         }
       },
+      enterDevelopmentWorkspace() {
+        const nextSession = createDevelopmentWorkspaceSession();
+        setDevelopmentWorkspaceEnabled(true);
+        startTransition(() => {
+          setSession(nextSession);
+          setPendingVerificationEmail(null);
+          setStatus("authenticated");
+          setError(null);
+          setNotice("Development workspace is active on this device.");
+        });
+      },
       clearTransientState() {
         startTransition(() => {
           setError(null);
@@ -249,7 +289,11 @@ export function AuthProvider({
         });
       },
       async signOut() {
-        await repository.signOut();
+        if (isDevelopmentWorkspaceSession(session)) {
+          setDevelopmentWorkspaceEnabled(false);
+        } else {
+          await repository.signOut();
+        }
         startTransition(() => {
           setSession(null);
           setPendingVerificationEmail(null);

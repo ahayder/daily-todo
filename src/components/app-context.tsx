@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  startTransition,
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -25,11 +27,16 @@ import {
 } from "@/lib/store";
 import {
   createPersistenceMetadata,
+  normalizeAppState,
   seedAppState,
   type PersistenceMetadata,
   type PersistenceRepository,
   type PersistenceStatus,
 } from "@/lib/persistence";
+import {
+  DEV_WORKSPACE_STATE_KEY,
+  isDevelopmentWorkspaceSession,
+} from "@/lib/dev-mode";
 import type {
   AppState,
   CategoryTheme,
@@ -138,6 +145,31 @@ function normalizePlannerRange(startMinutes: number, endMinutes: number) {
     startMinutes: start,
     endMinutes: Math.max(start + 30, end),
   };
+}
+
+function saveDevelopmentWorkspaceState(nextState: AppState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(DEV_WORKSPACE_STATE_KEY, JSON.stringify(nextState));
+}
+
+function loadDevelopmentWorkspaceState() {
+  if (typeof window === "undefined") {
+    return seedAppState(new Date());
+  }
+
+  const saved = window.localStorage.getItem(DEV_WORKSPACE_STATE_KEY);
+  if (!saved) {
+    return seedAppState(new Date());
+  }
+
+  try {
+    return normalizeAppState(JSON.parse(saved), new Date());
+  } catch {
+    return seedAppState(new Date());
+  }
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -651,6 +683,7 @@ export function AppProvider({ children, repository }: AppProviderProps) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   const isPublicAuthRoute = pathname.startsWith("/auth/reset");
 
@@ -675,14 +708,37 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       }
 
       saveSnapshotRef.current = null;
-       dirtySnapshotRef.current = null;
+      dirtySnapshotRef.current = null;
       metadataRef.current = createPersistenceMetadata();
-      setState(null);
-      setSyncStatus("idle");
-      setSyncNotice(null);
-      setSyncError(null);
-      setLastSyncedAt(null);
-      setPersistenceAvailable(true);
+      startTransition(() => {
+        setState(null);
+        setSyncStatus("idle");
+        setSyncNotice(null);
+        setSyncError(null);
+        setLastSyncedAt(null);
+        setPersistenceAvailable(true);
+        setHasPendingChanges(false);
+      });
+      return;
+    }
+
+    if (isDevelopmentWorkspaceSession(session)) {
+      const devState = loadDevelopmentWorkspaceState();
+      const snapshot = JSON.stringify(devState);
+      saveSnapshotRef.current = snapshot;
+      dirtySnapshotRef.current = null;
+      metadataRef.current = createPersistenceMetadata({
+        lastLocalMutationAt: new Date().toISOString(),
+      });
+      startTransition(() => {
+        setHasPendingChanges(false);
+        setState(devState);
+        setSyncStatus("synced");
+        setSyncNotice("Development workspace is active. Changes stay on this device.");
+        setSyncError(null);
+        setLastSyncedAt(null);
+        setPersistenceAvailable(true);
+      });
       return;
     }
 
@@ -702,6 +758,7 @@ export function AppProvider({ children, repository }: AppProviderProps) {
             const snapshot = JSON.stringify(remoteResult.state);
             saveSnapshotRef.current = snapshot;
             dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
             metadataRef.current = remoteResult.metadata;
             setState(remoteResult.state);
             setSyncStatus(remoteResult.status);
@@ -718,6 +775,7 @@ export function AppProvider({ children, repository }: AppProviderProps) {
         const snapshot = JSON.stringify(result.state);
         saveSnapshotRef.current = snapshot;
         dirtySnapshotRef.current = null;
+        setHasPendingChanges(false);
         metadataRef.current = result.metadata;
         setState(result.state);
         setSyncStatus(result.status);
@@ -787,8 +845,35 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       return;
     }
 
+    if (isDevelopmentWorkspaceSession(session)) {
+      dirtySnapshotRef.current = nextSnapshot;
+      startTransition(() => {
+        setHasPendingChanges(true);
+      });
+      const timer = window.setTimeout(() => {
+        saveDevelopmentWorkspaceState(state);
+        saveSnapshotRef.current = nextSnapshot;
+        dirtySnapshotRef.current = null;
+        setHasPendingChanges(false);
+        metadataRef.current = createPersistenceMetadata({
+          ...metadataRef.current,
+          lastLocalMutationAt: new Date().toISOString(),
+        });
+        setSyncStatus("synced");
+        setSyncNotice("Development workspace is active. Changes stay on this device.");
+        setSyncError(null);
+      }, 150);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }
+
     dirtySnapshotRef.current = nextSnapshot;
-    setSyncStatus((current) => (current === "offline" ? "offline" : "syncing"));
+    startTransition(() => {
+      setHasPendingChanges(true);
+      setSyncStatus((current) => (current === "offline" ? "offline" : "syncing"));
+    });
 
     const timer = window.setTimeout(() => {
       void repository
@@ -808,12 +893,14 @@ export function AppProvider({ children, repository }: AppProviderProps) {
             const resolvedSnapshot = JSON.stringify(result.resolvedState);
             saveSnapshotRef.current = resolvedSnapshot;
             dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
             setState(result.resolvedState);
             return;
           }
           if (result.status === "synced") {
             saveSnapshotRef.current = nextSnapshot;
             dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
           }
         })
         .catch(() => {
@@ -827,8 +914,24 @@ export function AppProvider({ children, repository }: AppProviderProps) {
     };
   }, [authStatus, repository, session, state]);
 
-  const retrySync = async () => {
+  const retrySync = useCallback(async () => {
     if (!session || !state || authStatus !== "authenticated") {
+      return;
+    }
+
+    if (isDevelopmentWorkspaceSession(session)) {
+      saveDevelopmentWorkspaceState(state);
+      saveSnapshotRef.current = JSON.stringify(state);
+      dirtySnapshotRef.current = null;
+      setHasPendingChanges(false);
+      metadataRef.current = createPersistenceMetadata({
+        ...metadataRef.current,
+        lastLocalMutationAt: new Date().toISOString(),
+      });
+      setSyncStatus("synced");
+      setSyncNotice("Development workspace is active. Changes stay on this device.");
+      setSyncError(null);
+      setLastSyncedAt(null);
       return;
     }
 
@@ -850,14 +953,16 @@ export function AppProvider({ children, repository }: AppProviderProps) {
       const resolvedSnapshot = JSON.stringify(result.resolvedState);
       saveSnapshotRef.current = resolvedSnapshot;
       dirtySnapshotRef.current = null;
+      setHasPendingChanges(false);
       setState(result.resolvedState);
       return;
     }
     if (result.status === "synced") {
       saveSnapshotRef.current = nextSnapshot;
       dirtySnapshotRef.current = null;
+      setHasPendingChanges(false);
     }
-  };
+  }, [authStatus, repository, session, state]);
 
   useEffect(() => {
     if (!session || authStatus !== "authenticated") {
@@ -866,6 +971,17 @@ export function AppProvider({ children, repository }: AppProviderProps) {
 
     const flushIfNeeded = () => {
       if (!state || !dirtySnapshotRef.current) {
+        return;
+      }
+
+      if (isDevelopmentWorkspaceSession(session)) {
+        saveDevelopmentWorkspaceState(state);
+        saveSnapshotRef.current = dirtySnapshotRef.current;
+        dirtySnapshotRef.current = null;
+        setHasPendingChanges(false);
+        setSyncStatus("synced");
+        setSyncNotice("Development workspace is active. Changes stay on this device.");
+        setSyncError(null);
         return;
       }
 
@@ -886,12 +1002,14 @@ export function AppProvider({ children, repository }: AppProviderProps) {
             const resolvedSnapshot = JSON.stringify(result.resolvedState);
             saveSnapshotRef.current = resolvedSnapshot;
             dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
             setState(result.resolvedState);
             return;
           }
           if (result.status === "synced") {
             saveSnapshotRef.current = dirtySnapshotRef.current;
             dirtySnapshotRef.current = null;
+            setHasPendingChanges(false);
           }
         })
         .catch(() => {
@@ -926,13 +1044,23 @@ export function AppProvider({ children, repository }: AppProviderProps) {
               lastSyncedAt,
               notice: syncNotice,
               errorMessage: syncError,
-              hasPendingChanges: dirtySnapshotRef.current !== null,
+              hasPendingChanges,
               persistenceAvailable,
             },
             retrySync,
           }
         : null,
-    [dispatch, lastSyncedAt, persistenceAvailable, state, syncError, syncNotice, syncStatus],
+    [
+      dispatch,
+      hasPendingChanges,
+      lastSyncedAt,
+      persistenceAvailable,
+      retrySync,
+      state,
+      syncError,
+      syncNotice,
+      syncStatus,
+    ],
   );
 
   if (isPublicAuthRoute) {

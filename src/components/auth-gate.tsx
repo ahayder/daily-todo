@@ -12,12 +12,21 @@ import {
 import { useAuth } from "@/components/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { canUseDevelopmentWorkspace } from "@/lib/dev-mode";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "sign-in" | "register" | "reset";
 
 export function AuthGate() {
-  const { error, notice, register, requestPasswordReset, signIn, status } = useAuth();
+  const {
+    enterDevelopmentWorkspace,
+    error,
+    notice,
+    register,
+    requestPasswordReset,
+    signIn,
+    status,
+  } = useAuth();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,6 +34,7 @@ export function AuthGate() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const canOpenDevWorkspace = canUseDevelopmentWorkspace();
 
   const heading =
     mode === "register"
@@ -304,6 +314,19 @@ export function AuthGate() {
                     </>
                   )}
                 </Button>
+
+                {canOpenDevWorkspace ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalError(null);
+                      enterDevelopmentWorkspace();
+                    }}
+                    className="w-full rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_88%,transparent)] px-4 py-3 text-sm font-semibold text-[var(--ink-900)] transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
+                  >
+                    Open local dev workspace
+                  </button>
+                ) : null}
 
                 {mode === "sign-in" ? (
                   <button
