@@ -85,6 +85,5 @@ jobs:
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
+          includeUpdaterJson: true
           args: --target ${{ matrix.target }} --bundles app,dmg --ci

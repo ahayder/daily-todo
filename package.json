@@ -1,6 +1,6 @@
 {
   "name": "dailytodoapp",
-  "version": "2026.3.7",
+  "version": "2026.3.8",
   "private": true,
   "packageManager": "pnpm@8.7.1",
   "scripts": {

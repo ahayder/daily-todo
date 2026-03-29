@@ -1,6 +1,6 @@
 [package]
 name = "dailytodoapp"
-version = "2026.3.7"
+version = "2026.3.8"
 description = "DailyTodo desktop shell"
 authors = ["Ali Hayder"]
 edition = "2021"
