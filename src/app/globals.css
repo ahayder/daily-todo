@@ -1081,9 +1081,10 @@ select {
   padding: 1.5rem;
   min-height: 100%;
   outline: none;
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 18px; /* Increased for ADHD readability */
+  line-height: 1.8; /* Increased line spacing */
   color: var(--ink-900);
+  caret-color: var(--brand); /* Strongly colored classic blinking cursor */
 }
 
 .tiptap-editor > * + * {
@@ -1390,7 +1391,7 @@ select {
   display: flex;
   align-items: center;
   gap: 0.42rem;
-  padding: 0.38rem 0.46rem;
+  padding: 0.5rem 0.46rem; /* Slightly more spacious for ADHD readability */
   border-radius: 8px;
   transition: background 150ms ease;
 }
@@ -1401,6 +1402,28 @@ select {
 
 .task-entry:focus-within .task-item {
   background: color-mix(in srgb, var(--brand-soft) 40%, transparent);
+}
+
+/* ── ADHD Focus Dimming: when hovering a task, others subtly recede ── */
+.task-list:has(.task-entry:hover) .task-entry:not(:hover) {
+  opacity: 0.45;
+  transition: opacity 200ms ease;
+}
+
+.task-list:has(.task-entry:hover) .task-entry:hover {
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+
+/* Also dim when focus is inside a particular task-entry */
+.task-list:has(.task-entry:focus-within) .task-entry:not(:focus-within) {
+  opacity: 0.45;
+  transition: opacity 200ms ease;
+}
+
+.task-list:has(.task-entry:focus-within) .task-entry:focus-within {
+  opacity: 1;
+  transition: opacity 150ms ease;
 }
 
 .task-entry {
@@ -1457,8 +1480,13 @@ select {
 
 .task-text--done {
   text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--brand) 55%, var(--ink-700));
+  text-decoration-thickness: 1.5px;
   color: var(--ink-700);
   opacity: 0.5;
+  transition:
+    opacity 200ms ease,
+    text-decoration-color 200ms ease;
 }
 
 .task-row-actions {
@@ -1468,24 +1496,30 @@ select {
   margin-left: auto;
 }
 
-.task-row-action-grip {
-  color: var(--ink-700);
-  opacity: 0;
-  padding: 0.15rem;
-  border-radius: 4px;
-  cursor: grab;
+.task-collapse-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.18rem;
+  border-radius: 999px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--ink-500);
   transition:
-    opacity 150ms ease,
-    color 150ms ease,
-    background-color 150ms ease;
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.task-row-action-grip:hover {
-  color: var(--ink-900);
+.task-collapse-btn:hover {
+  color: var(--brand);
   background: color-mix(in srgb, var(--brand-soft) 28%, transparent);
+}
+
+.task-collapse-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .task-row-action-btn {
@@ -1510,14 +1544,13 @@ select {
   outline-offset: 2px;
 }
 
-.task-item:hover .task-row-action-grip,
-.task-entry:focus-within .task-row-action-grip {
-  opacity: 0.35;
-}
-
 .task-item:hover .task-row-action-btn,
 .task-entry:focus-within .task-row-action-btn {
   opacity: 1;
+}
+
+.task-entry:focus-within .task-collapse-btn {
+  color: var(--brand);
 }
 
 .task-row-action-btn--focus {
@@ -1526,6 +1559,42 @@ select {
 
 .task-row-action-btn--edit {
   color: var(--ink-500);
+}
+
+.task-row-action-btn--time {
+  color: var(--ink-500);
+}
+
+.task-row-action-btn--time:hover {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 28%, transparent);
+}
+
+.task-estimate-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand) 38%, var(--line));
+  background: color-mix(in srgb, var(--brand-soft) 72%, var(--paper-strong));
+  padding: 0.1rem 0.45rem;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.task-estimate-chip:hover {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 90%, var(--paper-strong));
+}
+
+.task-estimate-chip:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .task-row-action-btn--edit:hover {
