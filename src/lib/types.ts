@@ -1,6 +1,8 @@
 export type Priority = 1 | 2 | 3;
+export type TaskStatus = "pending" | "ongoing" | "finished";
+export type FocusTimerStatus = "idle" | "running" | "paused";
 
-export type ViewMode = "daily" | "notes" | "planner";
+export type ViewMode = "todos" | "notes" | "planner";
 export type ThemeMode = "light" | "dark" | "system";
 export type CategoryTheme = "normal" | "adhd1" | "adhd2";
 export type PlannerDayKey =
@@ -46,7 +48,8 @@ export type Todo = {
   id: string;
   text: string;
   priority: Priority;
-  done: boolean;
+  status: TaskStatus;
+  estimatedMinutes: number | null;
   createdAt: string;
   parentId?: string;
 };
@@ -99,6 +102,11 @@ export type UIState = {
   categoryTheme: CategoryTheme;
   isFocusMode: boolean;
   focusedTodoId: string | null;
+  focusTimerStatus: FocusTimerStatus;
+  focusTimerRemainingSeconds: number | null;
+  focusTimerStartedAt: string | null;
+  focusTimerBaseEstimateMinutes: number | null;
+  isFocusTimerCompletionPromptOpen: boolean;
 };
 
 export type AppState = {

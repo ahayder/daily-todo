@@ -8,6 +8,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
+  MonitorDown,
 } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
 import type { AppAction } from "@/components/app-context";
@@ -92,7 +93,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   );
 
   const lastView = state.uiState.lastView;
-  const isDaily = !mounted || lastView === "daily";
+  const isTodos = !mounted || lastView === "todos";
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
   const SidebarIcon = state.uiState.isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
@@ -125,7 +126,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         ? Download
         : desktopUpdate.phase === "up-to-date"
           ? Check
-          : RefreshCw;
+          : MonitorDown;
 
   const syncPresentation = useMemo(() => {
     if (sync.indicator === "saving") {
@@ -188,13 +189,13 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
 
       <nav className="nav-pills" role="tablist" aria-label="Main navigation">
         <Link
-          href="/daily"
+          href="/todos"
           role="tab"
-          aria-selected={isDaily}
-          className={cn("nav-pill", isDaily && "nav-pill--active")}
-          onClick={() => dispatch({ type: "set-view", view: "daily" })}
+          aria-selected={isTodos}
+          className={cn("nav-pill", isTodos && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "todos" })}
         >
-          Daily
+          Todos
         </Link>
         <Link
           href="/notes"

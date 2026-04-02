@@ -43,7 +43,7 @@ describe("normalizeAppState", () => {
           selectedPlannerPresetId: null,
           expandedYears: ["2026"],
           expandedMonths: ["2026-03"],
-          lastView: "daily",
+          lastView: "todos",
         },
       },
       new Date("2026-03-11T08:00:00Z"),
@@ -56,6 +56,71 @@ describe("normalizeAppState", () => {
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
     expect(state.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
     expect(state.uiState.expandedNoteFolders).toContain(DEFAULT_NOTES_FOLDER_ID);
+  });
+
+  test("maps legacy daily lastView state to todos", () => {
+    const state = normalizeAppState(
+      {
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {},
+        noteFolders: {},
+        plannerPresets: {},
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: null,
+          selectedNoteFolderId: null,
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "daily",
+        },
+      },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+
+    expect(state.uiState.lastView).toBe("todos");
+  });
+
+  test("migrates legacy done-based todos into status and estimate fields", () => {
+    const state = normalizeAppState(
+      {
+        dailyPages: {
+          "2026-03-11": {
+            date: "2026-03-11",
+            markdown: "",
+            todos: [
+              {
+                id: "todo_1",
+                text: "Legacy task",
+                priority: 1,
+                done: true,
+                createdAt: "2026-03-11T08:00:00.000Z",
+              },
+            ],
+          },
+        },
+        notesDocs: {},
+        noteFolders: {},
+        plannerPresets: {},
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: null,
+          selectedNoteFolderId: null,
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "todos",
+        },
+      },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+
+    expect(state.dailyPages["2026-03-11"].todos[0]).toMatchObject({
+      status: "finished",
+      estimatedMinutes: null,
+    });
   });
 });
 

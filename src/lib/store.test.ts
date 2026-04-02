@@ -20,14 +20,16 @@ describe("ensureDailyPageForDate", () => {
         id: "a",
         text: "Open task",
         priority: 1,
-        done: false,
+        status: "pending",
+        estimatedMinutes: null,
         createdAt: "2026-03-10T10:00:00.000Z",
       },
       {
         id: "b",
         text: "Done task",
         priority: 2,
-        done: true,
+        status: "finished",
+        estimatedMinutes: null,
         createdAt: "2026-03-10T11:00:00.000Z",
       },
     ];
@@ -38,7 +40,7 @@ describe("ensureDailyPageForDate", () => {
     expect(rolled.dailyPages["2026-03-11"].markdown).toBe("Carry this note");
     expect(rolled.dailyPages["2026-03-11"].todos).toHaveLength(1);
     expect(rolled.dailyPages["2026-03-11"].todos[0].text).toBe("Open task");
-    expect(rolled.dailyPages["2026-03-11"].todos[0].done).toBe(false);
+    expect(rolled.dailyPages["2026-03-11"].todos[0].status).toBe("pending");
   });
 
   test("does not recreate when page already exists", () => {
@@ -53,9 +55,30 @@ describe("ensureDailyPageForDate", () => {
 describe("groupTodosByPriority", () => {
   test("groups by priority and places unchecked items first", () => {
     const todos: Todo[] = [
-      { id: "1", text: "p2 done", priority: 2, done: true, createdAt: "t" },
-      { id: "2", text: "p1 open", priority: 1, done: false, createdAt: "t" },
-      { id: "3", text: "p2 open", priority: 2, done: false, createdAt: "t" },
+      {
+        id: "1",
+        text: "p2 done",
+        priority: 2,
+        status: "finished",
+        estimatedMinutes: null,
+        createdAt: "t",
+      },
+      {
+        id: "2",
+        text: "p1 open",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "t",
+      },
+      {
+        id: "3",
+        text: "p2 open",
+        priority: 2,
+        status: "ongoing",
+        estimatedMinutes: null,
+        createdAt: "t",
+      },
     ];
 
     const grouped = groupTodosByPriority(todos);

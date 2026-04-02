@@ -12,7 +12,7 @@ vi.mock("next/link", () => ({
 }));
 
 describe("TopNavbar", () => {
-  test("shows sidebar toggle in daily and planner views", async () => {
+  test("shows sidebar toggle in todos and planner views", async () => {
     const dispatch = vi.fn();
     const auth = createMockAuthRepository({
       userId: "user_1",

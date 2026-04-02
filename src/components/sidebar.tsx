@@ -541,7 +541,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   const ThemeIcon = THEME_ICONS[themeMode];
   const nextThemeMode = THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
 
-  const isDailyView = !mounted || state.uiState.lastView === "daily";
+  const isTodosView = !mounted || state.uiState.lastView === "todos";
   const isPlannerView = mounted && state.uiState.lastView === "planner";
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -568,7 +568,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
 
   return (
     <aside className="sidebar">
-      {isDailyView && mounted && (
+      {isTodosView && mounted && (
         <button
           type="button"
           onClick={() => {
@@ -581,7 +581,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
         </button>
       )}
 
-      {!isDailyView && mounted && (
+      {!isTodosView && mounted && (
         <div className="sidebar-section-header">
           <span className="sidebar-section-label">
             {isPlannerView ? (
@@ -655,7 +655,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
         onDragCancel={() => setActiveDraggedNoteId(null)}
       >
       <ScrollArea className="flex-1 min-h-0">
-        {!mounted ? null : isDailyView ? (
+        {!mounted ? null : isTodosView ? (
           <div className="sidebar-tree">
             {Array.from(groupedYears.keys())
               .sort((a, b) => b.localeCompare(a))

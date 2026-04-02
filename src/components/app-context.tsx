@@ -43,10 +43,12 @@ import {
 import type {
   AppState,
   CategoryTheme,
+  FocusTimerStatus,
   NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
   Priority,
+  TaskStatus,
   ThemeMode,
   ViewMode,
 } from "@/lib/types";
@@ -64,7 +66,8 @@ export type AppAction =
   | { type: "toggle-note-folder"; folderId: string }
   | { type: "update-daily-markdown"; date: string; markdown: string }
   | { type: "add-todo"; date: string; text: string; priority: Priority; parentId?: string }
-  | { type: "toggle-todo"; date: string; todoId: string }
+  | { type: "set-todo-status"; date: string; todoId: string; status: TaskStatus }
+  | { type: "set-todo-estimated-minutes"; date: string; todoId: string; estimatedMinutes: number | null }
   | { type: "delete-todo"; date: string; todoId: string }
   | { type: "create-note"; title?: string }
   | { type: "create-note-folder"; name?: string; parentFolderId?: string | null }
@@ -108,13 +111,46 @@ export type AppAction =
   | { type: "delete-planner-event"; presetId: string; dayKey: PlannerDayKey; eventId: string }
   | { type: "edit-todo"; date: string; todoId: string; text: string }
   | { type: "move-todo-priority"; date: string; todoId: string; newPriority: Priority; newIndex: number }
-  | { type: "set-focus-mode"; isFocus: boolean; todoId?: string | null };
+  | { type: "set-focus-mode"; isFocus: boolean; todoId?: string | null }
+  | { type: "start-focus-timer"; date: string; todoId: string; estimateMinutes?: number | null }
+  | { type: "pause-focus-timer" }
+  | { type: "resume-focus-timer" }
+  | { type: "reset-focus-timer" }
+  | { type: "tick-focus-timer" }
+  | {
+      type: "resolve-focus-timer-complete";
+      resolution: "finish" | "keep-ongoing" | "add-time";
+      extraMinutes?: number;
+    };
 
 function toggleString(list: string[], value: string): string[] {
   if (list.includes(value)) {
     return list.filter((item) => item !== value);
   }
   return [...list, value];
+}
+
+function clearFocusTimerState(state: AppState["uiState"], overrides: Partial<AppState["uiState"]> = {}) {
+  return {
+    ...state,
+    focusTimerStatus: "idle" as FocusTimerStatus,
+    focusTimerRemainingSeconds: null,
+    focusTimerStartedAt: null,
+    focusTimerBaseEstimateMinutes: null,
+    isFocusTimerCompletionPromptOpen: false,
+    ...overrides,
+  };
+}
+
+function stopFocusTimerForTodo(state: AppState, todoId: string | null) {
+  if (!todoId || state.uiState.focusedTodoId !== todoId) {
+    return state.uiState;
+  }
+
+  return clearFocusTimerState(state.uiState, {
+    focusedTodoId: null,
+    isFocusMode: false,
+  });
 }
 
 function ensureSelectedDailyDate(state: AppState): string {
@@ -300,7 +336,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         uiState: {
-          ...state.uiState,
+          ...(action.isFocus
+            ? state.uiState
+            : clearFocusTimerState(state.uiState, { focusedTodoId: null })),
           isFocusMode: action.isFocus,
           focusedTodoId: action.todoId ?? null,
         },
@@ -311,7 +349,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           selectedDailyDate: action.date,
-          lastView: "daily",
+          lastView: "todos",
         },
       };
     case "toggle-year":
@@ -366,9 +404,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
       };
     }
-    case "toggle-todo": {
+    case "set-todo-status": {
       const page = state.dailyPages[action.date];
       if (!page) return state;
+      const nextUiState =
+        action.status === "finished"
+          ? stopFocusTimerForTodo(state, action.todoId)
+          : state.uiState;
+
       return {
         ...state,
         dailyPages: {
@@ -376,10 +419,49 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           [action.date]: {
             ...page,
             todos: page.todos.map((todo) =>
-              todo.id === action.todoId ? { ...todo, done: !todo.done } : todo,
+              todo.id === action.todoId
+                ? {
+                    ...todo,
+                    status: action.status,
+                  }
+                : todo,
             ),
           },
         },
+        uiState: nextUiState,
+      };
+    }
+    case "set-todo-estimated-minutes": {
+      const page = state.dailyPages[action.date];
+      if (!page) return state;
+
+      const nextEstimatedMinutes =
+        action.estimatedMinutes && action.estimatedMinutes > 0 ? action.estimatedMinutes : null;
+      const updatedTodos = page.todos.map((todo) =>
+        todo.id === action.todoId ? { ...todo, estimatedMinutes: nextEstimatedMinutes } : todo,
+      );
+      const updatedTodo = updatedTodos.find((todo) => todo.id === action.todoId) ?? null;
+      const nextUiState =
+        state.uiState.focusedTodoId === action.todoId
+          ? {
+              ...state.uiState,
+              focusTimerBaseEstimateMinutes:
+                state.uiState.focusTimerStatus === "idle"
+                  ? updatedTodo?.estimatedMinutes ?? null
+                  : state.uiState.focusTimerBaseEstimateMinutes,
+            }
+          : state.uiState;
+
+      return {
+        ...state,
+        dailyPages: {
+          ...state.dailyPages,
+          [action.date]: {
+            ...page,
+            todos: updatedTodos,
+          },
+        },
+        uiState: nextUiState,
       };
     }
     case "edit-todo": {
@@ -435,9 +517,188 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
       };
     }
+    case "start-focus-timer": {
+      const page = state.dailyPages[action.date];
+      if (!page) return state;
+
+      const todo = page.todos.find((item) => item.id === action.todoId);
+      if (!todo) return state;
+
+      const baseEstimateMinutes =
+        action.estimateMinutes ?? todo.estimatedMinutes ?? state.uiState.focusTimerBaseEstimateMinutes;
+
+      if (!baseEstimateMinutes || baseEstimateMinutes <= 0) {
+        return state;
+      }
+
+      const remainingSeconds =
+        state.uiState.focusedTodoId === action.todoId &&
+        state.uiState.focusTimerStatus === "paused" &&
+        state.uiState.focusTimerRemainingSeconds !== null
+          ? state.uiState.focusTimerRemainingSeconds
+          : baseEstimateMinutes * 60;
+
+      return {
+        ...state,
+        dailyPages: {
+          ...state.dailyPages,
+          [action.date]: {
+            ...page,
+            todos: page.todos.map((item) =>
+              item.id === action.todoId && item.status === "pending"
+                ? { ...item, status: "ongoing" }
+                : item,
+            ),
+          },
+        },
+        uiState: {
+          ...state.uiState,
+          isFocusMode: true,
+          focusedTodoId: action.todoId,
+          focusTimerStatus: "running",
+          focusTimerRemainingSeconds: remainingSeconds,
+          focusTimerStartedAt: new Date().toISOString(),
+          focusTimerBaseEstimateMinutes: baseEstimateMinutes,
+          isFocusTimerCompletionPromptOpen: false,
+        },
+      };
+    }
+    case "pause-focus-timer":
+      if (state.uiState.focusTimerStatus !== "running") {
+        return state;
+      }
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          focusTimerStatus: "paused",
+          focusTimerStartedAt: null,
+        },
+      };
+    case "resume-focus-timer":
+      if (
+        state.uiState.focusTimerStatus !== "paused" ||
+        !state.uiState.focusedTodoId ||
+        !state.uiState.focusTimerRemainingSeconds ||
+        state.uiState.focusTimerRemainingSeconds <= 0
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          focusTimerStatus: "running",
+          focusTimerStartedAt: new Date().toISOString(),
+          isFocusTimerCompletionPromptOpen: false,
+        },
+      };
+    case "reset-focus-timer": {
+      const resetSeconds = state.uiState.focusTimerBaseEstimateMinutes
+        ? state.uiState.focusTimerBaseEstimateMinutes * 60
+        : null;
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          focusTimerStatus: "idle",
+          focusTimerRemainingSeconds: resetSeconds,
+          focusTimerStartedAt: null,
+          isFocusTimerCompletionPromptOpen: false,
+        },
+      };
+    }
+    case "tick-focus-timer":
+      if (
+        state.uiState.focusTimerStatus !== "running" ||
+        state.uiState.focusTimerRemainingSeconds === null
+      ) {
+        return state;
+      }
+
+      if (state.uiState.focusTimerRemainingSeconds <= 1) {
+        return {
+          ...state,
+          uiState: {
+            ...state.uiState,
+            focusTimerStatus: "paused",
+            focusTimerRemainingSeconds: 0,
+            focusTimerStartedAt: null,
+            isFocusTimerCompletionPromptOpen: true,
+          },
+        };
+      }
+
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          focusTimerRemainingSeconds: state.uiState.focusTimerRemainingSeconds - 1,
+        },
+      };
+    case "resolve-focus-timer-complete": {
+      if (!state.uiState.focusedTodoId) {
+        return {
+          ...state,
+          uiState: clearFocusTimerState(state.uiState),
+        };
+      }
+
+      if (action.resolution === "keep-ongoing") {
+        return {
+          ...state,
+          uiState: {
+            ...state.uiState,
+            focusTimerStatus: "idle",
+            focusTimerStartedAt: null,
+            isFocusTimerCompletionPromptOpen: false,
+          },
+        };
+      }
+
+      if (action.resolution === "add-time") {
+        const extraMinutes = action.extraMinutes && action.extraMinutes > 0 ? action.extraMinutes : 5;
+        return {
+          ...state,
+          uiState: {
+            ...state.uiState,
+            focusTimerStatus: "running",
+            focusTimerRemainingSeconds: extraMinutes * 60,
+            focusTimerStartedAt: new Date().toISOString(),
+            isFocusTimerCompletionPromptOpen: false,
+          },
+        };
+      }
+
+      return {
+        ...state,
+        dailyPages: Object.fromEntries(
+          Object.entries(state.dailyPages).map(([dateKey, page]) => [
+            dateKey,
+            {
+              ...page,
+              todos: page.todos.map((todo) =>
+                todo.id === state.uiState.focusedTodoId ? { ...todo, status: "finished" } : todo,
+              ),
+            },
+          ]),
+        ),
+        uiState: clearFocusTimerState(state.uiState, {
+          isFocusMode: false,
+          focusedTodoId: null,
+        }),
+      };
+    }
     case "delete-todo": {
       const page = state.dailyPages[action.date];
       if (!page) return state;
+      const nextUiState =
+        state.uiState.focusedTodoId === action.todoId
+          ? clearFocusTimerState(state.uiState, {
+              isFocusMode: false,
+              focusedTodoId: null,
+            })
+          : state.uiState;
       return {
         ...state,
         dailyPages: {
@@ -447,6 +708,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             todos: page.todos.filter((todo) => todo.id !== action.todoId),
           },
         },
+        uiState: nextUiState,
       };
     }
     case "create-note": {

@@ -1,33 +1,46 @@
 import { z } from "zod";
+import type { Priority } from "@/lib/types";
 
-const todoSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  priority: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  done: z.boolean(),
-  createdAt: z.string(),
-  parentId: z.string().optional(),
-});
+const taskStatusSchema = z.enum(["pending", "ongoing", "finished"]);
+
+const todoSchema = z
+  .object({
+    id: z.string(),
+    text: z.string().catch(""),
+    priority: z.number().int().min(1).max(3).catch(3),
+    status: taskStatusSchema.optional().catch("pending"),
+    estimatedMinutes: z.number().int().min(1).nullable().optional().catch(null),
+    done: z.boolean().optional(),
+    createdAt: z.string().optional().catch(new Date().toISOString()),
+    parentId: z.string().optional(),
+  })
+  .transform(({ done, status, estimatedMinutes, priority, createdAt, ...todo }) => ({
+    ...todo,
+    priority: priority as Priority,
+    status: status ?? (done ? "finished" : "pending"),
+    estimatedMinutes: estimatedMinutes ?? null,
+    createdAt: createdAt ?? new Date().toISOString(),
+  }));
 
 const dailyPageSchema = z.object({
   date: z.string(),
-  markdown: z.string(),
-  todos: z.array(todoSchema),
+  markdown: z.string().catch(""),
+  todos: z.array(todoSchema).catch([]),
 });
 
 const noteDocSchema = z.object({
   id: z.string(),
-  title: z.string(),
-  folderId: z.string().nullable(),
-  markdown: z.string().optional(),
-  updatedAt: z.string(),
+  title: z.string().catch("Untitled"),
+  folderId: z.string().nullable().catch(null),
+  markdown: z.string().optional().catch(""),
+  updatedAt: z.string().catch(new Date().toISOString()),
 });
 
 const noteFolderSchema = z.object({
   id: z.string(),
-  name: z.string(),
-  parentId: z.string().nullable(),
-  updatedAt: z.string(),
+  name: z.string().catch("New Folder"),
+  parentId: z.string().nullable().catch(null),
+  updatedAt: z.string().catch(new Date().toISOString()),
 });
 
 const plannerEventSchema = z.object({
@@ -95,11 +108,16 @@ export const appStateSchema = z.object({
     expandedYears: z.array(z.string()),
     expandedMonths: z.array(z.string()),
     expandedNoteFolders: z.array(z.string()).optional(),
-    lastView: z.enum(["daily", "notes", "planner"]),
+    lastView: z.enum(["todos", "notes", "planner"]),
     themeMode: z.enum(["light", "dark", "system"]).optional(),
     categoryTheme: z.enum(["normal", "adhd1", "adhd2"]).optional(),
     isFocusMode: z.boolean().optional(),
     focusedTodoId: z.string().nullable().optional(),
+    focusTimerStatus: z.enum(["idle", "running", "paused"]).optional(),
+    focusTimerRemainingSeconds: z.number().int().min(0).nullable().optional(),
+    focusTimerStartedAt: z.string().nullable().optional(),
+    focusTimerBaseEstimateMinutes: z.number().int().min(1).nullable().optional(),
+    isFocusTimerCompletionPromptOpen: z.boolean().optional(),
   }),
 });
 

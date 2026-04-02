@@ -9,8 +9,8 @@ vi.mock("@/components/app-context", () => ({
   useAppState: () => mockUseAppState(),
 }));
 
-vi.mock("@/components/daily-view", () => ({
-  DailyView: () => <div data-testid="daily-view" />,
+vi.mock("@/components/todos-view", () => ({
+  TodosView: () => <div data-testid="todos-view" />,
 }));
 
 vi.mock("@/components/notes-view", () => ({
@@ -33,7 +33,7 @@ describe("Workspace", () => {
   test("hides the top navbar and sidebar in focus mode", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.isFocusMode = true;
-    state.uiState.lastView = "daily";
+    state.uiState.lastView = "todos";
     const dispatch = vi.fn();
 
     mockUseAppState.mockReturnValue({
@@ -58,7 +58,7 @@ describe("Workspace", () => {
 
     expect(screen.queryByTestId("top-navbar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("sidebar")).not.toBeInTheDocument();
-    expect(screen.getByTestId("daily-view")).toBeInTheDocument();
+    expect(screen.getByTestId("todos-view")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close Focus Mode" })).toBeInTheDocument();
   });
 });

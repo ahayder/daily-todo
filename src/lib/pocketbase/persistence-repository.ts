@@ -25,7 +25,14 @@ import {
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
-import type { AppState, DailyPage, NoteDoc, NoteFolder, NoteSummary, PlannerPreset } from "@/lib/types";
+import type {
+  AppState,
+  DailyPage,
+  NoteDoc,
+  NoteFolder,
+  NoteSummary,
+  PlannerPreset,
+} from "@/lib/types";
 
 const WORKSPACE_RECORD_KEY = "workspace_state:self";
 
@@ -88,7 +95,7 @@ type PocketBaseWorkspaceStateRecord = {
   selected_planner_preset_id?: string | null;
   expanded_years_json?: unknown;
   expanded_months_json?: unknown;
-  last_view?: SyncableUIState["lastView"];
+  last_view?: SyncableUIState["lastView"] | "daily";
   updated?: string;
   updated_at_client?: string;
 };
@@ -923,7 +930,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         selectedPlannerPresetId: workspaceState.selected_planner_preset_id ?? null,
         expandedYears: safeArray(workspaceState.expanded_years_json),
         expandedMonths: safeArray(workspaceState.expanded_months_json),
-        lastView: workspaceState.last_view ?? "daily",
+        lastView: workspaceState.last_view === "daily" ? "todos" : workspaceState.last_view ?? "todos",
       };
       values[WORKSPACE_RECORD_KEY] = { key: WORKSPACE_RECORD_KEY, kind: "workspace_state", value };
       records[WORKSPACE_RECORD_KEY] = createRecordMetadata(

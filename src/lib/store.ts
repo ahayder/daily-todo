@@ -10,6 +10,7 @@ import type {
   PlannerEventColor,
   PlannerPreset,
   Priority,
+  TaskStatus,
   Todo,
 } from "@/lib/types";
 
@@ -41,6 +42,11 @@ const DEFAULT_DAY_TITLES: Record<PlannerDayKey, string> = {
 };
 
 export const DEFAULT_NOTES_FOLDER_ID = "note-folder-default";
+const TASK_STATUS_ORDER: Record<TaskStatus, number> = {
+  ongoing: 0,
+  pending: 1,
+  finished: 2,
+};
 
 export function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -59,7 +65,8 @@ export function createTodo(text: string, priority: Priority, parentId?: string):
     id: makeId("todo"),
     text,
     priority,
-    done: false,
+    status: "pending",
+    estimatedMinutes: null,
     createdAt: new Date().toISOString(),
     parentId,
   };
@@ -187,11 +194,16 @@ export function createInitialState(todayISO: string): AppState {
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],
-      lastView: "daily",
+      lastView: "todos",
       themeMode: "dark",
       categoryTheme: "normal",
       isFocusMode: false,
       focusedTodoId: null,
+      focusTimerStatus: "idle",
+      focusTimerRemainingSeconds: null,
+      focusTimerStartedAt: null,
+      focusTimerBaseEstimateMinutes: null,
+      isFocusTimerCompletionPromptOpen: false,
     },
   };
 }
@@ -314,11 +326,11 @@ export function ensurePlannerState(state: AppState): AppState {
 
 function cloneCarryoverTodos(todos: Todo[]): Todo[] {
   return todos
-    .filter((todo) => !todo.done)
+    .filter((todo) => todo.status !== "finished")
     .map((todo) => ({
       ...todo,
       id: makeId("todo"),
-      done: false,
+      status: "pending",
       createdAt: new Date().toISOString(),
     }));
 }
@@ -379,7 +391,7 @@ export function groupTodosByPriority(todos: Todo[]): Record<Priority, Todo[]> {
   }
 
   for (const bucket of Object.values(grouped)) {
-    bucket.sort((a, b) => Number(a.done) - Number(b.done));
+    bucket.sort((a, b) => TASK_STATUS_ORDER[a.status] - TASK_STATUS_ORDER[b.status]);
   }
 
   return grouped;

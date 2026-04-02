@@ -8,7 +8,7 @@ import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/daily",
+  usePathname: () => "/todos",
 }));
 
 type MatchMediaController = {
@@ -234,6 +234,64 @@ describe("appReducer theme mode", () => {
 
     expect(deleted.notesDocs).toEqual({});
     expect(deleted.uiState.selectedNoteId).toBeNull();
+  });
+
+  test("starts a focus timer and moves a pending task into ongoing", () => {
+    const initial = createInitialState("2026-03-11");
+    initial.dailyPages["2026-03-11"].todos = [
+      {
+        id: "todo_1",
+        text: "Focus task",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: 25,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+    ];
+
+    const started = appReducer(initial, {
+      type: "start-focus-timer",
+      date: "2026-03-11",
+      todoId: "todo_1",
+      estimateMinutes: 25,
+    });
+
+    expect(started.dailyPages["2026-03-11"].todos[0].status).toBe("ongoing");
+    expect(started.uiState.focusedTodoId).toBe("todo_1");
+    expect(started.uiState.focusTimerStatus).toBe("running");
+    expect(started.uiState.focusTimerRemainingSeconds).toBe(1500);
+  });
+
+  test("opens the completion prompt at zero and can resolve by finishing the task", () => {
+    const initial = createInitialState("2026-03-11");
+    initial.dailyPages["2026-03-11"].todos = [
+      {
+        id: "todo_1",
+        text: "Focus task",
+        priority: 1,
+        status: "ongoing",
+        estimatedMinutes: 1,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+    ];
+    initial.uiState.isFocusMode = true;
+    initial.uiState.focusedTodoId = "todo_1";
+    initial.uiState.focusTimerStatus = "running";
+    initial.uiState.focusTimerRemainingSeconds = 1;
+    initial.uiState.focusTimerBaseEstimateMinutes = 1;
+
+    const zeroed = appReducer(initial, { type: "tick-focus-timer" });
+    expect(zeroed.uiState.isFocusTimerCompletionPromptOpen).toBe(true);
+    expect(zeroed.uiState.focusTimerRemainingSeconds).toBe(0);
+
+    const finished = appReducer(zeroed, {
+      type: "resolve-focus-timer-complete",
+      resolution: "finish",
+    });
+
+    expect(finished.dailyPages["2026-03-11"].todos[0].status).toBe("finished");
+    expect(finished.uiState.focusedTodoId).toBeNull();
+    expect(finished.uiState.isFocusMode).toBe(false);
   });
 
   test("deletes a note folder recursively with its nested notes", () => {

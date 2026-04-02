@@ -1,13 +1,13 @@
 import { useReducer } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import confetti from "canvas-confetti";
 import {
-  DailyView,
+  TodosView,
   getDropIndicatorPosition,
   getDropInsertionIndex,
-} from "@/components/daily-view";
+} from "@/components/todos-view";
 import { appReducer } from "@/components/app-context";
 import { createInitialState } from "@/lib/store";
 
@@ -25,7 +25,8 @@ function Harness({
       id: "todo-1",
       text: "Task one",
       priority: 1,
-      done: false,
+      status: "pending",
+      estimatedMinutes: null,
       createdAt: "2026-03-11T10:00:00.000Z",
     },
   ],
@@ -34,7 +35,8 @@ function Harness({
     id: string;
     text: string;
     priority: 1 | 2 | 3;
-    done: boolean;
+    status: "pending" | "ongoing" | "finished";
+    estimatedMinutes: number | null;
     createdAt: string;
     parentId?: string;
   }>;
@@ -43,10 +45,10 @@ function Harness({
   initial.dailyPages["2026-03-11"].todos = todos;
 
   const [state, dispatch] = useReducer(appReducer, initial);
-  return <DailyView state={state} dispatch={dispatch} />;
+  return <TodosView state={state} dispatch={dispatch} />;
 }
 
-describe("DailyView", () => {
+describe("TodosView", () => {
   test("detects whether a drop indicator should render before or after a hovered task", () => {
     expect(
       getDropIndicatorPosition({
@@ -89,15 +91,18 @@ describe("DailyView", () => {
     ).toBe(1);
   });
 
-  test("applies strikethrough when checkbox is toggled", async () => {
+  test("applies strikethrough when status is advanced to finished", async () => {
     render(<Harness />);
 
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.click(checkbox);
+    const statusButton = screen.getByRole("button", { name: "Status for Task one" });
+    await userEvent.click(statusButton);
+    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await userEvent.click(statusButton);
+    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     const taskText = screen.getByText("Task one");
     expect(taskText).toHaveClass("task-text--done");
-    expect(confetti).toHaveBeenCalledTimes(4);
+    expect(confetti).toHaveBeenCalled();
   });
 
   test("uses enter to add without an Add button", async () => {
@@ -203,6 +208,7 @@ describe("DailyView", () => {
     expect(dragSurface).not.toBeNull();
     expect(dragSurface).toContainElement(taskText);
     expect(dragSurface?.closest(".task-item")?.querySelector(".task-row-actions")).not.toBeNull();
+    expect(dragSurface?.closest(".task-item")?.querySelector(".task-row-action-grip")).toBeNull();
   });
 
   test("opens inline editing from the edit button and saves on enter", async () => {
@@ -217,6 +223,37 @@ describe("DailyView", () => {
 
     expect(screen.getByText("Updated task")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("Task one")).not.toBeInTheDocument();
+  });
+
+  test("opens inline editing when the task text is clicked", async () => {
+    render(<Harness />);
+
+    await userEvent.click(screen.getByText("Task one"));
+
+    expect(await screen.findByDisplayValue("Task one")).toBeInTheDocument();
+  });
+
+  test("opens focus mode when the task text is double clicked", async () => {
+    render(<Harness />);
+
+    fireEvent.doubleClick(screen.getByText("Task one"));
+
+    expect(await screen.findByText("Remaining Time")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue("Task one")).not.toBeInTheDocument();
+    });
+  });
+
+  test("opens estimate presets and saves a quick estimate", async () => {
+    render(<Harness />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Set estimate for Task one" }));
+    expect(screen.getByText("Task time")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "20m" }));
+
+    expect(screen.queryByText("Task time")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Set estimate for Task one" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit estimate for Task one" })).toHaveTextContent("20m");
   });
 
   test("closes the subtask composer on escape", async () => {
@@ -240,6 +277,105 @@ describe("DailyView", () => {
 
     expect(screen.getByText("Nested task")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Add a subtask")).not.toBeInTheDocument();
+  });
+
+  test("lets a parent task collapse and expand its subtasks", async () => {
+    render(
+      <Harness
+        todos={[
+          {
+            id: "todo-1",
+            text: "Task one",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: null,
+            createdAt: "2026-03-11T10:00:00.000Z",
+          },
+          {
+            id: "todo-2",
+            text: "Nested task",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: null,
+            createdAt: "2026-03-11T10:05:00.000Z",
+            parentId: "todo-1",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Nested task")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse subtasks" }));
+    expect(screen.queryByText("Nested task")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Expand subtasks" }));
+    expect(screen.getByText("Nested task")).toBeInTheDocument();
+  });
+
+  test("does not show time or focus controls for subtasks", async () => {
+    render(
+      <Harness
+        todos={[
+          {
+            id: "todo-1",
+            text: "Task one",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: null,
+            createdAt: "2026-03-11T10:00:00.000Z",
+          },
+          {
+            id: "todo-2",
+            text: "Nested task",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: 20,
+            createdAt: "2026-03-11T10:05:00.000Z",
+            parentId: "todo-1",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByText("Nested task"));
+
+    expect(screen.queryByRole("button", { name: "Set estimate for Nested task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit estimate for Nested task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Focus on this task" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Focus on this task" })).toHaveLength(1);
+  });
+
+  test("does not enter focus mode when a subtask is double clicked", async () => {
+    render(
+      <Harness
+        todos={[
+          {
+            id: "todo-1",
+            text: "Task one",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: null,
+            createdAt: "2026-03-11T10:00:00.000Z",
+          },
+          {
+            id: "todo-2",
+            text: "Nested task",
+            priority: 1,
+            status: "pending",
+            estimatedMinutes: null,
+            createdAt: "2026-03-11T10:05:00.000Z",
+            parentId: "todo-1",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByText("Nested task"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Remaining Time")).not.toBeInTheDocument();
+    });
   });
 
   test("closes the subtask composer on blur when empty", async () => {

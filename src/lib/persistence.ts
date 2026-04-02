@@ -8,7 +8,7 @@ import {
 } from "@/lib/store";
 import type { AppState, CachedNoteBody, NoteSummary, UIState } from "@/lib/types";
 
-export const APP_STATE_VERSION = 1;
+export const APP_STATE_VERSION = 2;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
 export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
@@ -120,6 +120,11 @@ export type LocalOnlyUIState = Pick<
   | "categoryTheme"
   | "isFocusMode"
   | "focusedTodoId"
+  | "focusTimerStatus"
+  | "focusTimerRemainingSeconds"
+  | "focusTimerStartedAt"
+  | "focusTimerBaseEstimateMinutes"
+  | "isFocusTimerCompletionPromptOpen"
   | "expandedNoteFolders"
 >;
 
@@ -232,6 +237,11 @@ function normalizeLegacyState(parsed: unknown): unknown {
       categoryTheme?: unknown;
       isFocusMode?: unknown;
       focusedTodoId?: unknown;
+      focusTimerStatus?: unknown;
+      focusTimerRemainingSeconds?: unknown;
+      focusTimerStartedAt?: unknown;
+      focusTimerBaseEstimateMinutes?: unknown;
+      isFocusTimerCompletionPromptOpen?: unknown;
       expandedNoteFolders?: unknown;
     };
     plannerPresets?: unknown;
@@ -249,11 +259,13 @@ function normalizeLegacyState(parsed: unknown): unknown {
       : "dark";
 
   const normalizedLastView =
-    candidate.uiState.lastView === "daily" ||
+    candidate.uiState.lastView === "todos" ||
     candidate.uiState.lastView === "notes" ||
     candidate.uiState.lastView === "planner"
       ? candidate.uiState.lastView
-      : "daily";
+      : candidate.uiState.lastView === "daily"
+        ? "todos"
+        : "todos";
 
   return {
     ...candidate,
@@ -298,6 +310,31 @@ function normalizeLegacyState(parsed: unknown): unknown {
         candidate.uiState.focusedTodoId === null
           ? candidate.uiState.focusedTodoId
           : null,
+      focusTimerStatus:
+        candidate.uiState.focusTimerStatus === "idle" ||
+        candidate.uiState.focusTimerStatus === "running" ||
+        candidate.uiState.focusTimerStatus === "paused"
+          ? candidate.uiState.focusTimerStatus
+          : "idle",
+      focusTimerRemainingSeconds:
+        typeof candidate.uiState.focusTimerRemainingSeconds === "number" &&
+        candidate.uiState.focusTimerRemainingSeconds >= 0
+          ? candidate.uiState.focusTimerRemainingSeconds
+          : null,
+      focusTimerStartedAt:
+        typeof candidate.uiState.focusTimerStartedAt === "string" ||
+        candidate.uiState.focusTimerStartedAt === null
+          ? candidate.uiState.focusTimerStartedAt
+          : null,
+      focusTimerBaseEstimateMinutes:
+        typeof candidate.uiState.focusTimerBaseEstimateMinutes === "number" &&
+        candidate.uiState.focusTimerBaseEstimateMinutes > 0
+          ? candidate.uiState.focusTimerBaseEstimateMinutes
+          : null,
+      isFocusTimerCompletionPromptOpen:
+        typeof candidate.uiState.isFocusTimerCompletionPromptOpen === "boolean"
+          ? candidate.uiState.isFocusTimerCompletionPromptOpen
+          : false,
       expandedNoteFolders: Array.isArray(candidate.uiState.expandedNoteFolders)
         ? candidate.uiState.expandedNoteFolders.filter((value): value is string => typeof value === "string")
         : [],
@@ -314,6 +351,15 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
   const validated = appStateSchema.safeParse(parsed);
 
   if (!validated.success) {
+    const msg = "App State Schema failed to parse: " + validated.error.toString();
+    console.error(msg);
+    if (typeof window !== "undefined") {
+      const errDiv = document.createElement("div");
+      errDiv.style.cssText = "position:fixed;top:0;left:0;right:0;background:red;color:white;z-index:9999;padding:20px;font-family:monospace;white-space:pre-wrap;max-height:100vh;overflow:auto;";
+      errDiv.id = "schema-error-box";
+      errDiv.innerText = msg;
+      document.body.appendChild(errDiv);
+    }
     return null;
   }
 
@@ -327,6 +373,12 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
           categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
           isFocusMode: validated.data.uiState.isFocusMode ?? false,
           focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
+          focusTimerStatus: validated.data.uiState.focusTimerStatus ?? "idle",
+          focusTimerRemainingSeconds: validated.data.uiState.focusTimerRemainingSeconds ?? null,
+          focusTimerStartedAt: validated.data.uiState.focusTimerStartedAt ?? null,
+          focusTimerBaseEstimateMinutes: validated.data.uiState.focusTimerBaseEstimateMinutes ?? null,
+          isFocusTimerCompletionPromptOpen:
+            validated.data.uiState.isFocusTimerCompletionPromptOpen ?? false,
           expandedNoteFolders: validated.data.uiState.expandedNoteFolders ?? [],
           selectedNoteFolderId: validated.data.uiState.selectedNoteFolderId ?? null,
           selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
@@ -363,6 +415,11 @@ export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
     categoryTheme: uiState.categoryTheme,
     isFocusMode: uiState.isFocusMode,
     focusedTodoId: uiState.focusedTodoId,
+    focusTimerStatus: uiState.focusTimerStatus,
+    focusTimerRemainingSeconds: uiState.focusTimerRemainingSeconds,
+    focusTimerStartedAt: uiState.focusTimerStartedAt,
+    focusTimerBaseEstimateMinutes: uiState.focusTimerBaseEstimateMinutes,
+    isFocusTimerCompletionPromptOpen: uiState.isFocusTimerCompletionPromptOpen,
     expandedNoteFolders: uiState.expandedNoteFolders,
   };
 }

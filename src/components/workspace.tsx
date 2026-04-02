@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { DailyView } from "@/components/daily-view";
+import { TodosView } from "@/components/todos-view";
 import { NotesView } from "@/components/notes-view";
 import { PlannerView } from "@/components/planner-view";
 import { Sidebar } from "@/components/sidebar";
@@ -67,8 +67,8 @@ export function Workspace({ forcedView }: Props) {
           />
         )}
         <main className="main-panel">
-          {activeView === "daily" ? (
-            <DailyView state={state} dispatch={dispatch} />
+          {activeView === "todos" ? (
+            <TodosView state={state} dispatch={dispatch} />
           ) : activeView === "planner" ? (
             <PlannerView state={state} dispatch={dispatch} />
           ) : (
