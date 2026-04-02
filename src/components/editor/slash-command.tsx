@@ -3,7 +3,7 @@ import Suggestion from "@tiptap/suggestion";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { type Instance } from "tippy.js";
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { Heading1, Heading2, List, ListTodo, PenTool, Type } from "lucide-react";
+import { Heading1, Heading2, List, ListTodo, PenTool, Type, Image as ImageIcon } from "lucide-react";
 
 type CommandProps = {
   editor: any;
@@ -57,6 +57,29 @@ const COMMANDS: CommandItem[] = [
     icon: <PenTool size={18} />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).insertContent({ type: "drawing" }).run();
+    },
+  },
+  {
+    title: "Insert Image",
+    icon: <ImageIcon size={18} />,
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (file) {
+          try {
+            const { compressImageToBase64 } = await import("@/lib/image");
+            const base64 = await compressImageToBase64(file);
+            editor.chain().focus().setImage({ src: base64 }).run();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      };
+      input.click();
     },
   },
 ];

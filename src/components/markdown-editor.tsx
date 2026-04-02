@@ -6,11 +6,13 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
+import Image from "@tiptap/extension-image";
 import { useEffect, useRef } from "react";
 import { DrawingNode } from "./editor/drawing-node";
 import { EditorToolbar } from "./editor/editor-toolbar";
 import { EditorBubbleMenu } from "./editor/bubble-menu";
 import { SlashCommand } from "./editor/slash-command";
+import { compressImageToBase64 } from "@/lib/image";
 
 type Props = {
   value: string;
@@ -38,6 +40,9 @@ export function MarkdownEditor({ value, onChange }: Props) {
         transformPastedText: true,
         transformCopiedText: true,
       }),
+      Image.configure({
+        allowBase64: true,
+      }),
       DrawingNode,
       SlashCommand,
     ],
@@ -45,6 +50,46 @@ export function MarkdownEditor({ value, onChange }: Props) {
     editorProps: {
       attributes: {
         class: "tiptap-editor",
+      },
+      handleDrop(view, event) {
+        if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+          let handled = false;
+          Array.from(event.dataTransfer.files).forEach((file) => {
+            if (file.type.startsWith("image/")) {
+              handled = true;
+              event.preventDefault();
+              compressImageToBase64(file).then((base64) => {
+                const { schema } = view.state;
+                const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                if (!coordinates) return;
+                const node = schema.nodes.image.create({ src: base64 });
+                const transaction = view.state.tr.insert(coordinates.pos, node);
+                view.dispatch(transaction);
+              });
+            }
+          });
+          if (handled) return true;
+        }
+        return false;
+      },
+      handlePaste(view, event) {
+        if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length > 0) {
+          let handled = false;
+          Array.from(event.clipboardData.files).forEach((file) => {
+            if (file.type.startsWith("image/")) {
+              handled = true;
+              event.preventDefault();
+              compressImageToBase64(file).then((base64) => {
+                const { schema } = view.state;
+                const node = schema.nodes.image.create({ src: base64 });
+                const transaction = view.state.tr.replaceSelectionWith(node);
+                view.dispatch(transaction);
+              });
+            }
+          });
+          if (handled) return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor: ed }) => {

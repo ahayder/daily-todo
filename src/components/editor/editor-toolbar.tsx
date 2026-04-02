@@ -12,8 +12,11 @@ import {
   List,
   ListTodo,
   PenTool,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRef } from "react";
+import { compressImageToBase64 } from "@/lib/image";
 
 type Props = {
   editor: Editor | null;
@@ -50,10 +53,34 @@ function ToolbarButton({
 }
 
 export function EditorToolbar({ editor }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (!editor) return null;
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      try {
+        const base64 = await compressImageToBase64(file);
+        editor.chain().focus().setImage({ src: base64 }).run();
+      } catch (err) {
+        console.error("Failed to process image:", err);
+      }
+    }
+    // Clear the input so the same file can be selected again
+    event.target.value = "";
+  };
 
   return (
     <div className="editor-toolbar">
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileInputRef}
+        onChange={handleFileSelected}
+        className="hidden"
+        style={{ display: "none" }}
+      />
       {/* Text formatting group */}
       <div className="toolbar-group">
         <ToolbarButton
@@ -138,6 +165,12 @@ export function EditorToolbar({ editor }: Props) {
 
       {/* Insert group */}
       <div className="toolbar-group">
+        <ToolbarButton
+          onClick={() => fileInputRef.current?.click()}
+          tooltip="Insert Image"
+        >
+          <ImageIcon size={15} />
+        </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().insertContent({ type: "drawing" }).run()}
           tooltip="Insert Drawing"
