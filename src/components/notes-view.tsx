@@ -216,6 +216,7 @@ export function NotesView({ state, dispatch, notes }: Props) {
               <div className="px-4 pb-2 text-xs text-[var(--ink-700)]">{notes.selectedBodyNotice}</div>
             ) : null}
             <MarkdownEditor
+              key={note.id}
               value={note.markdown}
               onChange={(markdown) =>
                 dispatch({ type: "update-note-markdown", noteId, markdown })

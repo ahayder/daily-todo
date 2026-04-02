@@ -118,7 +118,7 @@ export function PasswordResetScreen() {
         </form>
 
         <Link
-          href="/daily"
+          href="/todos"
           onClick={clearTransientState}
           className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--ink-700)] transition hover:text-[var(--ink-900)]"
         >

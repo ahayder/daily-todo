@@ -11,7 +11,7 @@ const body = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: "DailyTodo",
-  description: "Daily notes and priority-grouped todos in one workspace",
+  description: "Todos, notes, and planning in one workspace",
 };
 
 export default function RootLayout({

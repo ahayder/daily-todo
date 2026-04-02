@@ -2,6 +2,8 @@
 
 > This file is the single source of truth for AI-assisted development on DailyTodoApp.
 > Read this before making any UI, architectural, or design decisions.
+>
+> **IMPORTANT REVISION RULE:** When a structural change or big change is made to the codebase, this "brain" of the application (`CLAUDE.md`) MUST be updated immediately to reflect the new architecture, dependencies, or patterns.
 
 ---
 
@@ -15,22 +17,22 @@ The core metaphor is a **physical desk notebook** — warm, calm, analog in feel
 
 ## Tech Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript 5 |
-| Styling | Tailwind CSS v4 + shadcn/ui |
-| Component Lib | shadcn/ui (Radix primitives), @base-ui/react |
-| Markdown Editor | Tiptap (ProseMirror-based, Notion-like) |
-| Drawing | Excalidraw embedded inside Tiptap node views |
-| State | React useReducer + Context (AppProvider) |
-| Auth | PocketBase email/password auth + verification/reset flows |
-| Persistence | PocketBase sync + local cache (`src/lib/persistence.ts`, PocketBase collections + browser cache) |
-| Desktop Shell | Tauri 2 + native updater |
-| Icons | lucide-react |
-| Animation | tw-animate-css |
-| Testing | Vitest + @testing-library/react |
-| Package Manager | pnpm |
+| Layer           | Choice                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| Framework       | Next.js 16 (App Router)                                                                          |
+| Language        | TypeScript 5                                                                                     |
+| Styling         | Tailwind CSS v4 + shadcn/ui                                                                      |
+| Component Lib   | shadcn/ui (Radix primitives), @base-ui/react                                                     |
+| Markdown Editor | Tiptap (ProseMirror-based, Notion-like)                                                          |
+| Drawing         | Excalidraw embedded inside Tiptap node views                                                     |
+| State           | React useReducer + Context (AppProvider)                                                         |
+| Auth            | PocketBase email/password auth + verification/reset flows                                        |
+| Persistence     | PocketBase sync + local cache (`src/lib/persistence.ts`, PocketBase collections + browser cache) |
+| Desktop Shell   | Tauri 2 + native updater                                                                         |
+| Icons           | lucide-react                                                                                     |
+| Animation       | tw-animate-css                                                                                   |
+| Testing         | Vitest + @testing-library/react                                                                  |
+| Package Manager | pnpm                                                                                             |
 
 ---
 
@@ -40,8 +42,8 @@ The core metaphor is a **physical desk notebook** — warm, calm, analog in feel
 src/
 ├── app/
 │   ├── layout.tsx          # Root layout with providers + font setup
-│   ├── page.tsx            # Root redirect → /daily
-│   ├── daily/page.tsx      # Daily view page
+│   ├── page.tsx            # Root redirect → /todos
+│   ├── todos/page.tsx      # Todos view page
 │   ├── notes/page.tsx      # Notes view page
 │   ├── planner/page.tsx    # Weekly planner page
 │   └── auth/reset/page.tsx # PocketBase password reset landing page
@@ -53,7 +55,7 @@ src/
 │   ├── top-navbar.tsx      # Top bar: nav pills + sync status + updater + theme toggle
 │   ├── sidebar.tsx         # Left sidebar: date tree (daily) / notes list (notes)
 │   ├── workspace.tsx       # Shell: top-nav + sidebar + main panel
-│   ├── daily-view.tsx      # Two-column: note pane + todo pane (inline task inputs)
+│   ├── todos-view.tsx      # Main task view (todos) + focus timer
 │   ├── notes-view.tsx      # Full-width note with title + editor
 │   ├── planner-view.tsx    # Weekly planner board and event editor
 │   ├── markdown-editor.tsx # Tiptap editor wrapper with toolbar, bubble menu, slash command
@@ -77,14 +79,16 @@ src/
 AppState {
   dailyPages: Record<dateISO, DailyPage>   // e.g. "2026-03-11"
   notesDocs:  Record<id, NoteDoc>
+  noteFolders: Record<id, NoteFolder>
   plannerPresets: Record<id, PlannerPreset>
-  uiState:    UIState                       // synced selection state + device-local preferences
+  uiState:    UIState                       // synced selection, focus timer + device prefs
 }
 
 DailyPage { date, markdown, todos[] }
-NoteDoc   { id, title, markdown, updatedAt }
+NoteDoc   { id, folderId, title, markdown, updatedAt }
+NoteFolder { id, parentId, name }
 PlannerPreset { id, name, dayOrder[], days, updatedAt }
-Todo      { id, text, priority(1|2|3), done, createdAt }
+Todo      { id, text, status, priority, estimatedMinutes, parentId }
 ```
 
 ### Key Behaviors
@@ -95,8 +99,8 @@ Todo      { id, text, priority(1|2|3), done, createdAt }
 - **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
-- **Navigation**: Top navbar with Daily/Notes/Planner pills, sync status, desktop updater entry point, and theme toggle.
-- **Sync model**: PocketBase stores top-level entities in separate collections (`daily_pages`, `notes`, `planner_presets`, `workspace_state`) while nested child structures remain embedded JSON inside those parent records. Legacy `app_state_snapshots` is retained temporarily for migration/rollback safety.
+- **Navigation**: Top navbar with Todos/Notes/Planner pills, sync status, desktop updater, theme toggle.
+- **Sync model**: PocketBase stores top-level entities (`daily_pages`, `notes`, `note_folders`, `planner_presets`, `workspace_state`).
 - **Desktop builds**: The Tauri shell supports in-app update checks and installation on supported desktop platforms.
 
 ---
@@ -126,32 +130,10 @@ When asked to remove a visual treatment (border, shadow, radius, background, div
 
 ```css
 /* Light mode */
---paper:         #faf8f4   /* page background */
---paper-strong:  #ffffff   /* card/pane surface */
---line:          #d9d1c5   /* all borders */
---ink-900:       #1f2430   /* primary text */
---ink-700:       #40495e   /* secondary/muted text */
---brand:         #2f6d62   /* accent */
---brand-soft:    #d9ece8   /* accent bg tint */
---warn:          #b8422e   /* destructive */
-
-/* Dark mode overrides */
---paper:         #16191f
---paper-strong:  #1e2228
---line:          #2d3340
---ink-900:       #e8e2d9
---ink-700:       #8c95a6
---brand:         #3d8c7f
---brand-soft:    #1e3533
---warn:          #d45a44
-
-/* Priority system */
---priority-1:       #c0392b   /* Critical — dusty red */
---priority-1-soft:  #f9e8e6   /* (dark: #2a1715) */
---priority-2:       #c07c30   /* Important — amber */
---priority-2-soft:  #fdf3e3   /* (dark: #271f0d) */
---priority-3:       #4a7c59   /* Someday — sage */
---priority-3-soft:  #e8f4ec   /* (dark: #101f15) */
+--paper: #faf8f4 /* page background */ --paper-strong: #ffffff /* card/pane surface */ --line: #d9d1c5 /* all borders */ --ink-900: #1f2430 /* primary text */ --ink-700: #40495e /* secondary/muted text */ --brand: #2f6d62 /* accent */
+  --brand-soft: #d9ece8 /* accent bg tint */ --warn: #b8422e /* destructive */ /* Dark mode overrides */ --paper: #16191f --paper-strong: #1e2228 --line: #2d3340 --ink-900: #e8e2d9 --ink-700: #8c95a6 --brand: #3d8c7f --brand-soft: #1e3533
+  --warn: #d45a44 /* Priority system */ --priority-1: #c0392b /* Critical — dusty red */ --priority-1-soft: #f9e8e6 /* (dark: #2a1715) */ --priority-2: #c07c30 /* Important — amber */ --priority-2-soft: #fdf3e3 /* (dark: #271f0d) */
+  --priority-3: #4a7c59 /* Someday — sage */ --priority-3-soft: #e8f4ec /* (dark: #101f15) */;
 ```
 
 ### Typography
@@ -166,6 +148,7 @@ No serifs anywhere. Hierarchy: `text-2xl font-semibold` (note title) → `text-l
 ### Spacing Scale
 
 Use Tailwind's default scale. Preferred spacings:
+
 - Section padding: `p-4` (16px)
 - Card internal padding: `p-3` to `p-4`
 - Between list items: `gap-2` (8px)
@@ -173,17 +156,20 @@ Use Tailwind's default scale. Preferred spacings:
 - Between priority group cards: `gap-3` (12px)
 
 ### Border Radius
+
 - Cards / panes: `rounded-2xl` (16px)
 - Inputs / buttons: `rounded-lg` (10px)
 - Badges / pills: `rounded-full`
 
 ### UX & Component Rules
+
 - **Hover states**: Every interactive element must have a clear hover state.
 - **Destructive actions**: Always require an `AlertDialog` confirmation.
 - **Icon buttons**: Must have both an `aria-label` and a `Tooltip` wrapper.
 - **Motion**: Duration 150ms-200ms. Never exceed 300ms. Never use bounce or spring animations.
 
 ### Accessibility
+
 - Maintain WCAG AA contrast (4.5:1 normal, 3:1 large).
 - Focus indicator: `outline: 2px solid var(--brand); outline-offset: 2px`.
 - Never rely on color alone to convey meaning (e.g. priority colors must have a text label).
@@ -192,42 +178,12 @@ Use Tailwind's default scale. Preferred spacings:
 ### Shadows
 
 Warm-tinted shadow (not the cool Tailwind default):
+
 ```css
-box-shadow: 0 1px 3px rgba(31, 36, 48, 0.06), 0 1px 2px rgba(31, 36, 48, 0.04);
+box-shadow:
+  0 1px 3px rgba(31, 36, 48, 0.06),
+  0 1px 2px rgba(31, 36, 48, 0.04);
 ```
-
----
-
-## UX/UI Improvement Plan
-
-Ordered by priority. Check off as completed.
-
-### 🔴 High Priority — Broken or Confusing
-
-- [x] **#1 Fix todo form overflow** — Replaced with inline task inputs per priority group
-- [x] **#2 Empty state for priority groups** — Shows "No tasks yet" in muted italic
-- [x] **#3 Remove redundant Add button** — Completely removed; inline inputs handle everything
-- [x] **#4 Relocate Draw controls** — Drawing actions now live in the editor toolbar / embedded drawing UI rather than inside legacy overlay chrome
-
-### 🟡 Medium Priority — Friction Points
-
-- [x] **#5 "Today" quick-nav button** — Added in sidebar header with calendar icon
-- [x] **#6 Meaningful priority labels** — Using colored left-border accent + "Critical" / "Important" / "Someday" labels
-- [x] **#7 Task count badge** — Shows count pill next to group title when tasks exist
-- [x] **#8 Clearer nav active state** — Top navbar uses filled pill style with shadow
-- [x] **#9 Markdown toolbar tooltips** — Toolbar and editor commands are now present in the Tiptap editing surface
-- [x] **#10 Notes view full-height stretch** — Uses `min-height: calc(100vh - 52px - 3rem)`
-- [x] **#11 Note delete confirmation** — AlertDialog wraps delete button
-
-### 🟢 Small Wins & Polish
-
-- [x] **#12 Consistent sidebar hover states** — All tree items have hover feedback
-- [ ] **#13 Sidebar orphan bullet** — Removed (using chevron icons now)
-- [ ] **#14 Completed todos collapse** — Future enhancement
-- [ ] **#15 Drag-to-reorder** — Future enhancement (grip handle icon is present)
-- [x] **#16 Note title as heading** — Large, 28px bold borderless heading
-- [ ] **#17 Todo inline priority change** — Future enhancement
-- [x] **#18 Keyboard shortcut hints** — Inline inputs replace explicit hints
 
 ---
 
