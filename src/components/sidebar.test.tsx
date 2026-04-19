@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AuthProvider } from "@/components/auth-context";
+import type { ContentPlannerControls } from "@/components/content-planner-view";
 import { Sidebar } from "@/components/sidebar";
 import { appReducer } from "@/components/app-context";
 import { createInitialState } from "@/lib/store";
@@ -11,6 +12,29 @@ import { createMockAuthRepository } from "@/test/repositories";
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: ComponentProps<"a">) => <a {...props}>{children}</a>,
 }));
+
+function createContentPlannerControls(): ContentPlannerControls {
+  return {
+    layout: "split",
+    setLayout: vi.fn(),
+    density: "comfortable",
+    setDensity: vi.fn(),
+    viewMode: "list",
+    setViewMode: vi.fn(),
+    demoState: "populated",
+    setDemoState: vi.fn(),
+    showLlmPanel: true,
+    setShowLlmPanel: vi.fn(),
+    statusFilter: "all",
+    setStatusFilter: vi.fn(),
+    pillarFilter: "all",
+    setPillarFilter: vi.fn(),
+    channelFilter: "all",
+    setChannelFilter: vi.fn(),
+    tagFilter: "all",
+    setTagFilter: vi.fn(),
+  };
+}
 
 function Harness() {
   const initial = createInitialState("2026-03-10");
@@ -76,6 +100,7 @@ describe("Sidebar", () => {
             dispatch={dispatch}
             sync={{ hasUnsyncedChanges: false }}
             retrySync={vi.fn(async () => {})}
+            contentPlannerControls={createContentPlannerControls()}
           />
         </AuthProvider>
       );
@@ -83,10 +108,45 @@ describe("Sidebar", () => {
 
     render(<PlannerHarness />);
 
-    expect(screen.getByText("Planner Presets")).toBeInTheDocument();
+    expect(screen.getByText("Daily Planner Presets")).toBeInTheDocument();
     expect(screen.getByText("Balanced Week")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New preset" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Balanced Week" })).toBeInTheDocument();
+  });
+
+  test("renders content planner filters directly in the sidebar", async () => {
+    function ContentPlannerHarness() {
+      const initial = createInitialState("2026-03-10");
+      initial.uiState.lastView = "content-planner";
+
+      const [state, dispatch] = useReducer(appReducer, initial);
+      const auth = createMockAuthRepository({
+        userId: "user_1",
+        email: "test@example.com",
+        isVerified: true,
+        accessToken: "token_1",
+      });
+
+      return (
+        <AuthProvider repository={auth.repository}>
+          <Sidebar
+            state={state}
+            dispatch={dispatch}
+            sync={{ hasUnsyncedChanges: false }}
+            retrySync={vi.fn(async () => {})}
+            contentPlannerControls={createContentPlannerControls()}
+          />
+        </AuthProvider>
+      );
+    }
+
+    render(<ContentPlannerHarness />);
+
+    expect(screen.getByText("Content Planner")).toBeInTheDocument();
+    expect(screen.getByText("Filters")).toBeInTheDocument();
+    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Show AI panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Outline script")).not.toBeInTheDocument();
   });
 
   test("renders note folders without a note delete action in the sidebar", async () => {

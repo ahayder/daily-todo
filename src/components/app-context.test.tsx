@@ -3,6 +3,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthProvider } from "@/components/auth-context";
 import { AppProvider, appReducer, useAppState } from "@/components/app-context";
+import {
+  CONTENT_FONT_SCALE_DEFAULT,
+  CONTENT_FONT_SCALE_MAX,
+  CONTENT_FONT_SCALE_MIN,
+} from "@/lib/content-font-scale";
 import { createPersistenceMetadata } from "@/lib/persistence";
 import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
@@ -126,6 +131,43 @@ describe("appReducer theme mode", () => {
 
     const reopened = appReducer(collapsed, { type: "set-sidebar-collapsed", isCollapsed: false });
     expect(reopened.uiState.isSidebarCollapsed).toBe(false);
+  });
+
+  test("increases, decreases, resets, and clamps the shared content font scale", () => {
+    const initial = createInitialState("2026-03-11");
+
+    const increased = appReducer(initial, { type: "increase-content-font-scale" });
+    expect(increased.uiState.contentFontScale).toBe(1.05);
+
+    const decreased = appReducer(increased, { type: "decrease-content-font-scale" });
+    expect(decreased.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);
+
+    const reset = appReducer(
+      {
+        ...initial,
+        uiState: { ...initial.uiState, contentFontScale: 1.15 },
+      },
+      { type: "reset-content-font-scale" },
+    );
+    expect(reset.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);
+
+    const maxed = appReducer(
+      {
+        ...initial,
+        uiState: { ...initial.uiState, contentFontScale: CONTENT_FONT_SCALE_MAX },
+      },
+      { type: "increase-content-font-scale" },
+    );
+    expect(maxed.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_MAX);
+
+    const mined = appReducer(
+      {
+        ...initial,
+        uiState: { ...initial.uiState, contentFontScale: CONTENT_FONT_SCALE_MIN },
+      },
+      { type: "decrease-content-font-scale" },
+    );
+    expect(mined.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_MIN);
   });
 
   test("toggles note folder expansion state", () => {

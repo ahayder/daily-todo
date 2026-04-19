@@ -27,6 +27,7 @@ import type { AppAction } from "@/components/app-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
+import { ContentPlannerSidebarPanels, type ContentPlannerControls } from "@/components/content-planner-view";
 import { cn } from "@/lib/utils";
 import { DEFAULT_NOTES_FOLDER_ID, getSortedDailyDates } from "@/lib/store";
 import type { AppState, NoteDoc, NoteFolder, ThemeMode } from "@/lib/types";
@@ -58,6 +59,7 @@ type Props = {
     hasUnsyncedChanges: boolean;
   };
   retrySync: () => Promise<void>;
+  contentPlannerControls?: ContentPlannerControls;
 };
 
 const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
@@ -496,7 +498,7 @@ function NotesTree({
   );
 }
 
-export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
+export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerControls }: Props) {
   const [activeDraggedNoteId, setActiveDraggedNoteId] = useState<string | null>(null);
   const { session } = useAuth();
   const sensors = useSensors(
@@ -543,6 +545,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
 
   const isTodosView = !mounted || state.uiState.lastView === "todos";
   const isPlannerView = mounted && state.uiState.lastView === "planner";
+  const isContentPlannerView = mounted && state.uiState.lastView === "content-planner";
 
   const handleDragEnd = (event: DragEndEvent) => {
     const noteId = event.active.data.current?.noteId as string | undefined;
@@ -587,7 +590,12 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
             {isPlannerView ? (
               <>
                 <PanelsTopLeft className="h-3.5 w-3.5" />
-                Planner Presets
+                Daily Planner Presets
+              </>
+            ) : isContentPlannerView ? (
+              <>
+                <PanelsTopLeft className="h-3.5 w-3.5" />
+                Content Planner
               </>
             ) : (
               <>
@@ -623,7 +631,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </>
-            ) : (
+            ) : isContentPlannerView ? null : (
               <>
                 <button
                   type="button"
@@ -654,120 +662,126 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDraggedNoteId(null)}
       >
-      <ScrollArea className="flex-1 min-h-0">
-        {!mounted ? null : isTodosView ? (
-          <div className="sidebar-tree">
-            {Array.from(groupedYears.keys())
-              .sort((a, b) => b.localeCompare(a))
-              .map((year) => {
-                const yearExpanded = state.uiState.expandedYears.includes(year);
-                const months = groupedYears.get(year);
-                return (
-                  <div key={year} className="tree-group">
-                    <button
-                      type="button"
-                      className="tree-toggle"
-                      onClick={() => dispatch({ type: "toggle-year", year })}
-                    >
-                      {yearExpanded ? (
-                        <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
-                      ) : (
-                        <Folder className="h-3.5 w-3.5 tree-folder-icon" />
-                      )}
-                      <span>{year}</span>
-                    </button>
+      {isContentPlannerView ? (
+        <div className="sidebar-scroll sidebar-scroll--flush flex-1 min-h-0 overflow-y-auto">
+          {contentPlannerControls ? <ContentPlannerSidebarPanels controls={contentPlannerControls} /> : null}
+        </div>
+      ) : (
+        <ScrollArea className="flex-1 min-h-0">
+          {!mounted ? null : isTodosView ? (
+            <div className="sidebar-tree">
+              {Array.from(groupedYears.keys())
+                .sort((a, b) => b.localeCompare(a))
+                .map((year) => {
+                  const yearExpanded = state.uiState.expandedYears.includes(year);
+                  const months = groupedYears.get(year);
+                  return (
+                    <div key={year} className="tree-group">
+                      <button
+                        type="button"
+                        className="tree-toggle"
+                        onClick={() => dispatch({ type: "toggle-year", year })}
+                      >
+                        {yearExpanded ? (
+                          <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
+                        ) : (
+                          <Folder className="h-3.5 w-3.5 tree-folder-icon" />
+                        )}
+                        <span>{year}</span>
+                      </button>
 
-                    {yearExpanded && months && (
-                      <div className="tree-children">
-                        {Array.from(months.keys())
-                          .sort((a, b) => b.localeCompare(a))
-                          .map((month) => {
-                            const monthExpanded = state.uiState.expandedMonths.includes(month);
-                            return (
-                              <div key={month} className="tree-group">
-                                <button
-                                  type="button"
-                                  className="tree-toggle"
-                                  onClick={() => dispatch({ type: "toggle-month", month })}
-                                >
-                                  {monthExpanded ? (
-                                    <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
-                                  ) : (
-                                    <Folder className="h-3.5 w-3.5 tree-folder-icon" />
+                      {yearExpanded && months && (
+                        <div className="tree-children">
+                          {Array.from(months.keys())
+                            .sort((a, b) => b.localeCompare(a))
+                            .map((month) => {
+                              const monthExpanded = state.uiState.expandedMonths.includes(month);
+                              return (
+                                <div key={month} className="tree-group">
+                                  <button
+                                    type="button"
+                                    className="tree-toggle"
+                                    onClick={() => dispatch({ type: "toggle-month", month })}
+                                  >
+                                    {monthExpanded ? (
+                                      <FolderOpen className="h-3.5 w-3.5 tree-folder-icon" />
+                                    ) : (
+                                      <Folder className="h-3.5 w-3.5 tree-folder-icon" />
+                                    )}
+                                    <span>{getMonthLabel(month)}</span>
+                                  </button>
+                                  {monthExpanded && (
+                                    <div className="tree-children">
+                                      {(months.get(month) || [])
+                                        .sort((a, b) => b.localeCompare(a))
+                                        .map((date) => (
+                                          <button
+                                            key={date}
+                                            type="button"
+                                            className={cn(
+                                              "tree-leaf",
+                                              state.uiState.selectedDailyDate === date && "tree-leaf--active",
+                                            )}
+                                            onClick={() => dispatch({ type: "select-daily", date })}
+                                          >
+                                            {getDayLabel(date)}
+                                          </button>
+                                        ))}
+                                    </div>
                                   )}
-                                  <span>{getMonthLabel(month)}</span>
-                                </button>
-                                {monthExpanded && (
-                                  <div className="tree-children">
-                                    {(months.get(month) || [])
-                                      .sort((a, b) => b.localeCompare(a))
-                                      .map((date) => (
-                                        <button
-                                          key={date}
-                                          type="button"
-                                          className={cn(
-                                            "tree-leaf",
-                                            state.uiState.selectedDailyDate === date && "tree-leaf--active",
-                                          )}
-                                          onClick={() => dispatch({ type: "select-daily", date })}
-                                        >
-                                          {getDayLabel(date)}
-                                        </button>
-                                      ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        ) : isPlannerView ? (
-          <div className="notes-list">
-            {plannerPresets.map((preset) => (
-              <div
-                key={preset.id}
-                className={cn(
-                  "sidebar-item-row",
-                  state.uiState.selectedPlannerPresetId === preset.id && "sidebar-item-row--active",
-                )}
-              >
-                <button
-                  type="button"
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          ) : isPlannerView ? (
+            <div className="notes-list">
+              {plannerPresets.map((preset) => (
+                <div
+                  key={preset.id}
                   className={cn(
-                    "note-item sidebar-item-button",
-                    state.uiState.selectedPlannerPresetId === preset.id && "note-item--active",
+                    "sidebar-item-row",
+                    state.uiState.selectedPlannerPresetId === preset.id && "sidebar-item-row--active",
                   )}
-                  onClick={() => dispatch({ type: "select-planner-preset", presetId: preset.id })}
                 >
-                  <span className="note-item-title">{preset.name}</span>
-                  <span className="note-item-date">
-                    {new Date(preset.updatedAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-row-action sidebar-row-action--danger"
-                  onClick={() => dispatch({ type: "delete-planner-preset", presetId: preset.id })}
-                  aria-label={`Delete ${preset.name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="notes-list">
-            <NotesTree state={state} dispatch={dispatch} activeDraggedNoteId={activeDraggedNoteId} />
-          </div>
-        )}
-      </ScrollArea>
+                  <button
+                    type="button"
+                    className={cn(
+                      "note-item sidebar-item-button",
+                      state.uiState.selectedPlannerPresetId === preset.id && "note-item--active",
+                    )}
+                    onClick={() => dispatch({ type: "select-planner-preset", presetId: preset.id })}
+                  >
+                    <span className="note-item-title">{preset.name}</span>
+                    <span className="note-item-date">
+                      {new Date(preset.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sidebar-row-action sidebar-row-action--danger"
+                    onClick={() => dispatch({ type: "delete-planner-preset", presetId: preset.id })}
+                    aria-label={`Delete ${preset.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="notes-list">
+              <NotesTree state={state} dispatch={dispatch} activeDraggedNoteId={activeDraggedNoteId} />
+            </div>
+          )}
+        </ScrollArea>
+      )}
       </DndContext>
       <div className="sidebar-footer">
         <div className="sidebar-footer-bar">

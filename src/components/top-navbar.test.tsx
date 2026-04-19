@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AuthProvider } from "@/components/auth-context";
 import { TopNavbar } from "@/components/top-navbar";
+import {
+  CONTENT_FONT_SCALE_MAX,
+  CONTENT_FONT_SCALE_MIN,
+} from "@/lib/content-font-scale";
 import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository } from "@/test/repositories";
 
@@ -109,6 +113,71 @@ describe("TopNavbar", () => {
     );
 
     expect(screen.getByText("Saving…")).toBeInTheDocument();
+  });
+
+  test("renders content font controls, dispatches clicks, and disables at bounds", async () => {
+    const dispatch = vi.fn();
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const minState = createInitialState("2026-03-10");
+    minState.uiState.contentFontScale = CONTENT_FONT_SCALE_MIN;
+
+    const { rerender } = render(
+      <AuthProvider repository={auth.repository}>
+        <TopNavbar
+          state={minState}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
+      </AuthProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Decrease font size" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Increase font size" }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "increase-content-font-scale" });
+
+    const maxState = createInitialState("2026-03-10");
+    maxState.uiState.contentFontScale = CONTENT_FONT_SCALE_MAX;
+
+    rerender(
+      <AuthProvider repository={auth.repository}>
+        <TopNavbar
+          state={maxState}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
+      </AuthProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Increase font size" })).toBeDisabled();
   });
 
   test("forces sync immediately when the sync icon is clicked", async () => {

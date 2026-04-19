@@ -1,4 +1,8 @@
 import { toISODate } from "@/lib/date";
+import {
+  CONTENT_FONT_SCALE_DEFAULT,
+  clampContentFontScale,
+} from "@/lib/content-font-scale";
 import { appStateSchema } from "@/lib/schema";
 import {
   createInitialState,
@@ -116,6 +120,7 @@ export type LocalOnlyUIState = Pick<
   UIState,
   | "isSidebarCollapsed"
   | "dailyTaskPaneWidth"
+  | "contentFontScale"
   | "themeMode"
   | "categoryTheme"
   | "isFocusMode"
@@ -234,6 +239,7 @@ function normalizeLegacyState(parsed: unknown): unknown {
       selectedNoteFolderId?: unknown;
       isSidebarCollapsed?: unknown;
       dailyTaskPaneWidth?: unknown;
+      contentFontScale?: unknown;
       categoryTheme?: unknown;
       isFocusMode?: unknown;
       focusedTodoId?: unknown;
@@ -261,7 +267,8 @@ function normalizeLegacyState(parsed: unknown): unknown {
   const normalizedLastView =
     candidate.uiState.lastView === "todos" ||
     candidate.uiState.lastView === "notes" ||
-    candidate.uiState.lastView === "planner"
+    candidate.uiState.lastView === "planner" ||
+    candidate.uiState.lastView === "content-planner"
       ? candidate.uiState.lastView
       : candidate.uiState.lastView === "daily"
         ? "todos"
@@ -297,6 +304,10 @@ function normalizeLegacyState(parsed: unknown): unknown {
         typeof candidate.uiState.dailyTaskPaneWidth === "number"
           ? candidate.uiState.dailyTaskPaneWidth
           : 500,
+      contentFontScale:
+        typeof candidate.uiState.contentFontScale === "number"
+          ? clampContentFontScale(candidate.uiState.contentFontScale)
+          : CONTENT_FONT_SCALE_DEFAULT,
       categoryTheme:
         candidate.uiState.categoryTheme === "adhd1" ||
         candidate.uiState.categoryTheme === "adhd2" ||
@@ -384,6 +395,9 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
           selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
           isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
           dailyTaskPaneWidth: validated.data.uiState.dailyTaskPaneWidth ?? 500,
+          contentFontScale: clampContentFontScale(
+            validated.data.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT,
+          ),
         },
       }),
     ),
@@ -411,6 +425,7 @@ export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
   return {
     isSidebarCollapsed: uiState.isSidebarCollapsed,
     dailyTaskPaneWidth: uiState.dailyTaskPaneWidth,
+    contentFontScale: uiState.contentFontScale,
     themeMode: uiState.themeMode,
     categoryTheme: uiState.categoryTheme,
     isFocusMode: uiState.isFocusMode,

@@ -40,6 +40,11 @@ import {
   DEV_WORKSPACE_STATE_KEY,
   isDevelopmentWorkspaceSession,
 } from "@/lib/dev-mode";
+import {
+  CONTENT_FONT_SCALE_DEFAULT,
+  decreaseContentFontScale,
+  increaseContentFontScale,
+} from "@/lib/content-font-scale";
 import type {
   AppState,
   CategoryTheme,
@@ -58,6 +63,9 @@ export type AppAction =
   | { type: "toggle-sidebar-collapsed" }
   | { type: "set-sidebar-collapsed"; isCollapsed: boolean }
   | { type: "set-daily-task-pane-width"; width: number }
+  | { type: "increase-content-font-scale" }
+  | { type: "decrease-content-font-scale" }
+  | { type: "reset-content-font-scale" }
   | { type: "set-theme-mode"; themeMode: ThemeMode }
   | { type: "set-category-theme"; theme: CategoryTheme }
   | { type: "select-daily"; date: string }
@@ -314,6 +322,33 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           dailyTaskPaneWidth: action.width,
+        },
+      };
+    case "increase-content-font-scale":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          contentFontScale: increaseContentFontScale(state.uiState.contentFontScale),
+        },
+      };
+    case "decrease-content-font-scale":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          contentFontScale: decreaseContentFontScale(state.uiState.contentFontScale),
+        },
+      };
+    case "reset-content-font-scale":
+      if (state.uiState.contentFontScale === CONTENT_FONT_SCALE_DEFAULT) {
+        return state;
+      }
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          contentFontScale: CONTENT_FONT_SCALE_DEFAULT,
         },
       };
     case "set-theme-mode":

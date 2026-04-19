@@ -45,7 +45,8 @@ src/
 │   ├── page.tsx            # Root redirect → /todos
 │   ├── todos/page.tsx      # Todos view page
 │   ├── notes/page.tsx      # Notes view page
-│   ├── planner/page.tsx    # Weekly planner page
+│   ├── planner/page.tsx    # Daily planner page
+│   ├── content-planner/page.tsx # Content planner page
 │   └── auth/reset/page.tsx # PocketBase password reset landing page
 ├── components/
 │   ├── providers.tsx       # Tooltip + desktop updater + auth + app providers
@@ -57,7 +58,8 @@ src/
 │   ├── workspace.tsx       # Shell: top-nav + sidebar + main panel
 │   ├── todos-view.tsx      # Main task view (todos) + focus timer
 │   ├── notes-view.tsx      # Full-width note with title + editor
-│   ├── planner-view.tsx    # Weekly planner board and event editor
+│   ├── planner-view.tsx    # Daily planner board and event editor
+│   ├── content-planner-view.tsx # Content strategy overview and planning prompts
 │   ├── markdown-editor.tsx # Tiptap editor wrapper with toolbar, bubble menu, slash command
 │   ├── desktop-update-provider.tsx # Tauri updater state + dialogs
 │   └── editor/             # Tiptap extensions, toolbar, bubble menu, Excalidraw node views
@@ -99,7 +101,7 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 - **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
-- **Navigation**: Top navbar with Todos/Notes/Planner pills, sync status, desktop updater, theme toggle.
+- **Navigation**: Top navbar with Todos/Notes/Daily Planner/Content Planner pills, sync status, desktop updater, theme toggle.
 - **Sync model**: PocketBase stores top-level entities (`daily_pages`, `notes`, `note_folders`, `planner_presets`, `workspace_state`).
 - **Desktop builds**: The Tauri shell supports in-app update checks and installation on supported desktop platforms.
 
@@ -193,7 +195,7 @@ box-shadow:
 - **Drawing** is Excalidraw-based now, not the old canvas overlay. Embedded boards are serialized into the note document, and legacy tldraw payloads are intentionally treated as read-only migration-era content.
 - **Persistence is hybrid** — PocketBase is the source of truth for synced content, while the browser keeps a per-user assembled cache for fast warm startup, offline fallback, and device-local UI preferences.
 - **Authentication** is PocketBase-backed — email/password sign-in, registration, email verification, and password reset are part of the expected product flow.
-- **Device-local UI state** — values like theme mode, sidebar collapsed state, and focus mode remain local-only and should not be moved into synced PocketBase records unless there is a strong cross-device reason.
+- **Device-local UI state** — values like theme mode, sidebar collapsed state, content font scale, and focus mode remain local-only and should not be moved into synced PocketBase records unless there is a strong cross-device reason.
 - **Hybrid storage strategy** — use scalar/relation fields for ownership, ids, titles, timestamps, and other queryable atoms; use JSON fields for nested parent-owned structures such as daily todos, planner day order, planner days/events, and small UI arrays.
 - **Desktop updater** lives in the Tauri shell — updater logic and release workflow are part of the product architecture, not a one-off script.
 - **shadcn/ui** components live in `src/components/ui/`. Generate new ones with `npx shadcn@latest add <component>`.

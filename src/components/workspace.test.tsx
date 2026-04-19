@@ -21,6 +21,10 @@ vi.mock("@/components/planner-view", () => ({
   PlannerView: () => <div data-testid="planner-view" />,
 }));
 
+vi.mock("@/components/content-planner-view", () => ({
+  ContentPlannerView: () => <div data-testid="content-planner-view" />,
+}));
+
 vi.mock("@/components/sidebar", () => ({
   Sidebar: () => <aside data-testid="sidebar" />,
 }));
@@ -39,6 +43,11 @@ describe("Workspace", () => {
     mockUseAppState.mockReturnValue({
       state,
       dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
       sync: {
         status: "idle",
         indicator: "saved",
@@ -60,5 +69,133 @@ describe("Workspace", () => {
     expect(screen.queryByTestId("sidebar")).not.toBeInTheDocument();
     expect(screen.getByTestId("todos-view")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close Focus Mode" })).toBeInTheDocument();
+  });
+
+  test("renders the content planner view when forced", () => {
+    const state = createInitialState("2026-03-11");
+    const dispatch = vi.fn();
+
+    mockUseAppState.mockReturnValue({
+      state,
+      dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
+      sync: {
+        status: "idle",
+        indicator: "saved",
+        lastSavedAt: null,
+        lastSyncedAt: null,
+        notice: null,
+        errorMessage: null,
+        hasPendingChanges: false,
+        hasUnsyncedChanges: false,
+        isSaving: false,
+        persistenceAvailable: true,
+      },
+      retrySync: vi.fn(),
+    });
+
+    render(<Workspace forcedView="content-planner" />);
+
+    expect(screen.getByTestId("content-planner-view")).toBeInTheDocument();
+  });
+
+  test("sets shared content font CSS variables on the shell", () => {
+    const state = createInitialState("2026-03-11");
+    state.uiState.contentFontScale = 1.15;
+    const dispatch = vi.fn();
+
+    mockUseAppState.mockReturnValue({
+      state,
+      dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
+      sync: {
+        status: "idle",
+        indicator: "saved",
+        lastSavedAt: null,
+        lastSyncedAt: null,
+        notice: null,
+        errorMessage: null,
+        hasPendingChanges: false,
+        hasUnsyncedChanges: false,
+        isSaving: false,
+        persistenceAvailable: true,
+      },
+      retrySync: vi.fn(),
+    });
+
+    const { container } = render(<Workspace />);
+    const shell = container.querySelector(".app-shell");
+
+    expect(shell).not.toBeNull();
+    expect(shell).toHaveStyle({
+      "--content-font-scale": "1.15",
+      "--content-font-size-editor": "calc(18px * var(--content-font-scale))",
+    });
+  });
+
+  test("handles shared content font keyboard shortcuts", () => {
+    const state = createInitialState("2026-03-11");
+    const dispatch = vi.fn();
+
+    mockUseAppState.mockReturnValue({
+      state,
+      dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
+      sync: {
+        status: "idle",
+        indicator: "saved",
+        lastSavedAt: null,
+        lastSyncedAt: null,
+        notice: null,
+        errorMessage: null,
+        hasPendingChanges: false,
+        hasUnsyncedChanges: false,
+        isSaving: false,
+        persistenceAvailable: true,
+      },
+      retrySync: vi.fn(),
+    });
+
+    render(<Workspace />);
+
+    const increaseEvent = new KeyboardEvent("keydown", {
+      key: "=",
+      metaKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(increaseEvent);
+
+    const decreaseEvent = new KeyboardEvent("keydown", {
+      key: "-",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(decreaseEvent);
+
+    const resetEvent = new KeyboardEvent("keydown", {
+      key: "0",
+      metaKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(resetEvent);
+
+    expect(increaseEvent.defaultPrevented).toBe(true);
+    expect(decreaseEvent.defaultPrevented).toBe(true);
+    expect(resetEvent.defaultPrevented).toBe(true);
+    expect(dispatch).toHaveBeenNthCalledWith(1, { type: "increase-content-font-scale" });
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: "decrease-content-font-scale" });
+    expect(dispatch).toHaveBeenNthCalledWith(3, { type: "reset-content-font-scale" });
   });
 });

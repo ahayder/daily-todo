@@ -130,7 +130,7 @@ describe("TodosView", () => {
   test("renders task pane top bar actions and cycles the category theme", async () => {
     render(<Harness />);
 
-    const taskHeading = screen.getByRole("heading", { name: "Tasks" });
+    const taskHeading = screen.getByRole("heading", { name: "Todos" });
     expect(taskHeading).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Toggle Focus Mode" })).toBeInTheDocument();
     const scrollArea = screen.getByTestId("task-pane-scroll");

@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  CONTENT_FONT_SCALE_DEFAULT,
+  CONTENT_FONT_SCALE_MAX,
+} from "@/lib/content-font-scale";
 import { createBrowserLocalCacheStorage, getUserCacheStorageKey } from "@/lib/local-cache-storage";
 import {
   LEGACY_LOCAL_STORAGE_KEY,
@@ -51,6 +55,7 @@ describe("normalizeAppState", () => {
 
     expect(state.uiState.themeMode).toBe("dark");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
+    expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
     expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
@@ -81,6 +86,32 @@ describe("normalizeAppState", () => {
     );
 
     expect(state.uiState.lastView).toBe("todos");
+  });
+
+  test("clamps content font scale from persisted state", () => {
+    const state = normalizeAppState(
+      {
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {},
+        noteFolders: {},
+        plannerPresets: {},
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: null,
+          selectedNoteFolderId: null,
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "todos",
+          contentFontScale: 9,
+        },
+      },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+
+    expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_MAX);
   });
 
   test("migrates legacy done-based todos into status and estimate fields", () => {
@@ -132,6 +163,7 @@ describe("browser local cache", () => {
   test("loads user-scoped cached state", () => {
     const cache = createBrowserLocalCacheStorage();
     const state = createInitialState("2026-03-11");
+    state.uiState.contentFontScale = 1.15;
 
     window.localStorage.setItem(
       getUserCacheStorageKey("user_1"),
@@ -145,6 +177,10 @@ describe("browser local cache", () => {
       cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope?.state
         .uiState.selectedDailyDate,
     ).toBe("2026-03-11");
+    expect(
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope?.state
+        .uiState.contentFontScale,
+    ).toBe(1.15);
   });
 
   test("falls back to the legacy cache key during migration", () => {

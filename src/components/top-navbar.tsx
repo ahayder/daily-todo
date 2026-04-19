@@ -5,14 +5,20 @@ import {
   Check,
   Download,
   LoaderCircle,
+  Minus,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   RefreshCw,
   MonitorDown,
 } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
 import type { AppAction } from "@/components/app-context";
 import { useDesktopUpdate } from "@/components/desktop-update-provider";
+import {
+  CONTENT_FONT_SCALE_MAX,
+  CONTENT_FONT_SCALE_MIN,
+} from "@/lib/content-font-scale";
 import {
   Tooltip,
   TooltipContent,
@@ -96,8 +102,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   const isTodos = !mounted || lastView === "todos";
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
+  const isContentPlanner = mounted && lastView === "content-planner";
   const SidebarIcon = state.uiState.isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
   const showDesktopUpdater = mounted && desktopUpdate.isSupported;
+  const isDecreaseFontDisabled = state.uiState.contentFontScale <= CONTENT_FONT_SCALE_MIN;
+  const isIncreaseFontDisabled = state.uiState.contentFontScale >= CONTENT_FONT_SCALE_MAX;
 
   const desktopUpdateLabel =
     desktopUpdate.phase === "downloading"
@@ -213,7 +222,16 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
           className={cn("nav-pill", isPlanner && "nav-pill--active")}
           onClick={() => dispatch({ type: "set-view", view: "planner" })}
         >
-          Planner
+          Daily Planner
+        </Link>
+        <Link
+          href="/content-planner"
+          role="tab"
+          aria-selected={isContentPlanner}
+          className={cn("nav-pill", isContentPlanner && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "content-planner" })}
+        >
+          Content Planner
         </Link>
       </nav>
 
@@ -293,6 +311,40 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
             </TooltipContent>
           </Tooltip>
         ) : null}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Decrease font size"
+              className="theme-cycle-btn"
+              disabled={isDecreaseFontDisabled}
+              onClick={() => dispatch({ type: "decrease-content-font-scale" })}
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Decrease font size
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Increase font size"
+              className="theme-cycle-btn"
+              disabled={isIncreaseFontDisabled}
+              onClick={() => dispatch({ type: "increase-content-font-scale" })}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Increase font size
+          </TooltipContent>
+        </Tooltip>
       </div>
     </header>
   );

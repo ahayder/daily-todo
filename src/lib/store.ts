@@ -1,4 +1,5 @@
 import { getYearMonth } from "@/lib/date";
+import { CONTENT_FONT_SCALE_DEFAULT } from "@/lib/content-font-scale";
 import type {
   AppState,
   DailyPage,
@@ -191,6 +192,7 @@ export function createInitialState(todayISO: string): AppState {
       selectedPlannerPresetId: starterPlanner.id,
       isSidebarCollapsed: false,
       dailyTaskPaneWidth: 500,
+      contentFontScale: CONTENT_FONT_SCALE_DEFAULT,
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],

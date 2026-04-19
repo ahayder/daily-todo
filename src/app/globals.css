@@ -365,6 +365,13 @@ select {
   overflow: hidden;
 }
 
+.sidebar-scroll--flush {
+  margin-right: -1.25rem;
+  margin-left: -1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 0;
+}
+
 .sidebar-footer {
   position: relative;
   margin-top: auto;
@@ -734,7 +741,7 @@ select {
   border-radius: 8px;
   background: transparent;
   color: var(--ink-700);
-  font-size: 13px;
+  font-size: var(--content-font-size-sidebar-tree, 13px);
   font-weight: 500;
   cursor: pointer;
   transition: all 150ms ease;
@@ -766,7 +773,7 @@ select {
   border-radius: 7px;
   background: transparent;
   color: var(--ink-700);
-  font-size: 13px;
+  font-size: var(--content-font-size-sidebar-tree, 13px);
   cursor: pointer;
   transition: all 150ms ease;
   text-align: left;
@@ -834,7 +841,7 @@ select {
 }
 
 .note-folder-item {
-  font-size: 0.8125rem;
+  font-size: var(--content-font-size-sidebar-folder, 0.8125rem);
   font-weight: 500;
 }
 
@@ -908,7 +915,7 @@ select {
 }
 
 .note-item-title {
-  font-size: 12.5px;
+  font-size: var(--content-font-size-sidebar-note-title, 12.5px);
   font-weight: 500;
   color: var(--ink-900);
   white-space: nowrap;
@@ -925,7 +932,7 @@ select {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.2rem;
-  font-size: 10.5px;
+  font-size: var(--content-font-size-sidebar-note-meta, 10.5px);
   color: var(--ink-700);
   opacity: 0.78;
 }
@@ -1081,7 +1088,7 @@ select {
   padding: 1.5rem;
   min-height: 100%;
   outline: none;
-  font-size: 18px; /* Increased for ADHD readability */
+  font-size: var(--content-font-size-editor, 18px);
   line-height: 1.8; /* Increased line spacing */
   color: var(--ink-900);
   caret-color: var(--brand); /* Strongly colored classic blinking cursor */
@@ -1463,7 +1470,7 @@ select {
 }
 
 .task-text {
-  font-size: 17px;
+  font-size: var(--content-font-size-task, 17px);
   color: var(--ink-900);
   line-height: 1.35;
 }
@@ -1659,7 +1666,7 @@ select {
   border-bottom: 1px solid color-mix(in srgb, var(--brand) 55%, transparent);
   background: transparent;
   outline: none;
-  font-size: 14.5px;
+  font-size: var(--content-font-size-task-input, 14.5px);
   color: var(--ink-900);
   padding: 0.15rem 0;
 }
@@ -1706,7 +1713,7 @@ select {
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14.5px;
+  font-size: var(--content-font-size-task-input, 14.5px);
   color: var(--ink-900);
   padding: 0.15rem 0;
 }
@@ -2872,6 +2879,83 @@ select {
 .dark .planner-select,
 .dark .planner-textarea {
   background: color-mix(in srgb, var(--paper) 96%, transparent);
+}
+
+@layer components {
+  .content-planner-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--content-planner-right, 390px);
+  }
+
+  .content-planner-panes--split {
+    --content-planner-right: 390px;
+  }
+
+  .content-planner-panes--detail-right {
+    --content-planner-right: 420px;
+  }
+
+  .content-planner-panes--kanban {
+    --content-planner-right: 0px;
+  }
+
+  .content-planner-panes--right-hidden {
+    --content-planner-right: 0px;
+  }
+
+  .content-planner-pane-center,
+  .content-planner-pane-right {
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .content-planner-pane-center,
+  .content-planner-pane-right {
+    animation: fadeIn 200ms ease forwards;
+  }
+
+  .content-planner-kanban {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(260px, 1fr);
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .content-planner--compact .content-planner-pane-center section {
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 1280px) {
+    .content-planner-panes--split,
+    .content-planner-panes--detail-right {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .content-planner-panes--split .content-planner-pane-right,
+    .content-planner-panes--detail-right .content-planner-pane-right {
+      grid-column: 1 / -1;
+      border-left: 0;
+      border-top: 1px dashed var(--line);
+      max-height: 640px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .content-planner-panes,
+    .content-planner-panes--split,
+    .content-planner-panes--detail-right,
+    .content-planner-panes--kanban {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .content-planner-pane-right {
+      border-left: 0;
+      border-top: 1px dashed var(--line);
+    }
+  }
 }
 
 /* ─── Tailwind Theme Token Bridge ─────────────── */
