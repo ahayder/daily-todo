@@ -20,6 +20,9 @@ dependencies:
   '@excalidraw/excalidraw':
     specifier: ^0.18.0
     version: 0.18.0(@types/react-dom@19.2.3)(@types/react@19.2.14)(react-dom@19.2.3)(react@19.2.3)
+  '@tabler/icons-react':
+    specifier: ^3.41.1
+    version: 3.41.1(react@19.2.3)
   '@tauri-apps/api':
     specifier: ^2.10.1
     version: 2.10.1
@@ -2366,6 +2369,19 @@ packages:
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
     dependencies:
       tslib: 2.8.1
+    dev: false
+
+  /@tabler/icons-react@3.41.1(react@19.2.3):
+    resolution: {integrity: sha512-kUgweE+DJtAlMZVIns1FTDdcbpRVnkK7ZpUOXmoxy3JAF0rSHj0TcP4VHF14+gMJGnF+psH2Zt26BLT6owetBA==}
+    peerDependencies:
+      react: '>= 16'
+    dependencies:
+      '@tabler/icons': 3.41.1
+      react: 19.2.3
+    dev: false
+
+  /@tabler/icons@3.41.1:
+    resolution: {integrity: sha512-OaRnVbRmH2nHtFeg+RmMJ/7m2oBIF9XCJAUD5gQnMrpK9f05ydj8MZrAf3NZQqOXyxGN1UBL0D5IKLLEUfr74Q==}
     dev: false
 
   /@tailwindcss/node@4.2.1:

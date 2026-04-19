@@ -5,10 +5,8 @@ import {
   Check,
   Download,
   LoaderCircle,
-  Minus,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   RefreshCw,
   MonitorDown,
 } from "lucide-react";
@@ -321,7 +319,12 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
               disabled={isDecreaseFontDisabled}
               onClick={() => dispatch({ type: "decrease-content-font-scale" })}
             >
-              <Minus className="h-4 w-4" />
+              <span
+                aria-hidden="true"
+                className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+              >
+                A−
+              </span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
@@ -338,7 +341,12 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
               disabled={isIncreaseFontDisabled}
               onClick={() => dispatch({ type: "increase-content-font-scale" })}
             >
-              <Plus className="h-4 w-4" />
+              <span
+                aria-hidden="true"
+                className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+              >
+                A+
+              </span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
