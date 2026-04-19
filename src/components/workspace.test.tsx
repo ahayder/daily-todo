@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Workspace } from "@/components/workspace";
 import { createInitialState } from "@/lib/store";
 
 const mockUseAppState = vi.fn();
+const mockContentPlannerView = vi.fn();
 
 vi.mock("@/components/app-context", () => ({
   useAppState: () => mockUseAppState(),
@@ -22,7 +23,10 @@ vi.mock("@/components/planner-view", () => ({
 }));
 
 vi.mock("@/components/content-planner-view", () => ({
-  ContentPlannerView: () => <div data-testid="content-planner-view" />,
+  ContentPlannerView: (props: unknown) => {
+    mockContentPlannerView(props);
+    return <div data-testid="content-planner-view" />;
+  },
 }));
 
 vi.mock("@/components/sidebar", () => ({
@@ -34,6 +38,48 @@ vi.mock("@/components/top-navbar", () => ({
 }));
 
 describe("Workspace", () => {
+  beforeEach(() => {
+    mockUseAppState.mockReset();
+    mockContentPlannerView.mockReset();
+  });
+
+  test("passes a prompt-only planner interface without note context", () => {
+    const state = createInitialState("2026-03-11");
+    state.uiState.lastView = "content-planner";
+    state.uiState.selectedNoteId = Object.keys(state.notesDocs)[0] ?? null;
+    const dispatch = vi.fn();
+
+    mockUseAppState.mockReturnValue({
+      state,
+      dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
+      sync: {
+        status: "idle",
+        indicator: "saved",
+        lastSavedAt: null,
+        lastSyncedAt: null,
+        notice: null,
+        errorMessage: null,
+        hasPendingChanges: false,
+        hasUnsyncedChanges: false,
+        isSaving: false,
+        persistenceAvailable: true,
+      },
+      retrySync: vi.fn(),
+    });
+
+    render(<Workspace forcedView="content-planner" />);
+
+    const props = mockContentPlannerView.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+
+    expect("noteContextLabel" in props).toBe(false);
+    expect(typeof props.onGenerateIdeas).toBe("function");
+  });
+
   test("hides the top navbar and sidebar in focus mode", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.isFocusMode = true;

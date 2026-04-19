@@ -2,6 +2,11 @@ import { getYearMonth } from "@/lib/date";
 import { CONTENT_FONT_SCALE_DEFAULT } from "@/lib/content-font-scale";
 import type {
   AppState,
+  ContentIdea,
+  ContentIdeaHookVariant,
+  ContentPlannerOptions,
+  ContentIdeaScriptStep,
+  ContentPlannerUIState,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -31,6 +36,21 @@ export const PLANNER_EVENT_COLORS: PlannerEventColor[] = [
   "sage",
   "lavender",
 ];
+export const CONTENT_PLANNER_DEFAULT_UI_STATE: ContentPlannerUIState = {
+  layout: "split",
+  density: "comfortable",
+  viewMode: "list",
+  showLlmPanel: true,
+  statusFilter: "all",
+  pillarFilter: "all",
+  channelFilter: "all",
+  tagFilter: "all",
+  searchQuery: "",
+};
+export const CONTENT_PLANNER_DEFAULT_OPTIONS: ContentPlannerOptions = {
+  pillars: ["Teach"],
+  platforms: ["LinkedIn"],
+};
 
 const DEFAULT_DAY_TITLES: Record<PlannerDayKey, string> = {
   monday: "Deep Workday Monday",
@@ -168,6 +188,161 @@ export function createPlannerEvent(input: {
   };
 }
 
+export function createContentIdeaHookVariant(value: string): ContentIdeaHookVariant {
+  return {
+    id: makeId("content-hook"),
+    value,
+  };
+}
+
+export function createContentIdeaScriptStep(input: {
+  label: string;
+  body: string;
+  placeholder?: boolean;
+  actionLabel: string;
+}): ContentIdeaScriptStep {
+  return {
+    id: makeId("content-step"),
+    label: input.label,
+    body: input.body,
+    placeholder: input.placeholder,
+    actionLabel: input.actionLabel,
+  };
+}
+
+export function createContentIdea(input: {
+  hook: string;
+  premise: string;
+  status?: ContentIdea["status"];
+  pillar?: string;
+  channels?: string[];
+  tags?: string[];
+  score?: number;
+  scoreBreakdown?: ContentIdea["scoreBreakdown"];
+  sourceLabel?: string;
+  sourceType?: ContentIdea["sourceType"];
+  hooks?: ContentIdeaHookVariant[];
+  activeHookId?: string | null;
+  scriptSteps?: ContentIdeaScriptStep[];
+}): ContentIdea {
+  const createdAt = new Date().toISOString();
+  const hooks =
+    input.hooks ??
+    (input.hook.trim() ? [createContentIdeaHookVariant(input.hook.trim())] : []);
+
+  return {
+    id: makeId("content-idea"),
+    code: `#${Math.floor(1000 + Math.random() * 9000)}`,
+    hook: input.hook.trim(),
+    premise: input.premise.trim(),
+    status: input.status ?? "inbox",
+    pillar: input.pillar ?? "Teach",
+    channels: input.channels ?? ["LinkedIn"],
+    tags: input.tags ?? [],
+    score: input.score ?? 7.5,
+    scoreBreakdown: input.scoreBreakdown ?? {
+      hook: 8,
+      proof: 7,
+      fit: 8,
+    },
+    sourceLabel: input.sourceLabel ?? "manual",
+    sourceType: input.sourceType ?? "human",
+    createdAt,
+    updatedAt: createdAt,
+    hooks,
+    activeHookId: input.activeHookId ?? hooks[0]?.id ?? null,
+    scriptSteps: input.scriptSteps ?? [],
+  };
+}
+
+function normalizeContentPlannerOptionValue(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function mergeContentPlannerOptionValues(values: Iterable<string>): string[] {
+  const seen = new Set<string>();
+  const normalizedValues: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeContentPlannerOptionValue(value);
+    if (!normalized) continue;
+    const key = normalized.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalizedValues.push(normalized);
+  }
+
+  return normalizedValues;
+}
+
+export function createContentPlannerOptions(
+  input: Partial<ContentPlannerOptions> = {},
+): ContentPlannerOptions {
+  return {
+    pillars: mergeContentPlannerOptionValues(input.pillars ?? []),
+    platforms: mergeContentPlannerOptionValues(input.platforms ?? []),
+  };
+}
+
+export function createDefaultContentPlannerOptions(
+  input: Partial<ContentPlannerOptions> = {},
+): ContentPlannerOptions {
+  return createContentPlannerOptions({
+    pillars: [...CONTENT_PLANNER_DEFAULT_OPTIONS.pillars, ...(input.pillars ?? [])],
+    platforms: [...CONTENT_PLANNER_DEFAULT_OPTIONS.platforms, ...(input.platforms ?? [])],
+  });
+}
+
+export function registerContentPlannerIdeaOptions(
+  options: ContentPlannerOptions,
+  input: {
+    pillar?: string | null;
+    platforms?: string[] | null;
+  },
+): ContentPlannerOptions {
+  return createContentPlannerOptions({
+    pillars: [...options.pillars, input.pillar ?? ""],
+    platforms: [...options.platforms, ...(input.platforms ?? [])],
+  });
+}
+
+export function removeContentPlannerOption(
+  options: ContentPlannerOptions,
+  kind: keyof ContentPlannerOptions,
+  value: string,
+): ContentPlannerOptions {
+  const normalizedTarget = normalizeContentPlannerOptionValue(value).toLocaleLowerCase();
+  if (!normalizedTarget) {
+    return options;
+  }
+
+  return createContentPlannerOptions({
+    ...options,
+    [kind]: options[kind].filter(
+      (option) => normalizeContentPlannerOptionValue(option).toLocaleLowerCase() !== normalizedTarget,
+    ),
+  });
+}
+
+export function isContentPlannerOptionInUse(
+  ideas: Record<string, ContentIdea>,
+  kind: keyof ContentPlannerOptions,
+  value: string,
+): boolean {
+  const normalizedTarget = normalizeContentPlannerOptionValue(value).toLocaleLowerCase();
+  if (!normalizedTarget) return false;
+
+  return Object.values(ideas).some((idea) => {
+    if (kind === "pillars") {
+      return normalizeContentPlannerOptionValue(idea.pillar).toLocaleLowerCase() === normalizedTarget;
+    }
+
+    return idea.channels.some(
+      (channel) => normalizeContentPlannerOptionValue(channel).toLocaleLowerCase() === normalizedTarget,
+    );
+  });
+}
+
 export function createInitialState(todayISO: string): AppState {
   const starterNote = createNoteDoc("Quick Notes");
   const defaultNotesFolder = createDefaultNotesFolder();
@@ -185,17 +360,21 @@ export function createInitialState(todayISO: string): AppState {
     plannerPresets: {
       [starterPlanner.id]: starterPlanner,
     },
+    contentIdeas: {},
+    contentPlannerOptions: createDefaultContentPlannerOptions(),
     uiState: {
       selectedDailyDate: todayISO,
       selectedNoteId: starterNote.id,
       selectedNoteFolderId: defaultNotesFolder.id,
       selectedPlannerPresetId: starterPlanner.id,
+      selectedContentIdeaId: null,
       isSidebarCollapsed: false,
       dailyTaskPaneWidth: 500,
       contentFontScale: CONTENT_FONT_SCALE_DEFAULT,
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],
+      contentPlanner: { ...CONTENT_PLANNER_DEFAULT_UI_STATE },
       lastView: "todos",
       themeMode: "dark",
       categoryTheme: "normal",
@@ -322,6 +501,54 @@ export function ensurePlannerState(state: AppState): AppState {
     uiState: {
       ...state.uiState,
       selectedPlannerPresetId: starterPlanner.id,
+    },
+  };
+}
+
+export function ensureContentPlannerState(state: AppState): AppState {
+  const contentIdeas = state.contentIdeas ?? {};
+  const contentPlannerOptions = Object.values(contentIdeas).reduce(
+    (options, idea) =>
+      registerContentPlannerIdeaOptions(options, {
+        pillar: idea.pillar,
+        platforms: idea.channels,
+      }),
+    state.contentPlannerOptions
+      ? createContentPlannerOptions(state.contentPlannerOptions)
+      : createDefaultContentPlannerOptions(),
+  );
+  const contentPlanner = {
+    ...CONTENT_PLANNER_DEFAULT_UI_STATE,
+    ...(state.uiState.contentPlanner ?? {}),
+  };
+  const selectedContentIdeaId =
+    state.uiState.selectedContentIdeaId && contentIdeas[state.uiState.selectedContentIdeaId]
+      ? state.uiState.selectedContentIdeaId
+      : Object.keys(contentIdeas)[0] ?? null;
+
+  if (
+    contentIdeas === state.contentIdeas &&
+    JSON.stringify(contentPlannerOptions) === JSON.stringify(state.contentPlannerOptions) &&
+    selectedContentIdeaId === state.uiState.selectedContentIdeaId &&
+    state.uiState.contentPlanner &&
+    Object.entries(CONTENT_PLANNER_DEFAULT_UI_STATE).every(
+      ([key]) =>
+        contentPlanner[key as keyof ContentPlannerUIState] ===
+        state.uiState.contentPlanner[key as keyof ContentPlannerUIState] &&
+        state.uiState.contentPlanner[key as keyof ContentPlannerUIState] !== undefined,
+    )
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    contentIdeas,
+    contentPlannerOptions,
+    uiState: {
+      ...state.uiState,
+      selectedContentIdeaId,
+      contentPlanner,
     },
   };
 }

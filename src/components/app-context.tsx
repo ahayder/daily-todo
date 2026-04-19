@@ -18,6 +18,9 @@ import { AuthGate } from "@/components/auth-gate";
 import { useAuth } from "@/components/auth-context";
 import { VerificationPendingScreen } from "@/components/verification-pending-screen";
 import {
+  createContentIdea,
+  createContentPlannerOptions,
+  isContentPlannerOptionInUse,
   createPlannerEvent,
   createPlannerPreset,
   createNoteDoc,
@@ -26,6 +29,8 @@ import {
   createTodo,
   duplicatePlannerPreset,
   getSortedDailyDates,
+  registerContentPlannerIdeaOptions,
+  removeContentPlannerOption,
 } from "@/lib/store";
 import {
   createPersistenceMetadata,
@@ -48,6 +53,13 @@ import {
 import type {
   AppState,
   CategoryTheme,
+  ContentIdea,
+  ContentIdeaHookVariant,
+  ContentIdeaScriptStep,
+  ContentIdeaStatus,
+  ContentPlannerDensity,
+  ContentPlannerLayout,
+  ContentPlannerViewMode,
   FocusTimerStatus,
   NoteBodyStatus,
   PlannerDayKey,
@@ -88,6 +100,77 @@ export type AppAction =
   | { type: "delete-note"; noteId: string }
   | { type: "update-note-markdown"; noteId: string; markdown: string }
   | { type: "select-planner-preset"; presetId: string }
+  | { type: "select-content-idea"; ideaId: string | null }
+  | {
+      type: "create-content-idea";
+      input: {
+        hook: string;
+        premise: string;
+        pillar?: string;
+        channels?: string[];
+        tags?: string[];
+        sourceLabel?: string;
+        sourceType?: "human" | "ai";
+      };
+    }
+  | { type: "create-content-ideas"; ideas: ContentIdea[] }
+  | {
+      type: "update-content-idea";
+      ideaId: string;
+      updates: Partial<
+        Pick<ContentIdea, "hook" | "premise" | "pillar" | "channels" | "score" | "scoreBreakdown">
+      >;
+    }
+  | { type: "set-content-idea-status"; ideaId: string; status: ContentIdeaStatus }
+  | { type: "delete-content-idea"; ideaId: string }
+  | { type: "add-content-idea-tag"; ideaId: string; tag: string }
+  | { type: "remove-content-idea-tag"; ideaId: string; tag: string }
+  | { type: "add-content-idea-hook"; ideaId: string; hook: ContentIdeaHookVariant }
+  | { type: "remove-content-idea-hook"; ideaId: string; hookId: string }
+  | { type: "set-content-idea-active-hook"; ideaId: string; hookId: string | null }
+  | { type: "add-content-idea-script-step"; ideaId: string; step: ContentIdeaScriptStep }
+  | {
+      type: "update-content-idea-script-step";
+      ideaId: string;
+      stepId: string;
+      updates: Partial<ContentIdeaScriptStep>;
+    }
+  | { type: "remove-content-idea-script-step"; ideaId: string; stepId: string }
+  | {
+      type: "reorder-content-idea-script-step";
+      ideaId: string;
+      stepId: string;
+      targetIndex: number;
+    }
+  | {
+      type: "apply-content-idea-ai-result";
+      ideaId: string;
+      result: {
+        tags?: string[];
+        hooks?: ContentIdeaHookVariant[];
+        scriptSteps?: ContentIdeaScriptStep[];
+        premise?: string;
+        channels?: string[];
+      };
+    }
+  | {
+      type: "update-content-planner-ui";
+      updates: Partial<{
+        layout: ContentPlannerLayout;
+        density: ContentPlannerDensity;
+        viewMode: ContentPlannerViewMode;
+        showLlmPanel: boolean;
+        statusFilter: string;
+        pillarFilter: string;
+        channelFilter: string;
+        tagFilter: string;
+        searchQuery: string;
+      }>;
+    }
+  | { type: "add-content-planner-pillar-option"; value: string }
+  | { type: "remove-content-planner-pillar-option"; value: string }
+  | { type: "add-content-planner-platform-option"; value: string }
+  | { type: "remove-content-planner-platform-option"; value: string }
   | { type: "create-planner-preset"; name?: string }
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }
@@ -261,6 +344,25 @@ function normalizePlannerRange(startMinutes: number, endMinutes: number) {
   };
 }
 
+function touchContentIdea(idea: ContentIdea, updates: Partial<ContentIdea>): ContentIdea {
+  return {
+    ...idea,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function nextSelectedContentIdeaId(
+  contentIdeas: AppState["contentIdeas"],
+  preferredId: string | null,
+): string | null {
+  if (preferredId && contentIdeas[preferredId]) {
+    return preferredId;
+  }
+
+  return Object.keys(contentIdeas)[0] ?? null;
+}
+
 function saveDevelopmentWorkspaceState(nextState: AppState) {
   if (typeof window === "undefined") {
     return;
@@ -298,6 +400,26 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         uiState: {
           ...state.uiState,
           lastView: action.view,
+        },
+      };
+    case "select-content-idea":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          selectedContentIdeaId: action.ideaId,
+          lastView: "content-planner",
+        },
+      };
+    case "update-content-planner-ui":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          contentPlanner: {
+            ...state.uiState.contentPlanner,
+            ...action.updates,
+          },
         },
       };
     case "toggle-sidebar-collapsed":
@@ -410,6 +532,303 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.uiState,
           expandedNoteFolders: toggleString(state.uiState.expandedNoteFolders, action.folderId),
         },
+      };
+    case "create-content-idea": {
+      if (!action.input.hook.trim() || !action.input.premise.trim()) {
+        return state;
+      }
+
+      const idea = createContentIdea(action.input);
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [idea.id]: idea,
+        },
+        contentPlannerOptions: registerContentPlannerIdeaOptions(state.contentPlannerOptions, {
+          pillar: idea.pillar,
+          platforms: idea.channels,
+        }),
+        uiState: {
+          ...state.uiState,
+          selectedContentIdeaId: idea.id,
+          lastView: "content-planner",
+        },
+      };
+    }
+    case "create-content-ideas": {
+      if (action.ideas.length === 0) {
+        return state;
+      }
+
+      const nextIdeas = { ...state.contentIdeas };
+      action.ideas.forEach((idea) => {
+        nextIdeas[idea.id] = idea;
+      });
+      const nextOptions = action.ideas.reduce(
+        (options, idea) =>
+          registerContentPlannerIdeaOptions(options, {
+            pillar: idea.pillar,
+            platforms: idea.channels,
+          }),
+        state.contentPlannerOptions,
+      );
+
+      return {
+        ...state,
+        contentIdeas: nextIdeas,
+        contentPlannerOptions: nextOptions,
+        uiState: {
+          ...state.uiState,
+          selectedContentIdeaId: action.ideas[0]?.id ?? state.uiState.selectedContentIdeaId,
+          lastView: "content-planner",
+        },
+      };
+    }
+    case "update-content-idea": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      const nextIdea = touchContentIdea(idea, action.updates);
+
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: nextIdea,
+        },
+        contentPlannerOptions: registerContentPlannerIdeaOptions(state.contentPlannerOptions, {
+          pillar: nextIdea.pillar,
+          platforms: nextIdea.channels,
+        }),
+      };
+    }
+    case "set-content-idea-status": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, { status: action.status }),
+        },
+      };
+    }
+    case "delete-content-idea": {
+      if (!state.contentIdeas[action.ideaId]) {
+        return state;
+      }
+
+      const nextIdeas = { ...state.contentIdeas };
+      delete nextIdeas[action.ideaId];
+
+      return {
+        ...state,
+        contentIdeas: nextIdeas,
+        uiState: {
+          ...state.uiState,
+          selectedContentIdeaId: nextSelectedContentIdeaId(
+            nextIdeas,
+            state.uiState.selectedContentIdeaId === action.ideaId
+              ? null
+              : state.uiState.selectedContentIdeaId,
+          ),
+        },
+      };
+    }
+    case "add-content-idea-tag": {
+      const idea = state.contentIdeas[action.ideaId];
+      const tag = action.tag.trim();
+      if (!idea || !tag) return state;
+      const tags = Array.from(new Set([...idea.tags, tag]));
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, { tags }),
+        },
+      };
+    }
+    case "remove-content-idea-tag": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            tags: idea.tags.filter((tag) => tag !== action.tag),
+          }),
+        },
+      };
+    }
+    case "add-content-idea-hook": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      const hooks = [...idea.hooks, action.hook];
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            hooks,
+            activeHookId: idea.activeHookId ?? action.hook.id,
+          }),
+        },
+      };
+    }
+    case "remove-content-idea-hook": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      const hooks = idea.hooks.filter((hook) => hook.id !== action.hookId);
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            hooks,
+            activeHookId:
+              idea.activeHookId === action.hookId ? hooks[0]?.id ?? null : idea.activeHookId,
+          }),
+        },
+      };
+    }
+    case "set-content-idea-active-hook": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, { activeHookId: action.hookId }),
+        },
+      };
+    }
+    case "add-content-idea-script-step": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            scriptSteps: [...idea.scriptSteps, action.step],
+          }),
+        },
+      };
+    }
+    case "update-content-idea-script-step": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            scriptSteps: idea.scriptSteps.map((step) =>
+              step.id === action.stepId ? { ...step, ...action.updates } : step,
+            ),
+          }),
+        },
+      };
+    }
+    case "remove-content-idea-script-step": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, {
+            scriptSteps: idea.scriptSteps.filter((step) => step.id !== action.stepId),
+          }),
+        },
+      };
+    }
+    case "reorder-content-idea-script-step": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      const currentIndex = idea.scriptSteps.findIndex((step) => step.id === action.stepId);
+      if (currentIndex === -1) return state;
+      const nextSteps = [...idea.scriptSteps];
+      const [step] = nextSteps.splice(currentIndex, 1);
+      nextSteps.splice(
+        Math.max(0, Math.min(action.targetIndex, nextSteps.length)),
+        0,
+        step,
+      );
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: touchContentIdea(idea, { scriptSteps: nextSteps }),
+        },
+      };
+    }
+    case "apply-content-idea-ai-result": {
+      const idea = state.contentIdeas[action.ideaId];
+      if (!idea) return state;
+      const nextHooks = action.result.hooks ? [...idea.hooks, ...action.result.hooks] : idea.hooks;
+      const nextIdea = touchContentIdea(idea, {
+        premise: action.result.premise ?? idea.premise,
+        channels: action.result.channels ?? idea.channels,
+        tags: action.result.tags ?? idea.tags,
+        hooks: nextHooks,
+        activeHookId:
+          idea.activeHookId ?? action.result.hooks?.[0]?.id ?? idea.activeHookId,
+        scriptSteps: action.result.scriptSteps ?? idea.scriptSteps,
+      });
+      return {
+        ...state,
+        contentIdeas: {
+          ...state.contentIdeas,
+          [action.ideaId]: nextIdea,
+        },
+        contentPlannerOptions: registerContentPlannerIdeaOptions(state.contentPlannerOptions, {
+          pillar: nextIdea.pillar,
+          platforms: nextIdea.channels,
+        }),
+      };
+    }
+    case "add-content-planner-pillar-option":
+      return {
+        ...state,
+        contentPlannerOptions: createContentPlannerOptions({
+          ...state.contentPlannerOptions,
+          pillars: [...state.contentPlannerOptions.pillars, action.value],
+        }),
+      };
+    case "remove-content-planner-pillar-option":
+      if (isContentPlannerOptionInUse(state.contentIdeas, "pillars", action.value)) {
+        return state;
+      }
+      return {
+        ...state,
+        contentPlannerOptions: removeContentPlannerOption(
+          state.contentPlannerOptions,
+          "pillars",
+          action.value,
+        ),
+      };
+    case "add-content-planner-platform-option":
+      return {
+        ...state,
+        contentPlannerOptions: createContentPlannerOptions({
+          ...state.contentPlannerOptions,
+          platforms: [...state.contentPlannerOptions.platforms, action.value],
+        }),
+      };
+    case "remove-content-planner-platform-option":
+      if (isContentPlannerOptionInUse(state.contentIdeas, "platforms", action.value)) {
+        return state;
+      }
+      return {
+        ...state,
+        contentPlannerOptions: removeContentPlannerOption(
+          state.contentPlannerOptions,
+          "platforms",
+          action.value,
+        ),
       };
     case "update-daily-markdown": {
       const page = state.dailyPages[action.date];

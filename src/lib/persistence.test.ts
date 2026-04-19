@@ -21,6 +21,9 @@ describe("normalizeAppState", () => {
     expect(state.dailyPages["2026-03-11"]).toBeDefined();
     expect(Object.keys(state.notesDocs).length).toBeGreaterThan(0);
     expect(Object.keys(state.plannerPresets).length).toBeGreaterThan(0);
+    expect(state.contentIdeas).toEqual({});
+    expect(state.contentPlannerOptions.pillars).toContain("Teach");
+    expect(state.uiState.contentPlanner.searchQuery).toBe("");
   });
 
   test("normalizes missing themeMode and sidebar state", () => {
@@ -40,6 +43,11 @@ describe("normalizeAppState", () => {
         },
         noteFolders: {},
         plannerPresets: {},
+        contentIdeas: {},
+        contentPlannerOptions: {
+          pillars: ["Teach"],
+          platforms: ["LinkedIn"],
+        },
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: "note_1",
@@ -61,6 +69,8 @@ describe("normalizeAppState", () => {
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
     expect(state.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
     expect(state.uiState.expandedNoteFolders).toContain(DEFAULT_NOTES_FOLDER_ID);
+    expect(state.uiState.contentPlanner.viewMode).toBe("list");
+    expect(state.contentPlannerOptions.pillars).toEqual(["Teach"]);
   });
 
   test("maps legacy daily lastView state to todos", () => {
@@ -72,6 +82,11 @@ describe("normalizeAppState", () => {
         notesDocs: {},
         noteFolders: {},
         plannerPresets: {},
+        contentIdeas: {},
+        contentPlannerOptions: {
+          pillars: ["Teach"],
+          platforms: ["LinkedIn"],
+        },
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: null,
@@ -97,6 +112,11 @@ describe("normalizeAppState", () => {
         notesDocs: {},
         noteFolders: {},
         plannerPresets: {},
+        contentIdeas: {},
+        contentPlannerOptions: {
+          pillars: ["Teach"],
+          platforms: ["LinkedIn"],
+        },
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: null,
@@ -135,6 +155,7 @@ describe("normalizeAppState", () => {
         notesDocs: {},
         noteFolders: {},
         plannerPresets: {},
+        contentIdeas: {},
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: null,
@@ -152,6 +173,110 @@ describe("normalizeAppState", () => {
       status: "finished",
       estimatedMinutes: null,
     });
+  });
+
+  test("backfills missing content planner ui state from persisted payload", () => {
+    const state = normalizeAppState(
+      {
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {},
+        noteFolders: {},
+        plannerPresets: {},
+        contentIdeas: {
+          idea_1: {
+            id: "idea_1",
+            code: "#0001",
+            hook: "Ship before polish",
+            premise: "Momentum creates clarity.",
+            status: "inbox",
+            pillar: "Teach",
+            channels: ["LinkedIn"],
+            tags: ["launch"],
+            score: 8.2,
+            scoreBreakdown: {
+              hook: 8,
+              proof: 8,
+              fit: 9,
+            },
+            sourceLabel: "manual",
+            sourceType: "human",
+            createdAt: "2026-03-11T08:00:00.000Z",
+            updatedAt: "2026-03-11T08:00:00.000Z",
+            hooks: [],
+            activeHookId: null,
+            scriptSteps: [],
+          },
+        },
+        contentPlannerOptions: {
+          pillars: ["Teach", "Build in public"],
+          platforms: ["LinkedIn", "Podcast"],
+        },
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: null,
+          selectedNoteFolderId: null,
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "content-planner",
+        },
+      },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+
+    expect(state.uiState.selectedContentIdeaId).toBe("idea_1");
+    expect(state.uiState.contentPlanner.layout).toBe("split");
+    expect(state.uiState.contentPlanner.showLlmPanel).toBe(true);
+    expect(state.contentPlannerOptions.platforms).toContain("Podcast");
+  });
+
+  test("backfills missing synced planner options from saved ideas", () => {
+    const state = normalizeAppState(
+      {
+        dailyPages: {
+          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
+        },
+        notesDocs: {},
+        noteFolders: {},
+        plannerPresets: {},
+        contentIdeas: {
+          idea_1: {
+            id: "idea_1",
+            code: "#0001",
+            hook: "Ship the experiment log",
+            premise: "Turn the notes into a public teardown.",
+            status: "inbox",
+            pillar: "Build in public",
+            channels: ["Podcast"],
+            tags: [],
+            score: 8,
+            scoreBreakdown: { hook: 8, proof: 8, fit: 8 },
+            sourceLabel: "manual",
+            sourceType: "human",
+            createdAt: "2026-03-11T08:00:00.000Z",
+            updatedAt: "2026-03-11T08:00:00.000Z",
+            hooks: [],
+            activeHookId: null,
+            scriptSteps: [],
+          },
+        },
+        uiState: {
+          selectedDailyDate: "2026-03-11",
+          selectedNoteId: null,
+          selectedNoteFolderId: null,
+          selectedPlannerPresetId: null,
+          expandedYears: ["2026"],
+          expandedMonths: ["2026-03"],
+          lastView: "content-planner",
+        },
+      },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+
+    expect(state.contentPlannerOptions.pillars).toContain("Build in public");
+    expect(state.contentPlannerOptions.platforms).toContain("Podcast");
   });
 });
 

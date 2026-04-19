@@ -46,6 +46,7 @@ describe("buildSchemaDefinitions", () => {
       "notes",
       "note_folders",
       "planner_presets",
+      "content_ideas",
       "workspace_state",
       "app_state_snapshots",
     ]);
@@ -148,8 +149,8 @@ describe("applyPocketBaseSchema", () => {
       logger: { log: vi.fn(), error: vi.fn() } as unknown as Console,
     });
 
-    expect(summary.created).toHaveLength(6);
-    expect(create).toHaveBeenCalledTimes(6);
+    expect(summary.created).toHaveLength(7);
+    expect(create).toHaveBeenCalledTimes(7);
   });
 
   test("updates existing collection with drift and preserves unchanged ones", async () => {

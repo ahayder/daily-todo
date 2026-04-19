@@ -213,6 +213,43 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
       ],
     },
     {
+      name: "content_ideas",
+      type: "base",
+      listRule: COLLECTION_ACCESS_RULE,
+      viewRule: COLLECTION_ACCESS_RULE,
+      createRule: COLLECTION_ACCESS_RULE,
+      updateRule: COLLECTION_ACCESS_RULE,
+      deleteRule: COLLECTION_ACCESS_RULE,
+      fields: [
+        {
+          name: "owner",
+          type: "relation",
+          required: true,
+          maxSelect: 1,
+          collectionId: usersCollectionId,
+          cascadeDelete: true,
+        },
+        {
+          name: "idea_id",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "payload_json",
+          type: "json",
+          required: true,
+        },
+        {
+          name: "updated_at_client",
+          type: "date",
+          required: true,
+        },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_content_ideas_owner_idea_id ON content_ideas (owner, idea_id)",
+      ],
+    },
+    {
       name: "workspace_state",
       type: "base",
       listRule: COLLECTION_ACCESS_RULE,
@@ -252,6 +289,16 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         },
         {
           name: "expanded_months_json",
+          type: "json",
+          required: true,
+        },
+        {
+          name: "content_planner_pillars_json",
+          type: "json",
+          required: true,
+        },
+        {
+          name: "content_planner_platforms_json",
           type: "json",
           required: true,
         },

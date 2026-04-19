@@ -664,7 +664,26 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
       >
       {isContentPlannerView ? (
         <div className="sidebar-scroll sidebar-scroll--flush flex-1 min-h-0 overflow-y-auto">
-          {contentPlannerControls ? <ContentPlannerSidebarPanels controls={contentPlannerControls} /> : null}
+          {contentPlannerControls ? (
+            <ContentPlannerSidebarPanels
+              controls={contentPlannerControls}
+              ideas={Object.values(state.contentIdeas)}
+              savedPillars={state.contentPlannerOptions.pillars}
+              savedPlatforms={state.contentPlannerOptions.platforms}
+              onAddPillarOption={(value) =>
+                dispatch({ type: "add-content-planner-pillar-option", value })
+              }
+              onRemovePillarOption={(value) =>
+                dispatch({ type: "remove-content-planner-pillar-option", value })
+              }
+              onAddPlatformOption={(value) =>
+                dispatch({ type: "add-content-planner-platform-option", value })
+              }
+              onRemovePlatformOption={(value) =>
+                dispatch({ type: "remove-content-planner-platform-option", value })
+              }
+            />
+          ) : null}
         </div>
       ) : (
         <ScrollArea className="flex-1 min-h-0">

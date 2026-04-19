@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   DEFAULT_NOTES_FOLDER_ID,
+  createContentIdea,
   createInitialState,
   createPlannerPreset,
   duplicatePlannerPreset,
   ensureDailyPageForDate,
+  ensureContentPlannerState,
   ensureNoteState,
   ensurePlannerState,
   groupTodosByPriority,
@@ -106,6 +108,79 @@ describe("planner state", () => {
     expect(presetIds).toHaveLength(1);
     expect(state.uiState.selectedPlannerPresetId).toBe(presetIds[0]);
     expect(state.plannerPresets[presetIds[0]].dayOrder).toHaveLength(7);
+  });
+
+  test("seeds content planner ui state in initial state", () => {
+    const state = createInitialState("2026-03-11");
+
+    expect(state.contentIdeas).toEqual({});
+    expect(state.contentPlannerOptions.pillars).toContain("Teach");
+    expect(state.contentPlannerOptions.platforms).toContain("LinkedIn");
+    expect(state.uiState.selectedContentIdeaId).toBeNull();
+    expect(state.uiState.contentPlanner.searchQuery).toBe("");
+    expect(state.uiState.contentPlanner.viewMode).toBe("list");
+    expect(state.uiState.contentPlanner.layout).toBe("split");
+  });
+
+  test("backfills content planner state when missing", () => {
+    const state = createInitialState("2026-03-11");
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentIdeas: undefined as never,
+      uiState: {
+        ...state.uiState,
+        selectedContentIdeaId: undefined as never,
+        contentPlanner: undefined as never,
+      },
+    });
+
+    expect(repaired.contentIdeas).toEqual({});
+    expect(repaired.contentPlannerOptions.pillars).toContain("Teach");
+    expect(repaired.uiState.selectedContentIdeaId).toBeNull();
+    expect(repaired.uiState.contentPlanner.tagFilter).toBe("all");
+  });
+
+  test("keeps content planner selection valid", () => {
+    const state = createInitialState("2026-03-11");
+    const idea = createContentIdea({
+      hook: "Ship ugly first",
+      premise: "Rough launches beat waiting.",
+    });
+
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentIdeas: { [idea.id]: idea },
+      uiState: {
+        ...state.uiState,
+        selectedContentIdeaId: "missing",
+      },
+    });
+
+    expect(repaired.uiState.selectedContentIdeaId).toBe(idea.id);
+    expect(repaired.contentPlannerOptions.pillars).toContain("Teach");
+    expect(repaired.contentPlannerOptions.platforms).toContain("LinkedIn");
+  });
+
+  test("backfills saved planner options from existing idea values", () => {
+    const state = createInitialState("2026-03-11");
+    const idea = createContentIdea({
+      hook: "Narrate the refactor",
+      premise: "Explain the tradeoffs while shipping it live.",
+      pillar: "Build in public",
+      channels: ["Podcast", "LinkedIn"],
+    });
+
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentIdeas: { [idea.id]: idea },
+      contentPlannerOptions: {
+        pillars: ["Teach"],
+        platforms: ["LinkedIn"],
+      },
+    });
+
+    expect(repaired.contentPlannerOptions.pillars).toContain("Build in public");
+    expect(repaired.contentPlannerOptions.platforms).toContain("Podcast");
   });
 
   test("backfills planner state when missing", () => {

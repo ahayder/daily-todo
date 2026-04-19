@@ -6,6 +6,7 @@ import {
   createPersistenceMetadata,
   extractLocalOnlyUIState,
   extractSyncableUIState,
+  extractSyncableWorkspaceState,
   getMaxTimestamp,
   getNoteSummary,
   mergeUiState,
@@ -22,11 +23,13 @@ import {
   type RemoteAppStateStore,
   type RemoteSnapshot,
   type SyncableUIState,
+  type SyncableWorkspaceState,
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
 import type {
   AppState,
+  ContentIdea,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -86,6 +89,15 @@ type PocketBasePlannerPresetRecord = {
   updated_at_client?: string;
 };
 
+type PocketBaseContentIdeaRecord = {
+  id: string;
+  owner: string;
+  idea_id?: string;
+  payload_json?: unknown;
+  updated?: string;
+  updated_at_client?: string;
+};
+
 type PocketBaseWorkspaceStateRecord = {
   id: string;
   owner: string;
@@ -95,6 +107,8 @@ type PocketBaseWorkspaceStateRecord = {
   selected_planner_preset_id?: string | null;
   expanded_years_json?: unknown;
   expanded_months_json?: unknown;
+  content_planner_pillars_json?: unknown;
+  content_planner_platforms_json?: unknown;
   last_view?: SyncableUIState["lastView"] | "daily";
   updated?: string;
   updated_at_client?: string;
@@ -105,7 +119,8 @@ type SyncRecordValue =
   | { key: string; kind: "note"; value: NoteSummary }
   | { key: string; kind: "note_folder"; value: NoteFolder }
   | { key: string; kind: "planner_preset"; value: PlannerPreset }
-  | { key: string; kind: "workspace_state"; value: SyncableUIState };
+  | { key: string; kind: "content_idea"; value: ContentIdea }
+  | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
 
 type SplitWorkspacePayload = {
   state: AppState;
@@ -195,10 +210,18 @@ function getSyncRecordValuesFromState(state: AppState): Record<string, SyncRecor
     };
   }
 
+  for (const [ideaId, idea] of Object.entries(state.contentIdeas)) {
+    values[`content_idea:${ideaId}`] = {
+      key: `content_idea:${ideaId}`,
+      kind: "content_idea",
+      value: idea,
+    };
+  }
+
   values[WORKSPACE_RECORD_KEY] = {
     key: WORKSPACE_RECORD_KEY,
     kind: "workspace_state",
-    value: extractSyncableUIState(state.uiState),
+    value: extractSyncableWorkspaceState(state),
   };
 
   return values;
@@ -214,7 +237,9 @@ function assembleStateFromValues(
   const notesDocs: Record<string, NoteDoc> = {};
   const noteFolders: Record<string, NoteFolder> = {};
   const plannerPresets: Record<string, PlannerPreset> = {};
+  const contentIdeas: Record<string, ContentIdea> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
+  let contentPlannerOptions = fallbackState.contentPlannerOptions;
 
   for (const record of Object.values(values)) {
     if (record.kind === "daily_page") {
@@ -240,7 +265,13 @@ function assembleStateFromValues(
       continue;
     }
 
-    syncableUiState = record.value;
+    if (record.kind === "content_idea") {
+      contentIdeas[record.value.id] = record.value;
+      continue;
+    }
+
+    syncableUiState = record.value.uiState;
+    contentPlannerOptions = record.value.contentPlannerOptions;
   }
 
   return normalizeAppState(
@@ -249,6 +280,8 @@ function assembleStateFromValues(
       notesDocs,
       noteFolders,
       plannerPresets,
+      contentIdeas,
+      contentPlannerOptions,
       uiState: mergeUiState(
         syncableUiState,
         extractLocalOnlyUIState(fallbackState.uiState),
@@ -829,7 +862,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     now: Date,
   ): Promise<SplitWorkspacePayload> {
     const client = getPocketBaseClient();
-    const [dailyPages, notes, noteFolders, plannerPresets, workspaceState] = await Promise.all([
+    const [dailyPages, notes, noteFolders, plannerPresets, contentIdeas, workspaceState] =
+      await Promise.all([
       client
         .collection("daily_pages")
         .getFullList<PocketBaseDailyPageRecord>({ filter: `owner="${userId}"` }),
@@ -840,6 +874,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       client
         .collection("planner_presets")
         .getFullList<PocketBasePlannerPresetRecord>({ filter: `owner="${userId}"` }),
+      client
+        .collection("content_ideas")
+        .getFullList<PocketBaseContentIdeaRecord>({ filter: `owner="${userId}"` }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
     ]);
 
@@ -922,15 +959,35 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
+    for (const record of contentIdeas) {
+      if (!record.idea_id || !record.payload_json || typeof record.payload_json !== "object") continue;
+      const value = record.payload_json as ContentIdea;
+      const key = `content_idea:${record.idea_id}`;
+      values[key] = { key, kind: "content_idea", value };
+      records[key] = createRecordMetadata(
+        key,
+        "content_idea",
+        value,
+        record.updated ?? null,
+        record.updated_at_client ?? null,
+      );
+    }
+
     if (workspaceState) {
-      const value: SyncableUIState = {
-        selectedDailyDate: workspaceState.selected_daily_date ?? null,
-        selectedNoteId: workspaceState.selected_note_id ?? null,
-        selectedNoteFolderId: workspaceState.selected_note_folder_id ?? null,
-        selectedPlannerPresetId: workspaceState.selected_planner_preset_id ?? null,
-        expandedYears: safeArray(workspaceState.expanded_years_json),
-        expandedMonths: safeArray(workspaceState.expanded_months_json),
-        lastView: workspaceState.last_view === "daily" ? "todos" : workspaceState.last_view ?? "todos",
+      const value: SyncableWorkspaceState = {
+        uiState: {
+          selectedDailyDate: workspaceState.selected_daily_date ?? null,
+          selectedNoteId: workspaceState.selected_note_id ?? null,
+          selectedNoteFolderId: workspaceState.selected_note_folder_id ?? null,
+          selectedPlannerPresetId: workspaceState.selected_planner_preset_id ?? null,
+          expandedYears: safeArray(workspaceState.expanded_years_json),
+          expandedMonths: safeArray(workspaceState.expanded_months_json),
+          lastView: workspaceState.last_view === "daily" ? "todos" : workspaceState.last_view ?? "todos",
+        },
+        contentPlannerOptions: {
+          pillars: safeArray(workspaceState.content_planner_pillars_json),
+          platforms: safeArray(workspaceState.content_planner_platforms_json),
+        },
       };
       values[WORKSPACE_RECORD_KEY] = { key: WORKSPACE_RECORD_KEY, kind: "workspace_state", value };
       records[WORKSPACE_RECORD_KEY] = createRecordMetadata(
@@ -952,6 +1009,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         notes.length > 0 ||
         noteFolders.length > 0 ||
         plannerPresets.length > 0 ||
+        contentIdeas.length > 0 ||
         Boolean(workspaceState),
     };
   }
@@ -1041,19 +1099,40 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       return;
     }
 
+    if (record.kind === "content_idea") {
+      const existing = await getFirstByFilter<PocketBaseContentIdeaRecord>(
+        "content_ideas",
+        `owner="${userId}" && idea_id="${record.value.id}"`,
+      );
+      const payload = {
+        owner: userId,
+        idea_id: record.value.id,
+        payload_json: record.value,
+        updated_at_client: updatedAtClient,
+      };
+      if (existing) {
+        await client.collection("content_ideas").update(existing.id, payload);
+      } else {
+        await client.collection("content_ideas").create(payload);
+      }
+      return;
+    }
+
     const existing = await getFirstByFilter<PocketBaseWorkspaceStateRecord>(
       "workspace_state",
       `owner="${userId}"`,
     );
     const payload = {
       owner: userId,
-      selected_daily_date: record.value.selectedDailyDate,
-      selected_note_id: record.value.selectedNoteId,
-      selected_note_folder_id: record.value.selectedNoteFolderId,
-      selected_planner_preset_id: record.value.selectedPlannerPresetId,
-      expanded_years_json: record.value.expandedYears,
-      expanded_months_json: record.value.expandedMonths,
-      last_view: record.value.lastView,
+      selected_daily_date: record.value.uiState.selectedDailyDate,
+      selected_note_id: record.value.uiState.selectedNoteId,
+      selected_note_folder_id: record.value.uiState.selectedNoteFolderId,
+      selected_planner_preset_id: record.value.uiState.selectedPlannerPresetId,
+      expanded_years_json: record.value.uiState.expandedYears,
+      expanded_months_json: record.value.uiState.expandedMonths,
+      content_planner_pillars_json: record.value.contentPlannerOptions.pillars,
+      content_planner_platforms_json: record.value.contentPlannerOptions.platforms,
+      last_view: record.value.uiState.lastView,
       updated_at_client: updatedAtClient,
     };
     if (existing) {
@@ -1106,6 +1185,17 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
       if (existing) {
         await client.collection("planner_presets").delete(existing.id);
+      }
+      return;
+    }
+
+    if (record.kind === "content_idea") {
+      const existing = await getFirstByFilter<PocketBaseContentIdeaRecord>(
+        "content_ideas",
+        `owner="${userId}" && idea_id="${record.value.id}"`,
+      );
+      if (existing) {
+        await client.collection("content_ideas").delete(existing.id);
       }
       return;
     }

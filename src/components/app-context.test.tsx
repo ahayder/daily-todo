@@ -9,7 +9,7 @@ import {
   CONTENT_FONT_SCALE_MIN,
 } from "@/lib/content-font-scale";
 import { createPersistenceMetadata } from "@/lib/persistence";
-import { createInitialState } from "@/lib/store";
+import { createContentIdea, createContentIdeaHookVariant, createContentIdeaScriptStep, createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 vi.mock("next/navigation", () => ({
@@ -220,6 +220,254 @@ describe("appReducer theme mode", () => {
 
     expect(updated.plannerPresets[presetId].days.monday.events[0].title).toBe("Deep Work Sprint");
     expect(updated.plannerPresets[presetId].days.monday.events[0].color).toBe("gold");
+  });
+
+  test("creates and selects a content idea", () => {
+    const initial = createInitialState("2026-03-11");
+
+    const next = appReducer(initial, {
+      type: "create-content-idea",
+      input: {
+        hook: "Ship before polish",
+        premise: "The first version should answer the market honestly.",
+        pillar: "Teach",
+        channels: ["LinkedIn"],
+        tags: ["launch"],
+        sourceLabel: "manual",
+        sourceType: "human",
+      },
+    });
+
+    const createdIdea = Object.values(next.contentIdeas)[0];
+
+    expect(createdIdea.hook).toBe("Ship before polish");
+    expect(next.contentPlannerOptions.pillars).toContain("Teach");
+    expect(next.contentPlannerOptions.platforms).toContain("LinkedIn");
+    expect(next.uiState.selectedContentIdeaId).toBe(createdIdea.id);
+  });
+
+  test("updates content idea fields and planner ui filters", () => {
+    const initial = createInitialState("2026-03-11");
+    const idea = createContentIdea({
+      hook: "Old hook",
+      premise: "Old premise",
+    });
+    initial.contentIdeas[idea.id] = idea;
+    initial.uiState.selectedContentIdeaId = idea.id;
+
+    const updatedIdeaState = appReducer(initial, {
+      type: "update-content-idea",
+      ideaId: idea.id,
+      updates: {
+        hook: "New hook",
+        premise: "New premise",
+        pillar: "Proof",
+      },
+    });
+
+    expect(updatedIdeaState.contentIdeas[idea.id].hook).toBe("New hook");
+    expect(updatedIdeaState.contentIdeas[idea.id].pillar).toBe("Proof");
+    expect(updatedIdeaState.contentPlannerOptions.pillars).toContain("Proof");
+
+    const updatedUiState = appReducer(updatedIdeaState, {
+      type: "update-content-planner-ui",
+      updates: {
+        searchQuery: "proof",
+        statusFilter: "curating",
+      },
+    });
+
+    expect(updatedUiState.uiState.contentPlanner.searchQuery).toBe("proof");
+    expect(updatedUiState.uiState.contentPlanner.statusFilter).toBe("curating");
+  });
+
+  test("changes content idea status and deletes invalid selection safely", () => {
+    const initial = createInitialState("2026-03-11");
+    const firstIdea = createContentIdea({
+      hook: "First idea",
+      premise: "First premise",
+    });
+    const secondIdea = createContentIdea({
+      hook: "Second idea",
+      premise: "Second premise",
+    });
+    initial.contentIdeas = {
+      [firstIdea.id]: firstIdea,
+      [secondIdea.id]: secondIdea,
+    };
+    initial.uiState.selectedContentIdeaId = secondIdea.id;
+
+    const moved = appReducer(initial, {
+      type: "set-content-idea-status",
+      ideaId: secondIdea.id,
+      status: "scripted",
+    });
+
+    expect(moved.contentIdeas[secondIdea.id].status).toBe("scripted");
+
+    const deleted = appReducer(moved, {
+      type: "delete-content-idea",
+      ideaId: secondIdea.id,
+    });
+
+    expect(deleted.contentIdeas[secondIdea.id]).toBeUndefined();
+    expect(deleted.uiState.selectedContentIdeaId).toBe(firstIdea.id);
+  });
+
+  test("manages content idea tags, hooks, and script steps", () => {
+    const initial = createInitialState("2026-03-11");
+    const hook = createContentIdeaHookVariant("Original hook");
+    const step = createContentIdeaScriptStep({
+      label: "Hook",
+      body: "Start with the surprising claim.",
+      actionLabel: "rewrite",
+    });
+    const idea = createContentIdea({
+      hook: "Core idea",
+      premise: "Core premise",
+      hooks: [hook],
+      activeHookId: hook.id,
+      scriptSteps: [step],
+      tags: ["launch"],
+    });
+    initial.contentIdeas = { [idea.id]: idea };
+    initial.uiState.selectedContentIdeaId = idea.id;
+
+    const withTag = appReducer(initial, {
+      type: "add-content-idea-tag",
+      ideaId: idea.id,
+      tag: "strategy",
+    });
+    expect(withTag.contentIdeas[idea.id].tags).toContain("strategy");
+
+    const withoutTag = appReducer(withTag, {
+      type: "remove-content-idea-tag",
+      ideaId: idea.id,
+      tag: "launch",
+    });
+    expect(withoutTag.contentIdeas[idea.id].tags).not.toContain("launch");
+
+    const nextHook = createContentIdeaHookVariant("Sharper hook");
+    const withHook = appReducer(withoutTag, {
+      type: "add-content-idea-hook",
+      ideaId: idea.id,
+      hook: nextHook,
+    });
+    expect(withHook.contentIdeas[idea.id].hooks).toHaveLength(2);
+
+    const activeHook = appReducer(withHook, {
+      type: "set-content-idea-active-hook",
+      ideaId: idea.id,
+      hookId: nextHook.id,
+    });
+    expect(activeHook.contentIdeas[idea.id].activeHookId).toBe(nextHook.id);
+
+    const nextStep = createContentIdeaScriptStep({
+      label: "CTA",
+      body: "Ask the audience to reply.",
+      actionLabel: "suggest",
+    });
+    const withStep = appReducer(activeHook, {
+      type: "add-content-idea-script-step",
+      ideaId: idea.id,
+      step: nextStep,
+    });
+    expect(withStep.contentIdeas[idea.id].scriptSteps).toHaveLength(2);
+
+    const reordered = appReducer(withStep, {
+      type: "reorder-content-idea-script-step",
+      ideaId: idea.id,
+      stepId: nextStep.id,
+      targetIndex: 0,
+    });
+    expect(reordered.contentIdeas[idea.id].scriptSteps[0].id).toBe(nextStep.id);
+  });
+
+  test("applies ai results as structured planner updates", () => {
+    const initial = createInitialState("2026-03-11");
+    const idea = createContentIdea({
+      hook: "Core idea",
+      premise: "Core premise",
+    });
+    initial.contentIdeas = { [idea.id]: idea };
+    initial.uiState.selectedContentIdeaId = idea.id;
+
+    const next = appReducer(initial, {
+      type: "apply-content-idea-ai-result",
+      ideaId: idea.id,
+      result: {
+        tags: ["launch", "trust"],
+        hooks: [createContentIdeaHookVariant("Better hook")],
+        scriptSteps: [
+          createContentIdeaScriptStep({
+            label: "Hook",
+            body: "Open on the tension immediately.",
+            actionLabel: "rewrite",
+          }),
+        ],
+      },
+    });
+
+    expect(next.contentIdeas[idea.id].tags).toEqual(["launch", "trust"]);
+    expect(next.contentIdeas[idea.id].hooks).toHaveLength(2);
+    expect(next.contentIdeas[idea.id].scriptSteps[0].label).toBe("Hook");
+    expect(next.contentPlannerOptions.pillars).toContain("Teach");
+  });
+
+  test("manages reusable content planner options and blocks deleting in-use values", () => {
+    const initial = createInitialState("2026-03-11");
+    const idea = createContentIdea({
+      hook: "Core idea",
+      premise: "Core premise",
+      pillar: "Teach",
+      channels: ["LinkedIn"],
+    });
+    initial.contentIdeas = { [idea.id]: idea };
+
+    const withCustomOptions = appReducer(
+      appReducer(initial, {
+        type: "add-content-planner-pillar-option",
+        value: "Proof",
+      }),
+      {
+        type: "add-content-planner-platform-option",
+        value: "Podcast",
+      },
+    );
+
+    expect(withCustomOptions.contentPlannerOptions.pillars).toContain("Proof");
+    expect(withCustomOptions.contentPlannerOptions.platforms).toContain("Podcast");
+
+    const blocked = appReducer(withCustomOptions, {
+      type: "remove-content-planner-pillar-option",
+      value: "Teach",
+    });
+    expect(blocked.contentPlannerOptions.pillars).toContain("Teach");
+
+    const removed = appReducer(withCustomOptions, {
+      type: "remove-content-planner-platform-option",
+      value: "Podcast",
+    });
+    expect(removed.contentPlannerOptions.platforms).not.toContain("Podcast");
+  });
+
+  test("registers new planner options from imported ai ideas", () => {
+    const initial = createInitialState("2026-03-11");
+    const importedIdea = createContentIdea({
+      hook: "New lane",
+      premise: "Test a new publishing loop.",
+      pillar: "Proof",
+      channels: ["Podcast"],
+      sourceType: "ai",
+    });
+
+    const next = appReducer(initial, {
+      type: "create-content-ideas",
+      ideas: [importedIdea],
+    });
+
+    expect(next.contentPlannerOptions.pillars).toContain("Proof");
+    expect(next.contentPlannerOptions.platforms).toContain("Podcast");
   });
 
   test("deletes planner presets and keeps planner selectable", () => {

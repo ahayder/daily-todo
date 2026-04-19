@@ -19,8 +19,7 @@ Help the user quickly get ideas into the planner from prompts, notes, transcript
 ### User stories
 
 - As a creator, I want to generate multiple content ideas from a prompt so that I can quickly fill my idea inbox.
-- As a creator, I want to start from quick prompts like `Brainstorm N ideas` or `From my notes` so that I can avoid rewriting common requests.
-- As a creator, I want to create ideas from my existing notes so that my planner reflects thoughts I already captured elsewhere in the app.
+- As a creator, I want to start from quick prompts like `Brainstorm N ideas` or `From one topic` so that I can avoid rewriting common requests.
 - As a creator, I want to paste a transcript or raw text and turn it into ideas so that long-form source material becomes usable content seeds.
 - As a creator, I want to turn a voice memo into ideas so that I can capture thoughts without typing first.
 - As a creator, I want each generated idea to include a hook, premise, source, and initial metadata so that I can triage it without extra setup.
@@ -160,7 +159,6 @@ Make AI a contextual collaborator while the user curates and drafts.
 - As a creator, I want an AI chat panel scoped to the selected idea so that I can ask targeted questions without losing context.
 - As a creator, I want quick AI actions like `Suggest tags`, `Outline script`, or `Repurpose for LinkedIn` so that common actions are one click away.
 - As a creator, I want AI to use the currently selected idea as context automatically so that I do not need to restate it every time.
-- As a creator, I want AI to pull supporting material from my notes when relevant so that idea development is grounded in existing material.
 - As a creator, I want AI to help find missing proof, examples, or CTAs so that drafts become more publishable.
 - As a creator, I want AI suggestions to remain editable and non-destructive so that I stay in control of the final content.
 
@@ -263,4 +261,3 @@ If we want to phase this cleanly, the likely MVP epics are:
 - Should published content stay in the same pipeline or move into a separate content library?
 - How tightly should this planner integrate with notes in the first release?
 - Should AI-generated edits overwrite current fields or always create suggestions first?
-

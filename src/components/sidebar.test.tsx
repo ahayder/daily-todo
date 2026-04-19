@@ -21,8 +21,6 @@ function createContentPlannerControls(): ContentPlannerControls {
     setDensity: vi.fn(),
     viewMode: "list",
     setViewMode: vi.fn(),
-    demoState: "populated",
-    setDemoState: vi.fn(),
     showLlmPanel: true,
     setShowLlmPanel: vi.fn(),
     statusFilter: "all",
@@ -33,6 +31,8 @@ function createContentPlannerControls(): ContentPlannerControls {
     setChannelFilter: vi.fn(),
     tagFilter: "all",
     setTagFilter: vi.fn(),
+    searchQuery: "",
+    setSearchQuery: vi.fn(),
   };
 }
 
