@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { NotesView } from "@/components/notes-view";
+import { NotesView } from "@/components/notes/notes-view";
 import type { AppState } from "@/lib/types";
 import { createInitialState } from "@/lib/store";
 
-vi.mock("@/components/markdown-editor", () => ({
+vi.mock("@/components/editor/markdown-editor", () => ({
   MarkdownEditor: () => <div data-testid="markdown-editor" />,
 }));
 

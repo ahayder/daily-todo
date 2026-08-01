@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { DesktopUpdateProvider, useDesktopUpdate } from "@/components/desktop-update-provider";
+import { DesktopUpdateProvider, useDesktopUpdate } from "@/components/workspace/desktop-update-provider";
 
 const mockCheck = vi.fn();
 const mockGetName = vi.fn();

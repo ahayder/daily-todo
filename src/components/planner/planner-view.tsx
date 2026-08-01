@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type Dispatch } from "react";
-import type { AppAction } from "@/components/app-context";
+import type { AppAction } from "@/components/app/app-context";
 import { cn } from "@/lib/utils";
 import type {
   AppState,

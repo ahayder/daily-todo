@@ -44,4 +44,20 @@ describe("workspace transfer", () => {
       }),
     ).toBeNull();
   });
+
+  test("discards legacy content planner branches during import normalization", () => {
+    const state = createInitialState("2026-03-11") as unknown as Record<string, unknown>;
+    state.contentIdeas = { legacy: { id: "legacy" } };
+    delete state.contentBoard;
+    delete state.contentCards;
+
+    const imported = parseWorkspaceImport(
+      { formatVersion: WORKSPACE_EXPORT_VERSION, state },
+      new Date("2026-03-11T08:00:00.000Z"),
+    );
+
+    expect(imported?.contentCards).toEqual({});
+    expect(imported?.contentBoard.columns).toHaveLength(5);
+    expect(imported && "contentIdeas" in imported).toBe(false);
+  });
 });

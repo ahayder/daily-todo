@@ -2,7 +2,7 @@
 
 import { LoaderCircle, LogOut, MailCheck } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "@/components/auth-context";
+import { useAuth } from "@/components/auth/auth-context";
 import { Button } from "@/components/ui/button";
 
 export function VerificationPendingScreen() {

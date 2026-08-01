@@ -3,15 +3,18 @@
 import { startTransition, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
+  Eye,
+  EyeOff,
   LoaderCircle,
   LockKeyhole,
   Mail,
   Sparkles,
   UserPlus,
 } from "lucide-react";
-import { useAuth } from "@/components/auth-context";
+import { useAuth } from "@/components/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { canUseDevelopmentWorkspace } from "@/lib/dev-mode";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +35,8 @@ export function AuthGate() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const canOpenDevWorkspace = canUseDevelopmentWorkspace();
@@ -122,15 +127,15 @@ export function AuthGate() {
   const message = localError ?? error;
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-10">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-[28px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,white)] shadow-[0_24px_80px_rgba(31,36,48,0.12)] md:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative hidden overflow-hidden border-r border-[var(--line)] bg-[linear-gradient(155deg,rgba(47,109,98,0.12),rgba(250,248,244,0.95)_42%,rgba(196,164,115,0.18))] p-10 md:flex md:flex-col md:justify-between">
+    <main className="h-screen overflow-y-auto bg-[var(--paper)] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] sm:min-h-[calc(100vh-5rem)] md:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative hidden overflow-hidden border-r border-[var(--line)] bg-[linear-gradient(155deg,color-mix(in_srgb,var(--brand-soft)_70%,var(--paper-strong)),var(--paper)_42%,color-mix(in_srgb,var(--priority-2-soft)_48%,var(--paper-strong)))] p-10 md:flex md:flex-col md:justify-between">
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -top-24 left-10 h-52 w-52 rounded-full bg-[rgba(47,109,98,0.16)] blur-3xl" />
-            <div className="absolute bottom-6 right-8 h-48 w-48 rounded-full bg-[rgba(196,164,115,0.20)] blur-3xl" />
+            <div className="absolute -top-24 left-10 h-52 w-52 rounded-full bg-[color:color-mix(in_srgb,var(--brand)_16%,transparent)] blur-3xl" />
+            <div className="absolute right-8 bottom-6 h-48 w-48 rounded-full bg-[color:color-mix(in_srgb,var(--priority-2)_14%,transparent)] blur-3xl" />
           </div>
           <div className="relative space-y-5">
-            <div className="inline-flex items-center gap-3 rounded-full border border-[rgba(47,109,98,0.16)] bg-white/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--brand)] backdrop-blur">
+            <div className="inline-flex items-center gap-3 rounded-full border border-[color:color-mix(in_srgb,var(--brand)_24%,var(--line))] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,transparent)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--brand)] backdrop-blur">
               <div className="app-logo h-6 w-6 rounded-[9px]" aria-hidden="true" />
               PocketBase Sync
             </div>
@@ -152,7 +157,7 @@ export function AuthGate() {
             ].map((item) => (
               <div
                 key={item}
-                className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm text-[var(--ink-900)] backdrop-blur"
+                className="flex items-center gap-3 rounded-2xl border border-[color:color-mix(in_srgb,var(--line)_82%,transparent)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,transparent)] px-4 py-3 text-sm text-[var(--ink-900)] backdrop-blur"
               >
                 <Sparkles className="h-4 w-4 text-[var(--brand)]" />
                 <span>{item}</span>
@@ -161,10 +166,10 @@ export function AuthGate() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center bg-[rgba(250,248,244,0.74)] px-4 py-8 sm:px-8 md:px-10">
+        <section className="flex items-center justify-center bg-[var(--paper)] px-4 py-8 sm:px-8 md:px-10">
           <div className="w-full max-w-md">
             <div className="mb-6 flex items-center justify-between md:hidden">
-              <div className="inline-flex items-center gap-3 rounded-full border border-[var(--line)] bg-white/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">
+              <div className="inline-flex items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--paper-strong)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">
                 <div className="app-logo h-6 w-6 rounded-[9px]" aria-hidden="true" />
                 PocketBase Sync
               </div>
@@ -222,7 +227,7 @@ export function AuthGate() {
                     onChange={(event) => setName(event.target.value)}
                     placeholder="How should we greet you?"
                     autoComplete="name"
-                    className="h-12 rounded-2xl border-[var(--line)] bg-white/70 px-4"
+                    className="h-12 rounded-2xl border-[var(--line)] bg-[var(--paper-strong)] px-4 text-[var(--ink-900)]"
                   />
                 </label>
               ) : null}
@@ -236,38 +241,64 @@ export function AuthGate() {
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
-                  className="h-12 rounded-2xl border-[var(--line)] bg-white/70 px-4"
+                  className="h-12 rounded-2xl border-[var(--line)] bg-[var(--paper-strong)] px-4 text-[var(--ink-900)]"
                 />
               </label>
 
               {mode !== "reset" ? (
-                <label className="block space-y-2">
-                  <span className="text-sm font-semibold text-[var(--ink-900)]">Password</span>
-                  <Input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="••••••••"
-                    autoComplete={mode === "register" ? "new-password" : "current-password"}
-                    required
-                    className="h-12 rounded-2xl border-[var(--line)] bg-white/70 px-4"
-                  />
-                </label>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="auth-password"
+                    className="block text-sm font-semibold text-[var(--ink-900)]"
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="auth-password"
+                      type={isPasswordVisible ? "text" : "password"}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="••••••••"
+                      autoComplete={mode === "register" ? "new-password" : "current-password"}
+                      required
+                      className="h-12 rounded-2xl border-[var(--line)] bg-[var(--paper-strong)] px-4 pr-12 text-[var(--ink-900)]"
+                    />
+                    <PasswordVisibilityButton
+                      isVisible={isPasswordVisible}
+                      label="password"
+                      onToggle={() => setIsPasswordVisible((isVisible) => !isVisible)}
+                    />
+                  </div>
+                </div>
               ) : null}
 
               {mode === "register" ? (
-                <label className="block space-y-2">
-                  <span className="text-sm font-semibold text-[var(--ink-900)]">Confirm password</span>
-                  <Input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="Repeat your password"
-                    autoComplete="new-password"
-                    required
-                    className="h-12 rounded-2xl border-[var(--line)] bg-white/70 px-4"
-                  />
-                </label>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="auth-confirm-password"
+                    className="block text-sm font-semibold text-[var(--ink-900)]"
+                  >
+                    Confirm password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="auth-confirm-password"
+                      type={isConfirmPasswordVisible ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="Repeat your password"
+                      autoComplete="new-password"
+                      required
+                      className="h-12 rounded-2xl border-[var(--line)] bg-[var(--paper-strong)] px-4 pr-12 text-[var(--ink-900)]"
+                    />
+                    <PasswordVisibilityButton
+                      isVisible={isConfirmPasswordVisible}
+                      label="confirmation password"
+                      onToggle={() => setIsConfirmPasswordVisible((isVisible) => !isVisible)}
+                    />
+                  </div>
+                </div>
               ) : null}
 
               {message ? (
@@ -374,5 +405,35 @@ export function AuthGate() {
         </section>
       </div>
     </main>
+  );
+}
+
+function PasswordVisibilityButton({
+  isVisible,
+  label,
+  onToggle,
+}: {
+  isVisible: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  const actionLabel = `${isVisible ? "Hide" : "Show"} ${label}`;
+  const Icon = isVisible ? EyeOff : Eye;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={actionLabel}
+          aria-pressed={isVisible}
+          onClick={onToggle}
+          className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center justify-center rounded-lg p-2 text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{actionLabel}</TooltipContent>
+    </Tooltip>
   );
 }

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { useEffect } from "react";
-import { MarkdownEditor } from "@/components/markdown-editor";
+import { MarkdownEditor } from "@/components/editor/markdown-editor";
 
 vi.mock("@/components/editor/bubble-menu", () => ({
   EditorBubbleMenu: () => null,

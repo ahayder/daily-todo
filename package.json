@@ -14,6 +14,7 @@
     "tauri:build:mac": "pnpm tauri build --bundles app,dmg --ci",
     "version:sync": "node scripts/sync-app-version.mjs",
     "pocketbase:schema:apply": "node scripts/apply-pocketbase-schema.mjs",
+    "pocketbase:content-planner:cleanup": "node scripts/cleanup-content-planner.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -49,6 +50,8 @@
     "pocketbase": "^0.26.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "shadcn": "^4.0.5",
     "tailwind-merge": "^3.5.0",
     "tippy.js": "^6.3.7",

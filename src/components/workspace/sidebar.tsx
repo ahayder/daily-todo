@@ -23,11 +23,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { toISODate } from "@/lib/date";
 import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
-import type { AppAction } from "@/components/app-context";
+import type { AppAction } from "@/components/app/app-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAuth } from "@/components/auth-context";
-import { ContentPlannerSidebarPanels, type ContentPlannerControls } from "@/components/content-planner-view";
+import { useAuth } from "@/components/auth/auth-context";
 import { cn } from "@/lib/utils";
 import { DEFAULT_NOTES_FOLDER_ID, getSortedDailyDates } from "@/lib/store";
 import type { AppState, NoteDoc, NoteFolder, ThemeMode } from "@/lib/types";
@@ -59,7 +58,6 @@ type Props = {
     hasUnsyncedChanges: boolean;
   };
   retrySync: () => Promise<void>;
-  contentPlannerControls?: ContentPlannerControls;
 };
 
 const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
@@ -498,7 +496,7 @@ function NotesTree({
   );
 }
 
-export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerControls }: Props) {
+export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   const [activeDraggedNoteId, setActiveDraggedNoteId] = useState<string | null>(null);
   const { session } = useAuth();
   const sensors = useSensors(
@@ -545,7 +543,6 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
 
   const isTodosView = !mounted || state.uiState.lastView === "todos";
   const isPlannerView = mounted && state.uiState.lastView === "planner";
-  const isContentPlannerView = mounted && state.uiState.lastView === "content-planner";
 
   const handleDragEnd = (event: DragEndEvent) => {
     const noteId = event.active.data.current?.noteId as string | undefined;
@@ -592,11 +589,6 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
                 <PanelsTopLeft className="h-3.5 w-3.5" />
                 Daily Planner Presets
               </>
-            ) : isContentPlannerView ? (
-              <>
-                <PanelsTopLeft className="h-3.5 w-3.5" />
-                Content Planner
-              </>
             ) : (
               <>
                 <FileText className="h-3.5 w-3.5" />
@@ -631,7 +623,7 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </>
-            ) : isContentPlannerView ? null : (
+            ) : (
               <>
                 <button
                   type="button"
@@ -662,31 +654,7 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDraggedNoteId(null)}
       >
-      {isContentPlannerView ? (
-        <div className="sidebar-scroll sidebar-scroll--flush flex-1 min-h-0 overflow-y-auto">
-          {contentPlannerControls ? (
-            <ContentPlannerSidebarPanels
-              controls={contentPlannerControls}
-              ideas={Object.values(state.contentIdeas)}
-              savedPillars={state.contentPlannerOptions.pillars}
-              savedPlatforms={state.contentPlannerOptions.platforms}
-              onAddPillarOption={(value) =>
-                dispatch({ type: "add-content-planner-pillar-option", value })
-              }
-              onRemovePillarOption={(value) =>
-                dispatch({ type: "remove-content-planner-pillar-option", value })
-              }
-              onAddPlatformOption={(value) =>
-                dispatch({ type: "add-content-planner-platform-option", value })
-              }
-              onRemovePlatformOption={(value) =>
-                dispatch({ type: "remove-content-planner-platform-option", value })
-              }
-            />
-          ) : null}
-        </div>
-      ) : (
-        <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0">
           {!mounted ? null : isTodosView ? (
             <div className="sidebar-tree">
               {Array.from(groupedYears.keys())
@@ -799,8 +767,7 @@ export function Sidebar({ state, dispatch, sync, retrySync, contentPlannerContro
               <NotesTree state={state} dispatch={dispatch} activeDraggedNoteId={activeDraggedNoteId} />
             </div>
           )}
-        </ScrollArea>
-      )}
+      </ScrollArea>
       </DndContext>
       <div className="sidebar-footer">
         <div className="sidebar-footer-bar">

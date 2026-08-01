@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AuthProvider } from "@/components/auth-context";
-import { AppProvider, appReducer, useAppState } from "@/components/app-context";
+import { AuthProvider } from "@/components/auth/auth-context";
+import { AppProvider, appReducer, useAppState } from "@/components/app/app-context";
 import {
   CONTENT_FONT_SCALE_DEFAULT,
   CONTENT_FONT_SCALE_MAX,
   CONTENT_FONT_SCALE_MIN,
 } from "@/lib/content-font-scale";
 import { createPersistenceMetadata } from "@/lib/persistence";
-import { createContentIdea, createContentIdeaHookVariant, createContentIdeaScriptStep, createInitialState } from "@/lib/store";
+import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 vi.mock("next/navigation", () => ({
@@ -222,252 +222,112 @@ describe("appReducer theme mode", () => {
     expect(updated.plannerPresets[presetId].days.monday.events[0].color).toBe("gold");
   });
 
-  test("creates and selects a content idea", () => {
+  test("manages content board columns", () => {
     const initial = createInitialState("2026-03-11");
-
-    const next = appReducer(initial, {
-      type: "create-content-idea",
-      input: {
-        hook: "Ship before polish",
-        premise: "The first version should answer the market honestly.",
-        pillar: "Teach",
-        channels: ["LinkedIn"],
-        tags: ["launch"],
-        sourceLabel: "manual",
-        sourceType: "human",
-      },
+    const added = appReducer(initial, {
+      type: "add-content-column",
+      title: "Review",
+      subtitle: "Waiting for approval",
     });
+    const column = added.contentBoard.columns.at(-1)!;
 
-    const createdIdea = Object.values(next.contentIdeas)[0];
+    expect(column.title).toBe("Review");
+    expect(column.subtitle).toBe("Waiting for approval");
 
-    expect(createdIdea.hook).toBe("Ship before polish");
-    expect(next.contentPlannerOptions.pillars).toContain("Teach");
-    expect(next.contentPlannerOptions.platforms).toContain("LinkedIn");
-    expect(next.uiState.selectedContentIdeaId).toBe(createdIdea.id);
-  });
-
-  test("updates content idea fields and planner ui filters", () => {
-    const initial = createInitialState("2026-03-11");
-    const idea = createContentIdea({
-      hook: "Old hook",
-      premise: "Old premise",
+    const renamed = appReducer(added, {
+      type: "rename-content-column",
+      columnId: column.id,
+      title: "Final Review",
     });
-    initial.contentIdeas[idea.id] = idea;
-    initial.uiState.selectedContentIdeaId = idea.id;
+    expect(renamed.contentBoard.columns.at(-1)?.title).toBe("Final Review");
 
-    const updatedIdeaState = appReducer(initial, {
-      type: "update-content-idea",
-      ideaId: idea.id,
-      updates: {
-        hook: "New hook",
-        premise: "New premise",
-        pillar: "Proof",
-      },
+    const withUpdatedSubtitle = appReducer(renamed, {
+      type: "update-content-column-subtitle",
+      columnId: column.id,
+      subtitle: "Approved and ready",
     });
-
-    expect(updatedIdeaState.contentIdeas[idea.id].hook).toBe("New hook");
-    expect(updatedIdeaState.contentIdeas[idea.id].pillar).toBe("Proof");
-    expect(updatedIdeaState.contentPlannerOptions.pillars).toContain("Proof");
-
-    const updatedUiState = appReducer(updatedIdeaState, {
-      type: "update-content-planner-ui",
-      updates: {
-        searchQuery: "proof",
-        statusFilter: "curating",
-      },
-    });
-
-    expect(updatedUiState.uiState.contentPlanner.searchQuery).toBe("proof");
-    expect(updatedUiState.uiState.contentPlanner.statusFilter).toBe("curating");
-  });
-
-  test("changes content idea status and deletes invalid selection safely", () => {
-    const initial = createInitialState("2026-03-11");
-    const firstIdea = createContentIdea({
-      hook: "First idea",
-      premise: "First premise",
-    });
-    const secondIdea = createContentIdea({
-      hook: "Second idea",
-      premise: "Second premise",
-    });
-    initial.contentIdeas = {
-      [firstIdea.id]: firstIdea,
-      [secondIdea.id]: secondIdea,
-    };
-    initial.uiState.selectedContentIdeaId = secondIdea.id;
-
-    const moved = appReducer(initial, {
-      type: "set-content-idea-status",
-      ideaId: secondIdea.id,
-      status: "scripted",
-    });
-
-    expect(moved.contentIdeas[secondIdea.id].status).toBe("scripted");
-
-    const deleted = appReducer(moved, {
-      type: "delete-content-idea",
-      ideaId: secondIdea.id,
-    });
-
-    expect(deleted.contentIdeas[secondIdea.id]).toBeUndefined();
-    expect(deleted.uiState.selectedContentIdeaId).toBe(firstIdea.id);
-  });
-
-  test("manages content idea tags, hooks, and script steps", () => {
-    const initial = createInitialState("2026-03-11");
-    const hook = createContentIdeaHookVariant("Original hook");
-    const step = createContentIdeaScriptStep({
-      label: "Hook",
-      body: "Start with the surprising claim.",
-      actionLabel: "rewrite",
-    });
-    const idea = createContentIdea({
-      hook: "Core idea",
-      premise: "Core premise",
-      hooks: [hook],
-      activeHookId: hook.id,
-      scriptSteps: [step],
-      tags: ["launch"],
-    });
-    initial.contentIdeas = { [idea.id]: idea };
-    initial.uiState.selectedContentIdeaId = idea.id;
-
-    const withTag = appReducer(initial, {
-      type: "add-content-idea-tag",
-      ideaId: idea.id,
-      tag: "strategy",
-    });
-    expect(withTag.contentIdeas[idea.id].tags).toContain("strategy");
-
-    const withoutTag = appReducer(withTag, {
-      type: "remove-content-idea-tag",
-      ideaId: idea.id,
-      tag: "launch",
-    });
-    expect(withoutTag.contentIdeas[idea.id].tags).not.toContain("launch");
-
-    const nextHook = createContentIdeaHookVariant("Sharper hook");
-    const withHook = appReducer(withoutTag, {
-      type: "add-content-idea-hook",
-      ideaId: idea.id,
-      hook: nextHook,
-    });
-    expect(withHook.contentIdeas[idea.id].hooks).toHaveLength(2);
-
-    const activeHook = appReducer(withHook, {
-      type: "set-content-idea-active-hook",
-      ideaId: idea.id,
-      hookId: nextHook.id,
-    });
-    expect(activeHook.contentIdeas[idea.id].activeHookId).toBe(nextHook.id);
-
-    const nextStep = createContentIdeaScriptStep({
-      label: "CTA",
-      body: "Ask the audience to reply.",
-      actionLabel: "suggest",
-    });
-    const withStep = appReducer(activeHook, {
-      type: "add-content-idea-script-step",
-      ideaId: idea.id,
-      step: nextStep,
-    });
-    expect(withStep.contentIdeas[idea.id].scriptSteps).toHaveLength(2);
-
-    const reordered = appReducer(withStep, {
-      type: "reorder-content-idea-script-step",
-      ideaId: idea.id,
-      stepId: nextStep.id,
-      targetIndex: 0,
-    });
-    expect(reordered.contentIdeas[idea.id].scriptSteps[0].id).toBe(nextStep.id);
-  });
-
-  test("applies ai results as structured planner updates", () => {
-    const initial = createInitialState("2026-03-11");
-    const idea = createContentIdea({
-      hook: "Core idea",
-      premise: "Core premise",
-    });
-    initial.contentIdeas = { [idea.id]: idea };
-    initial.uiState.selectedContentIdeaId = idea.id;
-
-    const next = appReducer(initial, {
-      type: "apply-content-idea-ai-result",
-      ideaId: idea.id,
-      result: {
-        tags: ["launch", "trust"],
-        hooks: [createContentIdeaHookVariant("Better hook")],
-        scriptSteps: [
-          createContentIdeaScriptStep({
-            label: "Hook",
-            body: "Open on the tension immediately.",
-            actionLabel: "rewrite",
-          }),
-        ],
-      },
-    });
-
-    expect(next.contentIdeas[idea.id].tags).toEqual(["launch", "trust"]);
-    expect(next.contentIdeas[idea.id].hooks).toHaveLength(2);
-    expect(next.contentIdeas[idea.id].scriptSteps[0].label).toBe("Hook");
-    expect(next.contentPlannerOptions.pillars).toContain("Teach");
-  });
-
-  test("manages reusable content planner options and blocks deleting in-use values", () => {
-    const initial = createInitialState("2026-03-11");
-    const idea = createContentIdea({
-      hook: "Core idea",
-      premise: "Core premise",
-      pillar: "Teach",
-      channels: ["LinkedIn"],
-    });
-    initial.contentIdeas = { [idea.id]: idea };
-
-    const withCustomOptions = appReducer(
-      appReducer(initial, {
-        type: "add-content-planner-pillar-option",
-        value: "Proof",
-      }),
-      {
-        type: "add-content-planner-platform-option",
-        value: "Podcast",
-      },
+    expect(withUpdatedSubtitle.contentBoard.columns.at(-1)?.subtitle).toBe(
+      "Approved and ready",
     );
 
-    expect(withCustomOptions.contentPlannerOptions.pillars).toContain("Proof");
-    expect(withCustomOptions.contentPlannerOptions.platforms).toContain("Podcast");
-
-    const blocked = appReducer(withCustomOptions, {
-      type: "remove-content-planner-pillar-option",
-      value: "Teach",
+    const reordered = appReducer(withUpdatedSubtitle, {
+      type: "reorder-content-columns",
+      activeColumnId: column.id,
+      overColumnId: withUpdatedSubtitle.contentBoard.columns[0].id,
     });
-    expect(blocked.contentPlannerOptions.pillars).toContain("Teach");
+    expect(reordered.contentBoard.columns[0].id).toBe(column.id);
 
-    const removed = appReducer(withCustomOptions, {
-      type: "remove-content-planner-platform-option",
-      value: "Podcast",
+    const deleted = appReducer(reordered, {
+      type: "delete-content-column",
+      columnId: column.id,
     });
-    expect(removed.contentPlannerOptions.platforms).not.toContain("Podcast");
+    expect(deleted.contentBoard.columns.some((item) => item.id === column.id)).toBe(false);
   });
 
-  test("registers new planner options from imported ai ideas", () => {
+  test("creates, edits, moves, and deletes content cards", () => {
     const initial = createInitialState("2026-03-11");
-    const importedIdea = createContentIdea({
-      hook: "New lane",
-      premise: "Test a new publishing loop.",
-      pillar: "Proof",
-      channels: ["Podcast"],
-      sourceType: "ai",
+    const [ideas, planned] = initial.contentBoard.columns;
+    const created = appReducer(initial, {
+      type: "create-content-card",
+      columnId: ideas.id,
+      title: "  Launch note  ",
+      notes: "  Supporting detail  ",
+    });
+    const card = Object.values(created.contentCards)[0];
+
+    expect(card).toMatchObject({
+      columnId: ideas.id,
+      title: "Launch note",
+      notes: "Supporting detail",
+      order: 0,
     });
 
-    const next = appReducer(initial, {
-      type: "create-content-ideas",
-      ideas: [importedIdea],
+    const updated = appReducer(created, {
+      type: "update-content-card",
+      cardId: card.id,
+      title: "Launch story",
+      notes: "Updated notes.",
+    });
+    expect(updated.contentCards[card.id].title).toBe("Launch story");
+
+    const moved = appReducer(updated, {
+      type: "move-content-card",
+      cardId: card.id,
+      targetColumnId: planned.id,
+      targetIndex: 0,
+    });
+    expect(moved.contentCards[card.id]).toMatchObject({ columnId: planned.id, order: 0 });
+
+    const deleted = appReducer(moved, { type: "delete-content-card", cardId: card.id });
+    expect(deleted.contentCards[card.id]).toBeUndefined();
+  });
+
+  test("keeps non-empty and final columns when deletion is requested", () => {
+    const initial = createInitialState("2026-03-11");
+    const column = initial.contentBoard.columns[0];
+    const withCard = appReducer(initial, {
+      type: "create-content-card",
+      columnId: column.id,
+      title: "Keep me",
     });
 
-    expect(next.contentPlannerOptions.pillars).toContain("Proof");
-    expect(next.contentPlannerOptions.platforms).toContain("Podcast");
+    expect(
+      appReducer(withCard, {
+        type: "delete-content-column",
+        columnId: column.id,
+      }).contentBoard.columns,
+    ).toHaveLength(5);
+
+    const singleColumn = {
+      ...initial,
+      contentBoard: { ...initial.contentBoard, columns: [column] },
+    };
+    expect(
+      appReducer(singleColumn, {
+        type: "delete-content-column",
+        columnId: column.id,
+      }).contentBoard.columns,
+    ).toHaveLength(1);
   });
 
   test("deletes planner presets and keeps planner selectable", () => {

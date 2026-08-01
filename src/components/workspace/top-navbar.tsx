@@ -11,8 +11,8 @@ import {
   MonitorDown,
 } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
-import type { AppAction } from "@/components/app-context";
-import { useDesktopUpdate } from "@/components/desktop-update-provider";
+import type { AppAction } from "@/components/app/app-context";
+import { useDesktopUpdate } from "@/components/workspace/desktop-update-provider";
 import {
   CONTENT_FONT_SCALE_MAX,
   CONTENT_FONT_SCALE_MIN,
@@ -173,21 +173,23 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   return (
     <header className="top-navbar">
       <div className="flex items-center gap-2.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "toggle-sidebar-collapsed" })}
-              aria-label={state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
-              className="theme-cycle-btn"
-            >
-              <SidebarIcon className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
-          </TooltipContent>
-        </Tooltip>
+        {!isContentPlanner ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "toggle-sidebar-collapsed" })}
+                aria-label={state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+                className="theme-cycle-btn"
+              >
+                <SidebarIcon className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <div className="app-logo" aria-hidden="true" />
         <span className="text-[15px] font-semibold tracking-wide text-[var(--ink-900)]">
           DailyTodo

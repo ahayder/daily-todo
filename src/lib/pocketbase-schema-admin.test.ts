@@ -7,6 +7,7 @@ import {
   hasSchemaFailures,
   mergeCollectionDefinition,
 } from "../../scripts/lib/pocketbase-schema.mjs";
+import { stripLegacyContentPlannerState } from "../../scripts/lib/content-planner-cleanup.mjs";
 
 function createBaseCollection(
   input: Partial<{
@@ -46,7 +47,8 @@ describe("buildSchemaDefinitions", () => {
       "notes",
       "note_folders",
       "planner_presets",
-      "content_ideas",
+      "content_boards",
+      "content_cards",
       "workspace_state",
       "app_state_snapshots",
     ]);
@@ -149,8 +151,8 @@ describe("applyPocketBaseSchema", () => {
       logger: { log: vi.fn(), error: vi.fn() } as unknown as Console,
     });
 
-    expect(summary.created).toHaveLength(7);
-    expect(create).toHaveBeenCalledTimes(7);
+    expect(summary.created).toHaveLength(8);
+    expect(create).toHaveBeenCalledTimes(8);
   });
 
   test("updates existing collection with drift and preserves unchanged ones", async () => {
@@ -212,5 +214,29 @@ describe("applyPocketBaseSchema", () => {
     expect(summary.failed).toHaveLength(1);
     expect(hasSchemaFailures(summary)).toBe(true);
     expect(formatSchemaSummary(summary)).toContain("Failed: 1");
+  });
+});
+
+describe("content planner cleanup", () => {
+  test("strips only legacy planner branches from snapshots", () => {
+    const cleaned = stripLegacyContentPlannerState(
+      {
+        dailyPages: { "2026-07-29": { date: "2026-07-29", markdown: "Keep", todos: [] } },
+        contentIdeas: { old: { id: "old" } },
+        contentPlannerOptions: { pillars: [], platforms: [] },
+        uiState: {
+          lastView: "content-planner",
+          selectedContentIdeaId: "old",
+          contentPlanner: { searchQuery: "legacy" },
+        },
+      },
+      new Date("2026-07-29T00:00:00.000Z"),
+    );
+
+    expect(cleaned.dailyPages["2026-07-29"].markdown).toBe("Keep");
+    expect(cleaned.contentBoard.columns).toHaveLength(5);
+    expect(cleaned.contentCards).toEqual({});
+    expect("contentIdeas" in cleaned).toBe(false);
+    expect("selectedContentIdeaId" in cleaned.uiState).toBe(false);
   });
 });

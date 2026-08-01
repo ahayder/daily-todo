@@ -7,15 +7,15 @@ import {
   TodosView,
   getDropIndicatorPosition,
   getDropInsertionIndex,
-} from "@/components/todos-view";
-import { appReducer } from "@/components/app-context";
+} from "@/components/todos/todos-view";
+import { appReducer } from "@/components/app/app-context";
 import { createInitialState } from "@/lib/store";
 
 vi.mock("canvas-confetti", () => ({
   default: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("@/components/markdown-editor", () => ({
+vi.mock("@/components/editor/markdown-editor", () => ({
   MarkdownEditor: () => <div data-testid="markdown-editor" />,
 }));
 

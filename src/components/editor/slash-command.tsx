@@ -1,13 +1,13 @@
-import { Extension } from "@tiptap/core";
-import Suggestion from "@tiptap/suggestion";
+import { Extension, type Editor, type Range } from "@tiptap/core";
+import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { type Instance } from "tippy.js";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { Heading1, Heading2, List, ListTodo, PenTool, Type, Image as ImageIcon } from "lucide-react";
 
 type CommandProps = {
-  editor: any;
-  range: any;
+  editor: Editor;
+  range: Range;
 };
 
 type CommandItem = {
@@ -15,6 +15,12 @@ type CommandItem = {
   icon: React.ReactNode;
   command: (props: CommandProps) => void;
 };
+
+type CommandListHandle = {
+  onKeyDown: (props: SuggestionKeyDownProps) => boolean;
+};
+
+type CommandListProps = Pick<SuggestionProps<CommandItem, CommandItem>, "items" | "command">;
 
 const COMMANDS: CommandItem[] = [
   {
@@ -84,7 +90,7 @@ const COMMANDS: CommandItem[] = [
   },
 ];
 
-const CommandList = forwardRef((props: { items: CommandItem[]; command: (item: CommandItem) => void }, ref) => {
+const CommandList = forwardRef<CommandListHandle, CommandListProps>((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const selectItem = (index: number) => {
@@ -159,7 +165,7 @@ export const SlashCommand = Extension.create({
     return {
       suggestion: {
         char: "/",
-        command: ({ editor, range, props }: any) => {
+        command: ({ editor, range, props }: { editor: Editor; range: Range; props: CommandItem }) => {
           props.command({ editor, range });
         },
       },
@@ -177,7 +183,7 @@ export const SlashCommand = Extension.create({
           );
         },
         render: () => {
-          let component: ReactRenderer;
+          let component: ReactRenderer<CommandListHandle, CommandListProps>;
           let popup: Instance[];
 
           return {
@@ -210,7 +216,7 @@ export const SlashCommand = Extension.create({
                 popup[0].hide();
                 return true;
               }
-              return (component.ref as any)?.onKeyDown(props);
+              return component.ref?.onKeyDown(props) ?? false;
             },
             onExit() {
               popup[0].destroy();

@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { AuthProvider } from "@/components/auth-context";
-import { AppProvider } from "@/components/app-context";
-import { DesktopUpdateProvider } from "@/components/desktop-update-provider";
+import { AuthProvider } from "@/components/auth/auth-context";
+import { AppProvider } from "@/components/app/app-context";
+import { DesktopUpdateProvider } from "@/components/workspace/desktop-update-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { AuthRepository } from "@/lib/auth";
 import type { PersistenceRepository } from "@/lib/persistence";

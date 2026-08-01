@@ -49,24 +49,18 @@ src/
 │   ├── content-planner/page.tsx # Content planner page
 │   └── auth/reset/page.tsx # PocketBase password reset landing page
 ├── components/
-│   ├── providers.tsx       # Tooltip + desktop updater + auth + app providers
-│   ├── auth-context.tsx    # PocketBase auth session state and actions
-│   ├── app-context.tsx     # AppState, AppAction, appReducer, AppProvider
-│   ├── auth-gate.tsx       # Sign-in / register / password reset entry screen
-│   ├── top-navbar.tsx      # Top bar: nav pills + sync status + updater + theme toggle
-│   ├── sidebar.tsx         # Left sidebar: date tree (daily) / notes list (notes)
-│   ├── workspace.tsx       # Shell: top-nav + sidebar + main panel
-│   ├── todos-view.tsx      # Main task view (todos) + focus timer
-│   ├── notes-view.tsx      # Full-width note with title + editor
-│   ├── planner-view.tsx    # Daily planner board and event editor
-│   ├── content-planner-view.tsx # Content planner workspace: library, filters, detail editing, AI actions
-│   ├── markdown-editor.tsx # Tiptap editor wrapper with toolbar, bubble menu, slash command
-│   ├── desktop-update-provider.tsx # Tauri updater state + dialogs
-│   └── editor/             # Tiptap extensions, toolbar, bubble menu, Excalidraw node views
+│   ├── app/                # App state provider and reducer
+│   ├── auth/               # Auth context, gate, and auth flow screens
+│   ├── workspace/          # Shell: providers, top-nav, sidebar, updater, main workspace
+│   ├── todos/              # Main task view (todos) + focus timer
+│   ├── notes/              # Full-width note with title + editor
+│   ├── planner/            # Daily planner board and event editor
+│   ├── content-planner-view.tsx # Public compatibility export for the content planner board
+│   ├── content-planner/         # Trello-style content board, columns, cards, dialogs, and drag-and-drop
+│   └── editor/             # Markdown editor wrapper, Tiptap extensions, toolbar, bubble menu, Excalidraw node views
 └── lib/
     ├── types.ts            # All TypeScript types (Todo, DailyPage, NoteDoc, etc.)
     ├── store.ts            # Pure state factories + selectors (groupTodosByPriority, etc.)
-    ├── content-planner-ai.ts # Lightweight AI adapter for idea generation, hooks, outlines, tags, repurposing
     ├── persistence.ts      # persistence types, normalization, metadata helpers
     ├── local-cache-storage.ts # browser cache envelope for assembled AppState
     ├── auth.ts             # auth repository contract
@@ -84,8 +78,8 @@ AppState {
   notesDocs:  Record<id, NoteDoc>
   noteFolders: Record<id, NoteFolder>
   plannerPresets: Record<id, PlannerPreset>
-  contentIdeas: Record<id, ContentIdea>
-  contentPlannerOptions: { pillars: string[], platforms: string[] }
+  contentBoard: ContentBoard
+  contentCards: Record<id, ContentCard>
   uiState:    UIState                       // synced selection, focus timer + device prefs
 }
 
@@ -93,7 +87,9 @@ DailyPage { date, markdown, todos[] }
 NoteDoc   { id, folderId, title, markdown, updatedAt }
 NoteFolder { id, parentId, name }
 PlannerPreset { id, name, dayOrder[], days, updatedAt }
-ContentIdea { id, code, hook, premise, status, pillar, channels[], tags[], score, hooks[], scriptSteps[] }
+ContentBoard { columns: ContentColumn[], updatedAt }
+ContentColumn { id, title, subtitle }
+ContentCard { id, columnId, title, notes, order, updatedAt }
 Todo      { id, text, status, priority, estimatedMinutes, parentId }
 ```
 
@@ -102,12 +98,12 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 - **Carryover**: When a new day is created (`ensureDailyPageForDate`), all incomplete todos AND the markdown from the previous day are copied forward automatically.
 - **Authentication**: The workspace is auth-gated. Anonymous users see `AuthGate`, unverified users see `VerificationPendingScreen`, and authenticated users load their synced workspace.
 - **Persistence**: `AppProvider` hydrates an assembled `AppState`, keeps a browser cache for fast startup/offline support, and syncs through PocketBase when authenticated.
-- **Content Planner**: The content planner is now a real persisted workspace, not a static demo. It stores ideas in `contentIdeas`, stores reusable synced taxonomies in `contentPlannerOptions`, keeps local-only planner UI preferences inside `uiState.contentPlanner`, and uses reducer actions for idea CRUD, status changes, tags, hooks, script steps, and AI-applied updates.
+- **Content Planner**: `/content-planner` is a full-width, single-board Kanban workspace. New boards seed Ideas, Planned, In Progress, Ready, and Published columns. Columns include editable titles and subtitles plus an ephemeral expand/collapse control. Cards present one multiline Markdown surface, edit directly in place, and open in a read-only preview dialog; saved cards render safe GitHub-flavored Markdown, while the first line and remaining text continue syncing through the existing `title` and `notes` fields for compatibility. Pure reducer actions and `dnd-kit` provide pointer- and keyboard-accessible ordering.
 - **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
 - **Navigation**: Top navbar with Todos/Notes/Daily Planner/Content Planner pills, sync status, desktop updater, theme toggle.
-- **Sync model**: PocketBase stores top-level entities (`daily_pages`, `notes`, `note_folders`, `planner_presets`, `content_ideas`, `workspace_state`).
+- **Sync model**: PocketBase stores top-level entities (`daily_pages`, `notes`, `note_folders`, `planner_presets`, `content_boards`, `content_cards`, `workspace_state`).
 - **Desktop builds**: The Tauri shell supports in-app update checks and installation on supported desktop platforms.
 
 ---
@@ -201,8 +197,8 @@ box-shadow:
 - **Persistence is hybrid** — PocketBase is the source of truth for synced content, while the browser keeps a per-user assembled cache for fast warm startup, offline fallback, and device-local UI preferences.
 - **Authentication** is PocketBase-backed — email/password sign-in, registration, email verification, and password reset are part of the expected product flow.
 - **Device-local UI state** — values like theme mode, sidebar collapsed state, content font scale, and focus mode remain local-only and should not be moved into synced PocketBase records unless there is a strong cross-device reason.
-- **Content planner preferences are local-only** — planner layout, density, filters, search, and AI panel visibility live in `uiState.contentPlanner`; the planner data itself lives in synced `contentIdeas` plus synced reusable pillar/platform options in `contentPlannerOptions`.
-- **Content planner AI is adapter-based** — `src/lib/content-planner-ai.ts` returns structured planner updates (ideas, hooks, tags, script steps, repurposed premise/channels) so UI components never parse freeform AI text.
+- **Content planner is intentionally narrow** — one fixed board per user, editable and locally collapsible columns, and Markdown cards edited inline with a read-only preview dialog. Column collapse and the active preview are ephemeral component state, not synced preferences. Card display uses `react-markdown` plus `remark-gfm` with raw HTML disabled, while card text still maps to `title` plus `notes` internally for persistence compatibility. Scheduling, taxonomy, scoring, filters, AI generation, and alternate views are outside this version.
+- **Content planner persistence** — board columns sync as one `content_boards` record and cards sync individually through `content_cards`; card positions are reindexed to integers after every move. Legacy planner branches are discarded during normalization and workspace import.
 - **Hybrid storage strategy** — use scalar/relation fields for ownership, ids, titles, timestamps, and other queryable atoms; use JSON fields for nested parent-owned structures such as daily todos, planner day order, planner days/events, and small UI arrays.
 - **Desktop updater** lives in the Tauri shell — updater logic and release workflow are part of the product architecture, not a one-off script.
 - **shadcn/ui** components live in `src/components/ui/`. Generate new ones with `npx shadcn@latest add <component>`.

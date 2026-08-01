@@ -29,7 +29,8 @@ import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
 import type {
   AppState,
-  ContentIdea,
+  ContentBoard,
+  ContentCard,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -89,11 +90,22 @@ type PocketBasePlannerPresetRecord = {
   updated_at_client?: string;
 };
 
-type PocketBaseContentIdeaRecord = {
+type PocketBaseContentBoardRecord = {
   id: string;
   owner: string;
-  idea_id?: string;
-  payload_json?: unknown;
+  columns_json?: unknown;
+  updated?: string;
+  updated_at_client?: string;
+};
+
+type PocketBaseContentCardRecord = {
+  id: string;
+  owner: string;
+  card_id?: string;
+  column_id?: string;
+  title?: string;
+  notes?: string;
+  position?: number;
   updated?: string;
   updated_at_client?: string;
 };
@@ -107,8 +119,6 @@ type PocketBaseWorkspaceStateRecord = {
   selected_planner_preset_id?: string | null;
   expanded_years_json?: unknown;
   expanded_months_json?: unknown;
-  content_planner_pillars_json?: unknown;
-  content_planner_platforms_json?: unknown;
   last_view?: SyncableUIState["lastView"] | "daily";
   updated?: string;
   updated_at_client?: string;
@@ -119,7 +129,8 @@ type SyncRecordValue =
   | { key: string; kind: "note"; value: NoteSummary }
   | { key: string; kind: "note_folder"; value: NoteFolder }
   | { key: string; kind: "planner_preset"; value: PlannerPreset }
-  | { key: string; kind: "content_idea"; value: ContentIdea }
+  | { key: string; kind: "content_board"; value: ContentBoard }
+  | { key: string; kind: "content_card"; value: ContentCard }
   | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
 
 type SplitWorkspacePayload = {
@@ -175,7 +186,9 @@ function createRecordMetadata(
   };
 }
 
-function getSyncRecordValuesFromState(state: AppState): Record<string, SyncRecordValue> {
+export function getSyncRecordValuesFromState(
+  state: AppState,
+): Record<string, SyncRecordValue> {
   const values: Record<string, SyncRecordValue> = {};
 
   for (const [date, page] of Object.entries(state.dailyPages)) {
@@ -210,11 +223,17 @@ function getSyncRecordValuesFromState(state: AppState): Record<string, SyncRecor
     };
   }
 
-  for (const [ideaId, idea] of Object.entries(state.contentIdeas)) {
-    values[`content_idea:${ideaId}`] = {
-      key: `content_idea:${ideaId}`,
-      kind: "content_idea",
-      value: idea,
+  values["content_board:self"] = {
+    key: "content_board:self",
+    kind: "content_board",
+    value: state.contentBoard,
+  };
+
+  for (const [cardId, card] of Object.entries(state.contentCards)) {
+    values[`content_card:${cardId}`] = {
+      key: `content_card:${cardId}`,
+      kind: "content_card",
+      value: card,
     };
   }
 
@@ -237,9 +256,9 @@ function assembleStateFromValues(
   const notesDocs: Record<string, NoteDoc> = {};
   const noteFolders: Record<string, NoteFolder> = {};
   const plannerPresets: Record<string, PlannerPreset> = {};
-  const contentIdeas: Record<string, ContentIdea> = {};
+  let contentBoard = fallbackState.contentBoard;
+  const contentCards: Record<string, ContentCard> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
-  let contentPlannerOptions = fallbackState.contentPlannerOptions;
 
   for (const record of Object.values(values)) {
     if (record.kind === "daily_page") {
@@ -265,13 +284,17 @@ function assembleStateFromValues(
       continue;
     }
 
-    if (record.kind === "content_idea") {
-      contentIdeas[record.value.id] = record.value;
+    if (record.kind === "content_board") {
+      contentBoard = record.value;
+      continue;
+    }
+
+    if (record.kind === "content_card") {
+      contentCards[record.value.id] = record.value;
       continue;
     }
 
     syncableUiState = record.value.uiState;
-    contentPlannerOptions = record.value.contentPlannerOptions;
   }
 
   return normalizeAppState(
@@ -280,8 +303,8 @@ function assembleStateFromValues(
       notesDocs,
       noteFolders,
       plannerPresets,
-      contentIdeas,
-      contentPlannerOptions,
+      contentBoard,
+      contentCards,
       uiState: mergeUiState(
         syncableUiState,
         extractLocalOnlyUIState(fallbackState.uiState),
@@ -437,6 +460,26 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     const splitPayload = await this.loadSplitWorkspaceState(userId, cachedEnvelope?.state ?? null, now);
 
     if (splitPayload.hasData) {
+      if (!splitPayload.records["content_board:self"]) {
+        const seededBoard = await this.saveRemoteState({
+          userId,
+          state: splitPayload.state,
+          metadata: createPersistenceMetadata({
+            ...buildMetadataFromRemote(splitPayload.state, splitPayload.records),
+            lastLocalMutationAt: now.toISOString(),
+          }),
+          now,
+        });
+        return toLoadResult(seededBoard.resolvedState ?? splitPayload.state, seededBoard.metadata, {
+          source: cachedEnvelope ? "local" : "remote",
+          status: seededBoard.status,
+          conflictResolution: seededBoard.conflictResolution,
+          notice: seededBoard.notice,
+          errorMessage: seededBoard.errorMessage,
+          persistenceAvailable: cacheAvailable,
+        });
+      }
+
       const resolved = await this.reconcileSplitState(
         userId,
         splitPayload,
@@ -575,6 +618,15 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         if (localRecord && remoteRecord) {
           const sameFingerprint = stableFingerprint(localRecord.value) === stableFingerprint(remoteRecord.value);
           if (sameFingerprint) {
+            if (!currentRemote) {
+              operations.push(
+                this.upsertRecord(
+                  userId,
+                  localRecord,
+                  metadata.lastLocalMutationAt ?? now.toISOString(),
+                ),
+              );
+            }
             resolvedValues[key] = localRecord;
             continue;
           }
@@ -862,7 +914,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     now: Date,
   ): Promise<SplitWorkspacePayload> {
     const client = getPocketBaseClient();
-    const [dailyPages, notes, noteFolders, plannerPresets, contentIdeas, workspaceState] =
+    const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, workspaceState] =
       await Promise.all([
       client
         .collection("daily_pages")
@@ -874,9 +926,10 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       client
         .collection("planner_presets")
         .getFullList<PocketBasePlannerPresetRecord>({ filter: `owner="${userId}"` }),
+      getFirstByFilter<PocketBaseContentBoardRecord>("content_boards", `owner="${userId}"`),
       client
-        .collection("content_ideas")
-        .getFullList<PocketBaseContentIdeaRecord>({ filter: `owner="${userId}"` }),
+        .collection("content_cards")
+        .getFullList<PocketBaseContentCardRecord>({ filter: `owner="${userId}"` }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
     ]);
 
@@ -959,14 +1012,38 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
-    for (const record of contentIdeas) {
-      if (!record.idea_id || !record.payload_json || typeof record.payload_json !== "object") continue;
-      const value = record.payload_json as ContentIdea;
-      const key = `content_idea:${record.idea_id}`;
-      values[key] = { key, kind: "content_idea", value };
+    if (contentBoard) {
+      const value: ContentBoard = {
+        columns: safeArray(contentBoard.columns_json),
+        updatedAt:
+          contentBoard.updated_at_client ?? contentBoard.updated ?? new Date(0).toISOString(),
+      };
+      const key = "content_board:self";
+      values[key] = { key, kind: "content_board", value };
       records[key] = createRecordMetadata(
         key,
-        "content_idea",
+        "content_board",
+        value,
+        contentBoard.updated ?? null,
+        contentBoard.updated_at_client ?? null,
+      );
+    }
+
+    for (const record of contentCards) {
+      if (!record.card_id || !record.column_id || !record.title) continue;
+      const value: ContentCard = {
+        id: record.card_id,
+        columnId: record.column_id,
+        title: record.title,
+        notes: record.notes ?? "",
+        order: Math.max(0, Math.trunc(record.position ?? 0)),
+        updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
+      };
+      const key = `content_card:${record.card_id}`;
+      values[key] = { key, kind: "content_card", value };
+      records[key] = createRecordMetadata(
+        key,
+        "content_card",
         value,
         record.updated ?? null,
         record.updated_at_client ?? null,
@@ -983,10 +1060,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
           expandedYears: safeArray(workspaceState.expanded_years_json),
           expandedMonths: safeArray(workspaceState.expanded_months_json),
           lastView: workspaceState.last_view === "daily" ? "todos" : workspaceState.last_view ?? "todos",
-        },
-        contentPlannerOptions: {
-          pillars: safeArray(workspaceState.content_planner_pillars_json),
-          platforms: safeArray(workspaceState.content_planner_platforms_json),
         },
       };
       values[WORKSPACE_RECORD_KEY] = { key: WORKSPACE_RECORD_KEY, kind: "workspace_state", value };
@@ -1009,7 +1082,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         notes.length > 0 ||
         noteFolders.length > 0 ||
         plannerPresets.length > 0 ||
-        contentIdeas.length > 0 ||
+        Boolean(contentBoard) ||
+        contentCards.length > 0 ||
         Boolean(workspaceState),
     };
   }
@@ -1099,21 +1173,42 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       return;
     }
 
-    if (record.kind === "content_idea") {
-      const existing = await getFirstByFilter<PocketBaseContentIdeaRecord>(
-        "content_ideas",
-        `owner="${userId}" && idea_id="${record.value.id}"`,
+    if (record.kind === "content_board") {
+      const existing = await getFirstByFilter<PocketBaseContentBoardRecord>(
+        "content_boards",
+        `owner="${userId}"`,
       );
       const payload = {
         owner: userId,
-        idea_id: record.value.id,
-        payload_json: record.value,
+        columns_json: record.value.columns,
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("content_ideas").update(existing.id, payload);
+        await client.collection("content_boards").update(existing.id, payload);
       } else {
-        await client.collection("content_ideas").create(payload);
+        await client.collection("content_boards").create(payload);
+      }
+      return;
+    }
+
+    if (record.kind === "content_card") {
+      const existing = await getFirstByFilter<PocketBaseContentCardRecord>(
+        "content_cards",
+        `owner="${userId}" && card_id="${record.value.id}"`,
+      );
+      const payload = {
+        owner: userId,
+        card_id: record.value.id,
+        column_id: record.value.columnId,
+        title: record.value.title,
+        notes: record.value.notes,
+        position: record.value.order,
+        updated_at_client: updatedAtClient,
+      };
+      if (existing) {
+        await client.collection("content_cards").update(existing.id, payload);
+      } else {
+        await client.collection("content_cards").create(payload);
       }
       return;
     }
@@ -1130,8 +1225,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       selected_planner_preset_id: record.value.uiState.selectedPlannerPresetId,
       expanded_years_json: record.value.uiState.expandedYears,
       expanded_months_json: record.value.uiState.expandedMonths,
-      content_planner_pillars_json: record.value.contentPlannerOptions.pillars,
-      content_planner_platforms_json: record.value.contentPlannerOptions.platforms,
       last_view: record.value.uiState.lastView,
       updated_at_client: updatedAtClient,
     };
@@ -1189,13 +1282,24 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       return;
     }
 
-    if (record.kind === "content_idea") {
-      const existing = await getFirstByFilter<PocketBaseContentIdeaRecord>(
-        "content_ideas",
-        `owner="${userId}" && idea_id="${record.value.id}"`,
+    if (record.kind === "content_board") {
+      const existing = await getFirstByFilter<PocketBaseContentBoardRecord>(
+        "content_boards",
+        `owner="${userId}"`,
       );
       if (existing) {
-        await client.collection("content_ideas").delete(existing.id);
+        await client.collection("content_boards").delete(existing.id);
+      }
+      return;
+    }
+
+    if (record.kind === "content_card") {
+      const existing = await getFirstByFilter<PocketBaseContentCardRecord>(
+        "content_cards",
+        `owner="${userId}" && card_id="${record.value.id}"`,
+      );
+      if (existing) {
+        await client.collection("content_cards").delete(existing.id);
       }
       return;
     }

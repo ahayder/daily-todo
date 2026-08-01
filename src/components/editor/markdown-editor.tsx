@@ -8,10 +8,10 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 import Image from "@tiptap/extension-image";
 import { useEffect, useRef } from "react";
-import { DrawingNode } from "./editor/drawing-node";
-import { EditorToolbar } from "./editor/editor-toolbar";
-import { EditorBubbleMenu } from "./editor/bubble-menu";
-import { SlashCommand } from "./editor/slash-command";
+import { DrawingNode } from "./drawing-node";
+import { EditorToolbar } from "./editor-toolbar";
+import { EditorBubbleMenu } from "./bubble-menu";
+import { SlashCommand } from "./slash-command";
 import { compressImageToBase64 } from "@/lib/image";
 
 type Props = {

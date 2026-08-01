@@ -88,7 +88,14 @@ export function createBrowserLocalCacheStorage(): LocalCacheStorage {
                   : null,
               records:
                 parsedMetadata?.records && typeof parsedMetadata.records === "object"
-                  ? (parsedMetadata.records as Record<string, PersistenceRecordMetadata>)
+                  ? Object.fromEntries(
+                      Object.entries(
+                        parsedMetadata.records as Record<string, PersistenceRecordMetadata>,
+                      ).filter(
+                        ([, record]) =>
+                          (record as { kind?: string } | undefined)?.kind !== "content_idea",
+                      ),
+                    )
                   : {},
               hasMigratedToSplitStore:
                 typeof parsedMetadata?.hasMigratedToSplitStore === "boolean"

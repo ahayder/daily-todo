@@ -11,10 +11,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { MarkdownEditor } from "@/components/markdown-editor";
+import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AppState } from "@/lib/types";
-import type { AppAction } from "@/components/app-context";
+import type { AppAction } from "@/components/app/app-context";
 import { DEFAULT_NOTES_FOLDER_ID } from "@/lib/store";
 import { FileText, FolderOpen, Trash2 } from "lucide-react";
 import type { Dispatch } from "react";

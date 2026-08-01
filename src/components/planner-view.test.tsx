@@ -2,8 +2,8 @@ import { useReducer } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
-import { appReducer } from "@/components/app-context";
-import { PlannerView } from "@/components/planner-view";
+import { appReducer } from "@/components/app/app-context";
+import { PlannerView } from "@/components/planner/planner-view";
 import { createInitialState } from "@/lib/store";
 
 function Harness() {

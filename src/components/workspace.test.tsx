@@ -1,24 +1,24 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { Workspace } from "@/components/workspace";
+import { Workspace } from "@/components/workspace/workspace";
 import { createInitialState } from "@/lib/store";
 
 const mockUseAppState = vi.fn();
 const mockContentPlannerView = vi.fn();
 
-vi.mock("@/components/app-context", () => ({
+vi.mock("@/components/app/app-context", () => ({
   useAppState: () => mockUseAppState(),
 }));
 
-vi.mock("@/components/todos-view", () => ({
+vi.mock("@/components/todos/todos-view", () => ({
   TodosView: () => <div data-testid="todos-view" />,
 }));
 
-vi.mock("@/components/notes-view", () => ({
+vi.mock("@/components/notes/notes-view", () => ({
   NotesView: () => <div data-testid="notes-view" />,
 }));
 
-vi.mock("@/components/planner-view", () => ({
+vi.mock("@/components/planner/planner-view", () => ({
   PlannerView: () => <div data-testid="planner-view" />,
 }));
 
@@ -29,11 +29,11 @@ vi.mock("@/components/content-planner-view", () => ({
   },
 }));
 
-vi.mock("@/components/sidebar", () => ({
+vi.mock("@/components/workspace/sidebar", () => ({
   Sidebar: () => <aside data-testid="sidebar" />,
 }));
 
-vi.mock("@/components/top-navbar", () => ({
+vi.mock("@/components/workspace/top-navbar", () => ({
   TopNavbar: () => <header data-testid="top-navbar" />,
 }));
 
@@ -43,7 +43,7 @@ describe("Workspace", () => {
     mockContentPlannerView.mockReset();
   });
 
-  test("passes a prompt-only planner interface without note context", () => {
+  test("passes the board model and board actions to the content planner", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.lastView = "content-planner";
     state.uiState.selectedNoteId = Object.keys(state.notesDocs)[0] ?? null;
@@ -76,8 +76,10 @@ describe("Workspace", () => {
 
     const props = mockContentPlannerView.mock.calls.at(-1)?.[0] as Record<string, unknown>;
 
-    expect("noteContextLabel" in props).toBe(false);
-    expect(typeof props.onGenerateIdeas).toBe("function");
+    expect(props.board).toBe(state.contentBoard);
+    expect(props.cards).toBe(state.contentCards);
+    expect(typeof props.onAddColumn).toBe("function");
+    expect(typeof props.onMoveCard).toBe("function");
   });
 
   test("hides the top navbar and sidebar in focus mode", () => {
@@ -147,6 +149,11 @@ describe("Workspace", () => {
     render(<Workspace forcedView="content-planner" />);
 
     expect(screen.getByTestId("content-planner-view")).toBeInTheDocument();
+    expect(screen.getByTestId("top-navbar")).toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("content-planner-view").closest("[data-content-planner-full-width='true']"),
+    ).not.toBeNull();
   });
 
   test("sets shared content font CSS variables on the shell", () => {

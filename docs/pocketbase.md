@@ -1,6 +1,6 @@
 # PocketBase Setup
 
-DailyTodo uses PocketBase with client-only auth and a split synced workspace model. The app now stores user content in separate collections for daily pages, notes, planner presets, and synced workspace navigation state, while keeping device-local UI preferences in local storage only.
+DailyTodo uses PocketBase with client-only auth and a split synced workspace model. The app stores user content in separate collections for daily pages, notes, planner presets, the content board, content cards, and synced workspace navigation state, while keeping device-local UI preferences in local storage only.
 
 ## Environment
 
@@ -122,6 +122,37 @@ Indexes:
 
 - unique composite index on `owner` + `preset_id`
 
+### `content_boards`
+
+One record is stored per owner.
+
+Fields:
+
+- `owner`: relation to `users`, required, max select `1`
+- `columns_json`: JSON, required
+- `updated_at_client`: date/time, required
+
+Indexes:
+
+- unique index on `owner`
+
+### `content_cards`
+
+Fields:
+
+- `owner`: relation to `users`, required, max select `1`
+- `card_id`: text, required
+- `column_id`: text, required
+- `title`: text, required
+- `notes`: text
+- `position`: integer number, required
+- `updated_at_client`: date/time, required
+
+Indexes:
+
+- unique composite index on `owner` + `card_id`
+- lookup index on `owner` + `column_id` + `position`
+
 ### `workspace_state`
 
 Fields:
@@ -157,6 +188,24 @@ Indexes:
 - unique index on `owner`
 
 The client still dual-writes to this collection during the migration phase so rollback remains possible.
+
+## Content planner destructive cleanup
+
+Apply the new schema and deploy/update all active clients before removing legacy content planner data. The cleanup is intentionally a separate admin command and never runs as part of schema reconciliation.
+
+Preview the exact cleanup scope:
+
+```bash
+pnpm pocketbase:content-planner:cleanup
+```
+
+After verifying that every active client uses `content_boards` and `content_cards`, apply it with the required confirmation flag:
+
+```bash
+pnpm pocketbase:content-planner:cleanup -- --confirm-delete-content-planner
+```
+
+The command deletes the `content_ideas` collection, removes obsolete content-planner fields from `workspace_state`, and strips legacy planner branches from snapshot JSON. Todos, notes, planner presets, daily pages, and unrelated UI state are preserved. No legacy content ideas are migrated.
 
 ## API rules
 

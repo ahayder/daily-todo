@@ -11,7 +11,7 @@ import {
 import { triggerCompletionConfettiFromElement } from "@/lib/confetti";
 import { getDayLabel } from "@/lib/date";
 import { groupTodosByPriority } from "@/lib/store";
-import { MarkdownEditor } from "@/components/markdown-editor";
+import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { AppState, CategoryTheme, Priority, TaskStatus } from "@/lib/types";
-import type { AppAction } from "@/components/app-context";
+import type { AppAction } from "@/components/app/app-context";
 import {
   Brain,
   CalendarDays,

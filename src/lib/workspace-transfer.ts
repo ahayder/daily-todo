@@ -1,7 +1,7 @@
 import { normalizeAppState } from "@/lib/persistence";
 import type { AppState } from "@/lib/types";
 
-export const WORKSPACE_EXPORT_VERSION = 1;
+export const WORKSPACE_EXPORT_VERSION = 2;
 
 export type WorkspaceExportPayload = {
   formatVersion: number;

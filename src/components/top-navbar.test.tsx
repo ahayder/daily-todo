@@ -2,8 +2,8 @@ import type { ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { AuthProvider } from "@/components/auth-context";
-import { TopNavbar } from "@/components/top-navbar";
+import { AuthProvider } from "@/components/auth/auth-context";
+import { TopNavbar } from "@/components/workspace/top-navbar";
 import {
   CONTENT_FONT_SCALE_MAX,
   CONTENT_FONT_SCALE_MIN,
@@ -78,6 +78,43 @@ describe("TopNavbar", () => {
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+  });
+
+  test("hides the sidebar toggle in the content planner while keeping sync status", async () => {
+    const dispatch = vi.fn();
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const state = createInitialState("2026-03-10");
+    state.uiState.lastView = "content-planner";
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <TopNavbar
+          state={state}
+          dispatch={dispatch}
+          sync={{
+            status: "synced",
+            indicator: "saved",
+            lastSavedAt: "2026-03-10T08:00:00.000Z",
+            lastSyncedAt: "2026-03-10T08:00:00.000Z",
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            hasUnsyncedChanges: false,
+            isSaving: false,
+            persistenceAvailable: true,
+          }}
+          retrySync={vi.fn(async () => {})}
+        />
+      </AuthProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Collapse sidebar" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Last saved/)).toBeInTheDocument();
   });
 
   test("shows plain text saving status", () => {

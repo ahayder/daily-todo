@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { AuthProvider, useAuth } from "@/components/auth-context";
+import { AuthProvider, useAuth } from "@/components/auth/auth-context";
 import { createMockAuthRepository } from "@/test/repositories";
 
 function Harness() {

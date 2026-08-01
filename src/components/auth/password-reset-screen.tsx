@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, KeyRound, LoaderCircle } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useAuth } from "@/components/auth-context";
+import { useAuth } from "@/components/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

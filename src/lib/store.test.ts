@@ -1,15 +1,23 @@
 import { describe, expect, test } from "vitest";
 import {
+  DEFAULT_CONTENT_COLUMNS,
   DEFAULT_NOTES_FOLDER_ID,
-  createContentIdea,
+  addContentColumn,
+  createContentCard,
+  createContentColumn,
   createInitialState,
   createPlannerPreset,
+  deleteContentColumn,
   duplicatePlannerPreset,
   ensureDailyPageForDate,
   ensureContentPlannerState,
   ensureNoteState,
   ensurePlannerState,
   groupTodosByPriority,
+  moveContentCard,
+  renameContentColumn,
+  reorderContentColumns,
+  updateContentColumnSubtitle,
 } from "@/lib/store";
 import type { Todo } from "@/lib/types";
 
@@ -110,77 +118,101 @@ describe("planner state", () => {
     expect(state.plannerPresets[presetIds[0]].dayOrder).toHaveLength(7);
   });
 
-  test("seeds content planner ui state in initial state", () => {
+  test("seeds the default content board in initial state", () => {
     const state = createInitialState("2026-03-11");
 
-    expect(state.contentIdeas).toEqual({});
-    expect(state.contentPlannerOptions.pillars).toContain("Teach");
-    expect(state.contentPlannerOptions.platforms).toContain("LinkedIn");
-    expect(state.uiState.selectedContentIdeaId).toBeNull();
-    expect(state.uiState.contentPlanner.searchQuery).toBe("");
-    expect(state.uiState.contentPlanner.viewMode).toBe("list");
-    expect(state.uiState.contentPlanner.layout).toBe("split");
+    expect(state.contentBoard.columns.map((column) => column.title)).toEqual(
+      DEFAULT_CONTENT_COLUMNS.map((column) => column.title),
+    );
+    expect(state.contentCards).toEqual({});
   });
 
-  test("backfills content planner state when missing", () => {
+  test("moves cards within and between columns with integer ordering", () => {
     const state = createInitialState("2026-03-11");
+    const [ideas, planned] = state.contentBoard.columns;
+    const first = createContentCard({ columnId: ideas.id, title: "First", order: 0 })!;
+    const second = createContentCard({ columnId: ideas.id, title: "Second", order: 1 })!;
+    const third = createContentCard({ columnId: planned.id, title: "Third", order: 0 })!;
+    const cards = {
+      [first.id]: first,
+      [second.id]: second,
+      [third.id]: third,
+    };
+
+    const reordered = moveContentCard(cards, second.id, ideas.id, 0);
+    expect([reordered[second.id].order, reordered[first.id].order]).toEqual([0, 1]);
+
+    const moved = moveContentCard(reordered, first.id, planned.id, 1);
+    expect(moved[third.id].order).toBe(0);
+    expect(moved[first.id]).toMatchObject({ columnId: planned.id, order: 1 });
+    expect(moved[second.id].order).toBe(0);
+  });
+
+  test("adds, renames, reorders, and guards column deletion", () => {
+    const state = createInitialState("2026-03-11");
+    const added = addContentColumn(
+      state.contentBoard,
+      "  Review Queue  ",
+      " Waiting for review ",
+    );
+    const addedColumn = added.columns.at(-1)!;
+
+    expect(addedColumn.title).toBe("Review Queue");
+    expect(addedColumn.subtitle).toBe("Waiting for review");
+    expect(renameContentColumn(added, addedColumn.id, " Final Review ").columns.at(-1)?.title).toBe(
+      "Final Review",
+    );
+    expect(
+      updateContentColumnSubtitle(added, addedColumn.id, " Ready for approval ")
+        .columns.at(-1)?.subtitle,
+    ).toBe("Ready for approval");
+    expect(
+      reorderContentColumns(added, addedColumn.id, added.columns[0].id).columns[0].id,
+    ).toBe(addedColumn.id);
+
+    const card = createContentCard({ columnId: addedColumn.id, title: "Occupied", order: 0 })!;
+    expect(deleteContentColumn(added, { [card.id]: card }, addedColumn.id)).toBe(added);
+    expect(deleteContentColumn(added, {}, addedColumn.id).columns).toHaveLength(
+      DEFAULT_CONTENT_COLUMNS.length,
+    );
+    const singleColumn = { columns: [addedColumn], updatedAt: added.updatedAt };
+    expect(deleteContentColumn(singleColumn, {}, addedColumn.id)).toBe(singleColumn);
+  });
+
+  test("repairs cards whose column no longer exists", () => {
+    const state = createInitialState("2026-03-11");
+    const card = createContentCard({
+      columnId: "missing",
+      title: "Recovered",
+      order: 7,
+    })!;
     const repaired = ensureContentPlannerState({
       ...state,
-      contentIdeas: undefined as never,
-      uiState: {
-        ...state.uiState,
-        selectedContentIdeaId: undefined as never,
-        contentPlanner: undefined as never,
+      contentCards: { [card.id]: card },
+    });
+
+    expect(repaired.contentCards[card.id]).toMatchObject({
+      columnId: state.contentBoard.columns[0].id,
+      order: 0,
+    });
+  });
+
+  test("adds sample subtitles to legacy default columns without changing custom columns", () => {
+    const state = createInitialState("2026-03-11");
+    const customColumn = createContentColumn("Custom")!;
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentBoard: {
+        ...state.contentBoard,
+        columns: [
+          { ...state.contentBoard.columns[0], subtitle: "" },
+          customColumn,
+        ],
       },
     });
 
-    expect(repaired.contentIdeas).toEqual({});
-    expect(repaired.contentPlannerOptions.pillars).toContain("Teach");
-    expect(repaired.uiState.selectedContentIdeaId).toBeNull();
-    expect(repaired.uiState.contentPlanner.tagFilter).toBe("all");
-  });
-
-  test("keeps content planner selection valid", () => {
-    const state = createInitialState("2026-03-11");
-    const idea = createContentIdea({
-      hook: "Ship ugly first",
-      premise: "Rough launches beat waiting.",
-    });
-
-    const repaired = ensureContentPlannerState({
-      ...state,
-      contentIdeas: { [idea.id]: idea },
-      uiState: {
-        ...state.uiState,
-        selectedContentIdeaId: "missing",
-      },
-    });
-
-    expect(repaired.uiState.selectedContentIdeaId).toBe(idea.id);
-    expect(repaired.contentPlannerOptions.pillars).toContain("Teach");
-    expect(repaired.contentPlannerOptions.platforms).toContain("LinkedIn");
-  });
-
-  test("backfills saved planner options from existing idea values", () => {
-    const state = createInitialState("2026-03-11");
-    const idea = createContentIdea({
-      hook: "Narrate the refactor",
-      premise: "Explain the tradeoffs while shipping it live.",
-      pillar: "Build in public",
-      channels: ["Podcast", "LinkedIn"],
-    });
-
-    const repaired = ensureContentPlannerState({
-      ...state,
-      contentIdeas: { [idea.id]: idea },
-      contentPlannerOptions: {
-        pillars: ["Teach"],
-        platforms: ["LinkedIn"],
-      },
-    });
-
-    expect(repaired.contentPlannerOptions.pillars).toContain("Build in public");
-    expect(repaired.contentPlannerOptions.platforms).toContain("Podcast");
+    expect(repaired.contentBoard.columns[0].subtitle).toBe("Capture raw concepts");
+    expect(repaired.contentBoard.columns[1].subtitle).toBe("");
   });
 
   test("backfills planner state when missing", () => {

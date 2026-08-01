@@ -2,11 +2,9 @@ import { getYearMonth } from "@/lib/date";
 import { CONTENT_FONT_SCALE_DEFAULT } from "@/lib/content-font-scale";
 import type {
   AppState,
-  ContentIdea,
-  ContentIdeaHookVariant,
-  ContentPlannerOptions,
-  ContentIdeaScriptStep,
-  ContentPlannerUIState,
+  ContentBoard,
+  ContentCard,
+  ContentColumn,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -36,21 +34,33 @@ export const PLANNER_EVENT_COLORS: PlannerEventColor[] = [
   "sage",
   "lavender",
 ];
-export const CONTENT_PLANNER_DEFAULT_UI_STATE: ContentPlannerUIState = {
-  layout: "split",
-  density: "comfortable",
-  viewMode: "list",
-  showLlmPanel: true,
-  statusFilter: "all",
-  pillarFilter: "all",
-  channelFilter: "all",
-  tagFilter: "all",
-  searchQuery: "",
-};
-export const CONTENT_PLANNER_DEFAULT_OPTIONS: ContentPlannerOptions = {
-  pillars: ["Teach"],
-  platforms: ["LinkedIn"],
-};
+export const DEFAULT_CONTENT_COLUMNS: ContentColumn[] = [
+  {
+    id: "content-column-ideas",
+    title: "Ideas",
+    subtitle: "Capture raw concepts",
+  },
+  {
+    id: "content-column-planned",
+    title: "Planned",
+    subtitle: "Ready to work on",
+  },
+  {
+    id: "content-column-in-progress",
+    title: "In Progress",
+    subtitle: "Currently being created",
+  },
+  {
+    id: "content-column-ready",
+    title: "Ready",
+    subtitle: "Prepared to publish",
+  },
+  {
+    id: "content-column-published",
+    title: "Published",
+    subtitle: "Live and complete",
+  },
+];
 
 const DEFAULT_DAY_TITLES: Record<PlannerDayKey, string> = {
   monday: "Deep Workday Monday",
@@ -188,159 +198,243 @@ export function createPlannerEvent(input: {
   };
 }
 
-export function createContentIdeaHookVariant(value: string): ContentIdeaHookVariant {
+export function createDefaultContentBoard(now = new Date()): ContentBoard {
   return {
-    id: makeId("content-hook"),
-    value,
+    columns: DEFAULT_CONTENT_COLUMNS.map((column) => ({ ...column })),
+    updatedAt: now.toISOString(),
   };
 }
 
-export function createContentIdeaScriptStep(input: {
-  label: string;
-  body: string;
-  placeholder?: boolean;
-  actionLabel: string;
-}): ContentIdeaScriptStep {
-  return {
-    id: makeId("content-step"),
-    label: input.label,
-    body: input.body,
-    placeholder: input.placeholder,
-    actionLabel: input.actionLabel,
-  };
-}
-
-export function createContentIdea(input: {
-  hook: string;
-  premise: string;
-  status?: ContentIdea["status"];
-  pillar?: string;
-  channels?: string[];
-  tags?: string[];
-  score?: number;
-  scoreBreakdown?: ContentIdea["scoreBreakdown"];
-  sourceLabel?: string;
-  sourceType?: ContentIdea["sourceType"];
-  hooks?: ContentIdeaHookVariant[];
-  activeHookId?: string | null;
-  scriptSteps?: ContentIdeaScriptStep[];
-}): ContentIdea {
-  const createdAt = new Date().toISOString();
-  const hooks =
-    input.hooks ??
-    (input.hook.trim() ? [createContentIdeaHookVariant(input.hook.trim())] : []);
-
-  return {
-    id: makeId("content-idea"),
-    code: `#${Math.floor(1000 + Math.random() * 9000)}`,
-    hook: input.hook.trim(),
-    premise: input.premise.trim(),
-    status: input.status ?? "inbox",
-    pillar: input.pillar ?? "Teach",
-    channels: input.channels ?? ["LinkedIn"],
-    tags: input.tags ?? [],
-    score: input.score ?? 7.5,
-    scoreBreakdown: input.scoreBreakdown ?? {
-      hook: 8,
-      proof: 7,
-      fit: 8,
-    },
-    sourceLabel: input.sourceLabel ?? "manual",
-    sourceType: input.sourceType ?? "human",
-    createdAt,
-    updatedAt: createdAt,
-    hooks,
-    activeHookId: input.activeHookId ?? hooks[0]?.id ?? null,
-    scriptSteps: input.scriptSteps ?? [],
-  };
-}
-
-function normalizeContentPlannerOptionValue(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function mergeContentPlannerOptionValues(values: Iterable<string>): string[] {
-  const seen = new Set<string>();
-  const normalizedValues: string[] = [];
-
-  for (const value of values) {
-    const normalized = normalizeContentPlannerOptionValue(value);
-    if (!normalized) continue;
-    const key = normalized.toLocaleLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalizedValues.push(normalized);
+export function createContentColumn(title: string, subtitle = ""): ContentColumn | null {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) {
+    return null;
   }
 
-  return normalizedValues;
-}
-
-export function createContentPlannerOptions(
-  input: Partial<ContentPlannerOptions> = {},
-): ContentPlannerOptions {
   return {
-    pillars: mergeContentPlannerOptionValues(input.pillars ?? []),
-    platforms: mergeContentPlannerOptionValues(input.platforms ?? []),
+    id: makeId("content-column"),
+    title: normalizedTitle,
+    subtitle: subtitle.trim(),
   };
 }
 
-export function createDefaultContentPlannerOptions(
-  input: Partial<ContentPlannerOptions> = {},
-): ContentPlannerOptions {
-  return createContentPlannerOptions({
-    pillars: [...CONTENT_PLANNER_DEFAULT_OPTIONS.pillars, ...(input.pillars ?? [])],
-    platforms: [...CONTENT_PLANNER_DEFAULT_OPTIONS.platforms, ...(input.platforms ?? [])],
-  });
-}
-
-export function registerContentPlannerIdeaOptions(
-  options: ContentPlannerOptions,
-  input: {
-    pillar?: string | null;
-    platforms?: string[] | null;
-  },
-): ContentPlannerOptions {
-  return createContentPlannerOptions({
-    pillars: [...options.pillars, input.pillar ?? ""],
-    platforms: [...options.platforms, ...(input.platforms ?? [])],
-  });
-}
-
-export function removeContentPlannerOption(
-  options: ContentPlannerOptions,
-  kind: keyof ContentPlannerOptions,
-  value: string,
-): ContentPlannerOptions {
-  const normalizedTarget = normalizeContentPlannerOptionValue(value).toLocaleLowerCase();
-  if (!normalizedTarget) {
-    return options;
+export function createContentCard(input: {
+  columnId: string;
+  title: string;
+  notes?: string;
+  order: number;
+}): ContentCard | null {
+  const title = input.title.trim();
+  if (!title || !input.columnId) {
+    return null;
   }
 
-  return createContentPlannerOptions({
-    ...options,
-    [kind]: options[kind].filter(
-      (option) => normalizeContentPlannerOptionValue(option).toLocaleLowerCase() !== normalizedTarget,
+  return {
+    id: makeId("content-card"),
+    columnId: input.columnId,
+    title,
+    notes: input.notes?.trim() ?? "",
+    order: Math.max(0, Math.trunc(input.order)),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function addContentColumn(
+  board: ContentBoard,
+  title: string,
+  subtitle = "",
+): ContentBoard {
+  const column = createContentColumn(title, subtitle);
+  if (!column) {
+    return board;
+  }
+
+  return {
+    columns: [...board.columns, column],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function renameContentColumn(
+  board: ContentBoard,
+  columnId: string,
+  title: string,
+): ContentBoard {
+  const normalizedTitle = title.trim();
+  const column = board.columns.find((candidate) => candidate.id === columnId);
+  if (!column || !normalizedTitle || column.title === normalizedTitle) {
+    return board;
+  }
+
+  return {
+    columns: board.columns.map((candidate) =>
+      candidate.id === columnId ? { ...candidate, title: normalizedTitle } : candidate,
     ),
-  });
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-export function isContentPlannerOptionInUse(
-  ideas: Record<string, ContentIdea>,
-  kind: keyof ContentPlannerOptions,
-  value: string,
-): boolean {
-  const normalizedTarget = normalizeContentPlannerOptionValue(value).toLocaleLowerCase();
-  if (!normalizedTarget) return false;
+export function updateContentColumnSubtitle(
+  board: ContentBoard,
+  columnId: string,
+  subtitle: string,
+): ContentBoard {
+  const normalizedSubtitle = subtitle.trim();
+  const column = board.columns.find((candidate) => candidate.id === columnId);
+  if (!column || column.subtitle === normalizedSubtitle) {
+    return board;
+  }
 
-  return Object.values(ideas).some((idea) => {
-    if (kind === "pillars") {
-      return normalizeContentPlannerOptionValue(idea.pillar).toLocaleLowerCase() === normalizedTarget;
-    }
+  return {
+    columns: board.columns.map((candidate) =>
+      candidate.id === columnId
+        ? { ...candidate, subtitle: normalizedSubtitle }
+        : candidate,
+    ),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
-    return idea.channels.some(
-      (channel) => normalizeContentPlannerOptionValue(channel).toLocaleLowerCase() === normalizedTarget,
-    );
+export function reorderContentColumns(
+  board: ContentBoard,
+  activeColumnId: string,
+  overColumnId: string,
+): ContentBoard {
+  const activeIndex = board.columns.findIndex((column) => column.id === activeColumnId);
+  const overIndex = board.columns.findIndex((column) => column.id === overColumnId);
+  if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+    return board;
+  }
+
+  const columns = [...board.columns];
+  const [activeColumn] = columns.splice(activeIndex, 1);
+  columns.splice(overIndex, 0, activeColumn);
+
+  return {
+    columns,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function deleteContentColumn(
+  board: ContentBoard,
+  cards: Record<string, ContentCard>,
+  columnId: string,
+): ContentBoard {
+  if (
+    board.columns.length <= 1 ||
+    !board.columns.some((column) => column.id === columnId) ||
+    Object.values(cards).some((card) => card.columnId === columnId)
+  ) {
+    return board;
+  }
+
+  return {
+    columns: board.columns.filter((column) => column.id !== columnId),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function getContentCardsForColumn(
+  cards: Record<string, ContentCard>,
+  columnId: string,
+): ContentCard[] {
+  return Object.values(cards)
+    .filter((card) => card.columnId === columnId)
+    .toSorted((left, right) => left.order - right.order || left.updatedAt.localeCompare(right.updatedAt));
+}
+
+function reindexContentCards(
+  cards: Record<string, ContentCard>,
+  columnId: string,
+  orderedCardIds: string[],
+  updatedAt: string,
+): Record<string, ContentCard> {
+  const nextCards = { ...cards };
+  orderedCardIds.forEach((cardId, order) => {
+    const card = nextCards[cardId];
+    if (!card) return;
+    nextCards[cardId] = {
+      ...card,
+      columnId,
+      order,
+      updatedAt,
+    };
   });
+  return nextCards;
+}
+
+export function moveContentCard(
+  cards: Record<string, ContentCard>,
+  cardId: string,
+  targetColumnId: string,
+  targetIndex: number,
+): Record<string, ContentCard> {
+  const card = cards[cardId];
+  if (!card || !targetColumnId) {
+    return cards;
+  }
+
+  const sourceColumnId = card.columnId;
+  const sourceIds = getContentCardsForColumn(cards, sourceColumnId)
+    .map((candidate) => candidate.id)
+    .filter((candidateId) => candidateId !== cardId);
+  const targetIds =
+    sourceColumnId === targetColumnId
+      ? sourceIds
+      : getContentCardsForColumn(cards, targetColumnId)
+          .map((candidate) => candidate.id)
+          .filter((candidateId) => candidateId !== cardId);
+  const clampedIndex = Math.max(0, Math.min(Math.trunc(targetIndex), targetIds.length));
+  targetIds.splice(clampedIndex, 0, cardId);
+  const updatedAt = new Date().toISOString();
+
+  let nextCards = reindexContentCards(cards, targetColumnId, targetIds, updatedAt);
+  if (sourceColumnId !== targetColumnId) {
+    nextCards = reindexContentCards(nextCards, sourceColumnId, sourceIds, updatedAt);
+  }
+  return nextCards;
+}
+
+export function updateContentCard(
+  cards: Record<string, ContentCard>,
+  cardId: string,
+  updates: Pick<ContentCard, "title" | "notes">,
+): Record<string, ContentCard> {
+  const card = cards[cardId];
+  const title = updates.title.trim();
+  if (!card || !title) {
+    return cards;
+  }
+
+  return {
+    ...cards,
+    [cardId]: {
+      ...card,
+      title,
+      notes: updates.notes.trim(),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+export function deleteContentCard(
+  cards: Record<string, ContentCard>,
+  cardId: string,
+): Record<string, ContentCard> {
+  const card = cards[cardId];
+  if (!card) {
+    return cards;
+  }
+
+  const nextCards = { ...cards };
+  delete nextCards[cardId];
+  return reindexContentCards(
+    nextCards,
+    card.columnId,
+    getContentCardsForColumn(nextCards, card.columnId).map((candidate) => candidate.id),
+    new Date().toISOString(),
+  );
 }
 
 export function createInitialState(todayISO: string): AppState {
@@ -360,21 +454,19 @@ export function createInitialState(todayISO: string): AppState {
     plannerPresets: {
       [starterPlanner.id]: starterPlanner,
     },
-    contentIdeas: {},
-    contentPlannerOptions: createDefaultContentPlannerOptions(),
+    contentBoard: createDefaultContentBoard(),
+    contentCards: {},
     uiState: {
       selectedDailyDate: todayISO,
       selectedNoteId: starterNote.id,
       selectedNoteFolderId: defaultNotesFolder.id,
       selectedPlannerPresetId: starterPlanner.id,
-      selectedContentIdeaId: null,
       isSidebarCollapsed: false,
       dailyTaskPaneWidth: 500,
       contentFontScale: CONTENT_FONT_SCALE_DEFAULT,
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],
-      contentPlanner: { ...CONTENT_PLANNER_DEFAULT_UI_STATE },
       lastView: "todos",
       themeMode: "dark",
       categoryTheme: "normal",
@@ -506,50 +598,65 @@ export function ensurePlannerState(state: AppState): AppState {
 }
 
 export function ensureContentPlannerState(state: AppState): AppState {
-  const contentIdeas = state.contentIdeas ?? {};
-  const contentPlannerOptions = Object.values(contentIdeas).reduce(
-    (options, idea) =>
-      registerContentPlannerIdeaOptions(options, {
-        pillar: idea.pillar,
-        platforms: idea.channels,
-      }),
-    state.contentPlannerOptions
-      ? createContentPlannerOptions(state.contentPlannerOptions)
-      : createDefaultContentPlannerOptions(),
+  const repairTimestamp = new Date().toISOString();
+  const defaultSubtitles = new Map(
+    DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column.subtitle]),
   );
-  const contentPlanner = {
-    ...CONTENT_PLANNER_DEFAULT_UI_STATE,
-    ...(state.uiState.contentPlanner ?? {}),
-  };
-  const selectedContentIdeaId =
-    state.uiState.selectedContentIdeaId && contentIdeas[state.uiState.selectedContentIdeaId]
-      ? state.uiState.selectedContentIdeaId
-      : Object.keys(contentIdeas)[0] ?? null;
+  const columns = state.contentBoard.columns.map((column) => {
+    const defaultSubtitle = defaultSubtitles.get(column.id);
+    return !column.subtitle && defaultSubtitle
+      ? { ...column, subtitle: defaultSubtitle }
+      : column;
+  });
+  const columnsChanged = columns.some(
+    (column, index) => column !== state.contentBoard.columns[index],
+  );
+  const availableColumnIds = new Set(columns.map((column) => column.id));
+  const fallbackColumnId = columns[0]?.id;
+  const repairedCards = Object.fromEntries(
+    Object.entries(state.contentCards)
+      .filter(([, card]) => availableColumnIds.has(card.columnId) || Boolean(fallbackColumnId))
+      .map(([cardId, card]) => [
+        cardId,
+        availableColumnIds.has(card.columnId)
+          ? card
+          : {
+              ...card,
+              columnId: fallbackColumnId!,
+            },
+      ]),
+  );
+  const cards = columns.reduce(
+    (currentCards, column) =>
+      reindexContentCards(
+        currentCards,
+        column.id,
+        getContentCardsForColumn(currentCards, column.id).map((card) => card.id),
+        repairTimestamp,
+      ),
+    repairedCards,
+  );
 
   if (
-    contentIdeas === state.contentIdeas &&
-    JSON.stringify(contentPlannerOptions) === JSON.stringify(state.contentPlannerOptions) &&
-    selectedContentIdeaId === state.uiState.selectedContentIdeaId &&
-    state.uiState.contentPlanner &&
-    Object.entries(CONTENT_PLANNER_DEFAULT_UI_STATE).every(
-      ([key]) =>
-        contentPlanner[key as keyof ContentPlannerUIState] ===
-        state.uiState.contentPlanner[key as keyof ContentPlannerUIState] &&
-        state.uiState.contentPlanner[key as keyof ContentPlannerUIState] !== undefined,
-    )
+    !columnsChanged &&
+    Object.keys(cards).length === Object.keys(state.contentCards).length &&
+    Object.values(cards).every((card) => {
+      const previous = state.contentCards[card.id];
+      return previous && previous.columnId === card.columnId && previous.order === card.order;
+    })
   ) {
     return state;
   }
 
   return {
     ...state,
-    contentIdeas,
-    contentPlannerOptions,
-    uiState: {
-      ...state.uiState,
-      selectedContentIdeaId,
-      contentPlanner,
-    },
+    contentBoard: columnsChanged
+      ? {
+          columns,
+          updatedAt: repairTimestamp,
+        }
+      : state.contentBoard,
+    contentCards: cards,
   };
 }
 

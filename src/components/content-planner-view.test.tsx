@@ -1,298 +1,251 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+
 import {
-  ContentPlannerSidebarPanels,
   ContentPlannerView,
-  type ContentPlannerControls,
+  resolveContentBoardDrop,
+  type ContentPlannerViewProps,
 } from "@/components/content-planner-view";
-import {
-  createContentIdea,
-  createContentIdeaHookVariant,
-  createContentIdeaScriptStep,
-} from "@/lib/store";
-import type { ContentIdea } from "@/lib/types";
+import { createDefaultContentBoard } from "@/lib/store";
+import type { ContentCard } from "@/lib/types";
 
-function createIdeas(): ContentIdea[] {
-  const firstHook = createContentIdeaHookVariant('Why "shipping ugly" beats polishing.');
-  const secondHook = createContentIdeaHookVariant(
-    "I replaced my project manager with 4 prompts and a checklist.",
-  );
+function createProps(
+  overrides: Partial<ContentPlannerViewProps> = {},
+): ContentPlannerViewProps {
+  const board = createDefaultContentBoard(new Date("2026-07-29T00:00:00.000Z"));
+  const card: ContentCard = {
+    id: "card-1",
+    columnId: board.columns[0].id,
+    title: "Draft launch story",
+    notes:
+      "Explain **what changed** and why it matters.\n\n- [x] Outline the story\n- [ ] Add proof\n\n[Reference](https://example.com)\n\n<script>unsafe</script>",
+    order: 0,
+    updatedAt: "2026-07-29T00:00:00.000Z",
+  };
 
-  return [
-    createContentIdea({
-      hook: 'Why "shipping ugly" beats polishing for the first 90 days.',
-      premise: "Three concrete examples from founders who launched rough and learned faster.",
-      status: "inbox",
-      pillar: "Teach",
-      channels: ["YouTube long", "LinkedIn excerpt"],
-      tags: ["launch", "mindset"],
-      score: 8.4,
-      scoreBreakdown: {
-        hook: 9,
-        proof: 7,
-        fit: 9,
-      },
-      sourceLabel: "inbox reply → 2026-04-14",
-      sourceType: "ai",
-      hooks: [firstHook],
-      activeHookId: firstHook.id,
-      scriptSteps: [
-        createContentIdeaScriptStep({
-          label: "Hook",
-          body: "Cold open on the ugly screenshot.",
-          actionLabel: "rewrite",
-        }),
-      ],
-    }),
-    createContentIdea({
-      hook: "I replaced my project manager with 4 prompts and a checklist.",
-      premise: "Full script done. Needs thumbnail variants and a proof screenshot.",
-      status: "scripted",
-      pillar: "Teach",
-      channels: ["YouTube long"],
-      tags: ["prompts", "systems"],
-      score: 9.1,
-      scoreBreakdown: {
-        hook: 9,
-        proof: 8,
-        fit: 10,
-      },
-      sourceLabel: "workflow experiment → 2026-04-02",
-      sourceType: "human",
-      hooks: [secondHook],
-      activeHookId: secondHook.id,
-      scriptSteps: [
-        createContentIdeaScriptStep({
-          label: "Intro",
-          body: "Open with the stack diagram, then peel it back.",
-          actionLabel: "rewrite",
-        }),
-      ],
-    }),
-  ];
-}
-
-function createControls(
-  overrides: Partial<ContentPlannerControls> = {},
-): ContentPlannerControls {
   return {
-    layout: "split",
-    setLayout: vi.fn(),
-    density: "comfortable",
-    setDensity: vi.fn(),
-    viewMode: "list",
-    setViewMode: vi.fn(),
-    showLlmPanel: true,
-    setShowLlmPanel: vi.fn(),
-    statusFilter: "all",
-    setStatusFilter: vi.fn(),
-    pillarFilter: "all",
-    setPillarFilter: vi.fn(),
-    channelFilter: "all",
-    setChannelFilter: vi.fn(),
-    tagFilter: "all",
-    setTagFilter: vi.fn(),
-    searchQuery: "",
-    setSearchQuery: vi.fn(),
+    board,
+    cards: { [card.id]: card },
+    onAddColumn: vi.fn(),
+    onRenameColumn: vi.fn(),
+    onUpdateColumnSubtitle: vi.fn(),
+    onReorderColumns: vi.fn(),
+    onDeleteColumn: vi.fn(),
+    onAddCard: vi.fn(),
+    onUpdateCard: vi.fn(),
+    onMoveCard: vi.fn(),
+    onDeleteCard: vi.fn(),
     ...overrides,
   };
 }
 
 describe("ContentPlannerView", () => {
-  test("renders empty state when no ideas exist", () => {
-    render(
-      <ContentPlannerView
-        ideas={[]}
-        controls={createControls()}
-        selectedIdeaId={null}
-      />,
-    );
+  test("resolves card and column drag-end destinations", () => {
+    const props = createProps();
+    const card = props.cards["card-1"];
 
-    expect(screen.getByTestId("content-planner-empty-state")).toBeInTheDocument();
-    expect(screen.queryByTestId("content-planner-detail-pane")).not.toBeInTheDocument();
+    expect(
+      resolveContentBoardDrop(
+        { type: "column", columnId: props.board.columns[1].id },
+        { type: "column", columnId: props.board.columns[0].id },
+        {},
+      ),
+    ).toEqual({
+      type: "column",
+      activeColumnId: props.board.columns[1].id,
+      overColumnId: props.board.columns[0].id,
+    });
+
+    expect(
+      resolveContentBoardDrop(
+        { type: "card", cardId: card.id, columnId: card.columnId },
+        { type: "column", columnId: props.board.columns[1].id },
+        { [props.board.columns[1].id]: [] },
+      ),
+    ).toEqual({
+      type: "card",
+      cardId: card.id,
+      targetColumnId: props.board.columns[1].id,
+      targetIndex: 0,
+    });
   });
 
-  test("renders the planner workspace with real idea data", () => {
-    const ideas = createIdeas();
-
-    render(
-      <ContentPlannerView
-        ideas={ideas}
-        controls={createControls()}
-        selectedIdeaId={ideas[0].id}
-      />,
-    );
+  test("renders the default workflow and persisted cards as safe Markdown", () => {
+    const { container } = render(<ContentPlannerView {...createProps()} />);
 
     expect(screen.getByRole("heading", { name: "Content Planner" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Why "shipping ugly" beats polishing for the first 90 days.')).toBeInTheDocument();
-    expect(screen.getByText("Hook variations")).toBeInTheDocument();
-    expect(screen.getByTestId("content-planner-detail-pane")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Include current note context")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Find related in my notes" })).not.toBeInTheDocument();
-  });
-
-  test("switches the center workspace into kanban mode", () => {
-    render(
-      <ContentPlannerView
-        ideas={createIdeas()}
-        controls={createControls({ layout: "kanban" })}
-        selectedIdeaId={null}
-      />,
+    for (const title of ["Ideas", "Planned", "In Progress", "Ready", "Published"]) {
+      expect(screen.getByRole("button", { name: `Rename column ${title}` })).toBeInTheDocument();
+    }
+    expect(screen.getByText("Capture raw concepts")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit card Draft launch story" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "View card Draft launch story" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("what changed").tagName).toBe("STRONG");
+    expect(screen.getByRole("link", { name: "Reference" })).toHaveAttribute(
+      "href",
+      "https://example.com",
     );
-
-    expect(screen.getByTestId("content-planner-kanban")).toBeInTheDocument();
-    expect(screen.queryByTestId("content-planner-list")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("content-planner-detail-pane")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
+    expect(container.querySelector("script")).toBeNull();
   });
 
-  test("shows real grid cards when grid view is selected", () => {
-    const ideas = createIdeas();
-
-    render(
-      <ContentPlannerView
-        ideas={ideas}
-        controls={createControls({ viewMode: "grid" })}
-        selectedIdeaId={ideas[0].id}
-      />,
-    );
-
-    expect(screen.getByTestId("content-planner-grid")).toBeInTheDocument();
-    expect(screen.getAllByText(/YouTube long/i).length).toBeGreaterThan(0);
-  });
-
-  test("selects a different idea from the list", async () => {
+  test("opens the complete Markdown card in a read-only preview dialog", async () => {
     const user = userEvent.setup();
-    const ideas = createIdeas();
-    const onSelectIdea = vi.fn();
+    render(<ContentPlannerView {...createProps()} />);
 
-    render(
-      <ContentPlannerView
-        ideas={ideas}
-        controls={createControls()}
-        selectedIdeaId={ideas[0].id}
-        onSelectIdea={onSelectIdea}
-      />,
+    await user.click(
+      screen.getByRole("button", { name: "View card Draft launch story" }),
     );
 
-    await user.click(screen.getByRole("button", { name: /I replaced my project manager/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Card preview" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("what changed").tagName).toBe("STRONG");
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
 
-    expect(onSelectIdea).toHaveBeenCalledWith(ideas[1].id);
+    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  test("filters visible ideas by search query", () => {
-    const ideas = createIdeas();
-
-    render(
-      <ContentPlannerView
-        ideas={ideas}
-        controls={createControls({ searchQuery: "project manager" })}
-        selectedIdeaId={ideas[1].id}
-      />,
-    );
-
-    expect(screen.getByDisplayValue("I replaced my project manager with 4 prompts and a checklist.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /shipping ugly/i })).not.toBeInTheDocument();
-  });
-
-  test("keeps compact density and hides bulk select until implemented", () => {
-    const { container } = render(
-      <ContentPlannerView
-        ideas={createIdeas()}
-        controls={createControls({ density: "compact" })}
-        selectedIdeaId={null}
-      />,
-    );
-
-    expect(container.firstChild).toHaveClass("content-planner--compact");
-    expect(screen.queryByRole("button", { name: "Bulk select" })).not.toBeInTheDocument();
-  });
-
-  test("generates ideas with prompt-only input", async () => {
+  test("collapses and expands a column without changing board data", async () => {
     const user = userEvent.setup();
-    const onGenerateIdeas = vi.fn();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
 
-    render(
-      <ContentPlannerView
-        ideas={createIdeas()}
-        controls={createControls()}
-        selectedIdeaId={null}
-        onGenerateIdeas={onGenerateIdeas}
-      />,
-    );
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse column Ideas",
+    });
+    expect(collapseButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("content-card-card-1")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Generate →" }));
+    await user.click(collapseButton);
+    const expandButton = screen.getByRole("button", {
+      name: "Expand column Ideas",
+    });
+    expect(expandButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("content-card-card-1")).not.toBeInTheDocument();
+    expect(props.onUpdateCard).not.toHaveBeenCalled();
 
-    expect(onGenerateIdeas).toHaveBeenCalledWith(
-      "Brainstorm 10 ideas about indie hackers shipping AI tools",
-    );
-  });
-});
-
-describe("ContentPlannerSidebarPanels", () => {
-  test("renders filter sections from real ideas", () => {
-    render(<ContentPlannerSidebarPanels controls={createControls()} ideas={createIdeas()} />);
-
-    expect(screen.getByText("Filters")).toBeInTheDocument();
-    expect(screen.getByText("Status")).toBeInTheDocument();
-    expect(screen.getByText("Pillars")).toBeInTheDocument();
-    expect(screen.getByText("Channel")).toBeInTheDocument();
-    expect(screen.getByText("Tags")).toBeInTheDocument();
+    await user.click(expandButton);
+    expect(screen.getByTestId("content-card-card-1")).toBeInTheDocument();
   });
 
-  test("shows saved pillar and platform filters even before ideas use them heavily", () => {
-    render(
-      <ContentPlannerSidebarPanels
-        controls={createControls()}
-        ideas={createIdeas()}
-        savedPillars={["Teach", "Proof"]}
-        savedPlatforms={["YouTube long", "Podcast"]}
-      />,
-    );
-
-    expect(screen.getAllByRole("button", { name: /Proof/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Podcast/i }).length).toBeGreaterThan(0);
-  });
-
-  test("adds a saved platform from the detail panel token input", async () => {
+  test("adds a multiline card from a full text box", async () => {
     const user = userEvent.setup();
-    const ideas = createIdeas();
-    const onUpdateIdea = vi.fn();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
 
-    render(
-      <ContentPlannerView
-        ideas={ideas}
-        selectedIdeaId={ideas[0].id}
-        controls={createControls()}
-        savedPillars={["Teach", "Proof"]}
-        savedPlatforms={["YouTube long", "LinkedIn excerpt", "Podcast"]}
-        onUpdateIdea={onUpdateIdea}
-      />,
+    await user.click(screen.getAllByRole("button", { name: "Add card" })[0]);
+    const textBox = screen.getByRole("textbox", { name: "New card in Ideas" });
+    expect(textBox.tagName).toBe("TEXTAREA");
+    await user.type(
+      textBox,
+      "Record product walkthrough{Enter}{Enter}Outline the main steps.",
     );
+    await user.click(screen.getAllByRole("button", { name: "Add card" })[0]);
 
-    await user.click(screen.getByRole("button", { name: /\+ Podcast/i }));
-
-    expect(onUpdateIdea).toHaveBeenCalledWith(
-      ideas[0].id,
-      expect.objectContaining({
-        channels: ["YouTube long", "LinkedIn excerpt", "Podcast"],
-      }),
+    expect(props.onAddCard).toHaveBeenCalledWith(
+      props.board.columns[0].id,
+      "Record product walkthrough",
+      "Outline the main steps.",
     );
   });
 
-  test("prevents removing an in-use saved option from the sidebar manager", () => {
-    const onRemovePillarOption = vi.fn();
+  test("edits the card text directly in place", async () => {
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
 
-    render(
-      <ContentPlannerSidebarPanels
-        controls={createControls()}
-        ideas={createIdeas()}
-        savedPillars={["Teach", "Proof"]}
-        onRemovePillarOption={onRemovePillarOption}
-      />,
+    await user.click(screen.getByRole("button", { name: "Edit card Draft launch story" }));
+    expect(screen.queryByRole("heading", { name: "Edit card" })).not.toBeInTheDocument();
+
+    const textBox = screen.getByRole("textbox", {
+      name: "Edit card Draft launch story",
+    });
+    expect(textBox.tagName).toBe("TEXTAREA");
+    await user.clear(textBox);
+    await user.type(textBox, "Publish launch story{Enter}{Enter}Keep it concise.");
+    await user.tab();
+
+    expect(props.onUpdateCard).toHaveBeenCalledWith(
+      "card-1",
+      "Publish launch story",
+      "Keep it concise.",
+    );
+  });
+
+  test("confirms card deletion", async () => {
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete card Draft launch story" }));
+    expect(screen.getByText("Delete this card?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(props.onDeleteCard).toHaveBeenCalledWith("card-1");
+  });
+
+  test("blocks deleting the final or non-empty column", async () => {
+    const user = userEvent.setup();
+    const props = createProps({
+      board: {
+        columns: [{ id: "only", title: "Ideas", subtitle: "" }],
+        updatedAt: "2026-07-29T00:00:00.000Z",
+      },
+      cards: {},
+    });
+    render(<ContentPlannerView {...props} />);
+
+    const deleteButton = screen.getByRole("button", { name: "Delete column Ideas" });
+    expect(deleteButton).toHaveAttribute("aria-disabled", "true");
+    await user.click(deleteButton);
+    expect(screen.queryByText("Delete this column?")).not.toBeInTheDocument();
+  });
+
+  test("adds, renames, and confirms deletion of an empty column", async () => {
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await user.type(screen.getByRole("textbox", { name: "New column title" }), "On Hold");
+    await user.type(
+      screen.getByRole("textbox", { name: "New column subtitle" }),
+      "Waiting for capacity{Enter}",
+    );
+    expect(props.onAddColumn).toHaveBeenCalledWith("On Hold", "Waiting for capacity");
+
+    await user.click(screen.getByRole("button", { name: "Rename column Planned" }));
+    const renameInput = screen.getByRole("textbox", { name: "Rename column Planned" });
+    await user.clear(renameInput);
+    await user.type(renameInput, "Scheduled{Enter}");
+    expect(props.onRenameColumn).toHaveBeenCalledWith(
+      props.board.columns[1].id,
+      "Scheduled",
     );
 
-    expect(screen.getByRole("button", { name: /Teach • in use/i })).toBeDisabled();
-    expect(onRemovePillarOption).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Edit subtitle for Planned" }));
+    const subtitleInput = screen.getByRole("textbox", {
+      name: "Edit subtitle for Planned",
+    });
+    await user.clear(subtitleInput);
+    await user.type(subtitleInput, "Next in the queue{Enter}");
+    expect(props.onUpdateColumnSubtitle).toHaveBeenCalledWith(
+      props.board.columns[1].id,
+      "Next in the queue",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete column Planned" }));
+    expect(screen.getByText("Delete this column?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(props.onDeleteColumn).toHaveBeenCalledWith(props.board.columns[1].id);
   });
 });

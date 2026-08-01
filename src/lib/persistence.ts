@@ -5,17 +5,16 @@ import {
 } from "@/lib/content-font-scale";
 import { appStateSchema } from "@/lib/schema";
 import {
+  createDefaultContentBoard,
   createInitialState,
-  createContentPlannerOptions,
-  createDefaultContentPlannerOptions,
   ensureContentPlannerState,
   ensureDailyPageForDate,
   ensureNoteState,
   ensurePlannerState,
 } from "@/lib/store";
-import type { AppState, CachedNoteBody, ContentPlannerOptions, NoteSummary, UIState } from "@/lib/types";
+import type { AppState, CachedNoteBody, NoteSummary, UIState } from "@/lib/types";
 
-export const APP_STATE_VERSION = 2;
+export const APP_STATE_VERSION = 3;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
 export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
@@ -30,7 +29,8 @@ export type PersistenceRecordKind =
   | "note"
   | "note_folder"
   | "planner_preset"
-  | "content_idea"
+  | "content_board"
+  | "content_card"
   | "workspace_state";
 
 export type PersistenceRecordMetadata = {
@@ -122,7 +122,6 @@ export type SyncableUIState = Pick<
 
 export type SyncableWorkspaceState = {
   uiState: SyncableUIState;
-  contentPlannerOptions: ContentPlannerOptions;
 };
 
 export type LocalOnlyUIState = Pick<
@@ -134,14 +133,12 @@ export type LocalOnlyUIState = Pick<
   | "categoryTheme"
   | "isFocusMode"
   | "focusedTodoId"
-  | "selectedContentIdeaId"
   | "focusTimerStatus"
   | "focusTimerRemainingSeconds"
   | "focusTimerStartedAt"
   | "focusTimerBaseEstimateMinutes"
   | "isFocusTimerCompletionPromptOpen"
   | "expandedNoteFolders"
-  | "contentPlanner"
 >;
 
 export type PersistenceRepository = {
@@ -247,7 +244,6 @@ function normalizeLegacyState(parsed: unknown): unknown {
       themeMode?: unknown;
       lastView?: unknown;
       selectedPlannerPresetId?: unknown;
-      selectedContentIdeaId?: unknown;
       selectedNoteFolderId?: unknown;
       isSidebarCollapsed?: unknown;
       dailyTaskPaneWidth?: unknown;
@@ -261,12 +257,11 @@ function normalizeLegacyState(parsed: unknown): unknown {
       focusTimerBaseEstimateMinutes?: unknown;
       isFocusTimerCompletionPromptOpen?: unknown;
       expandedNoteFolders?: unknown;
-      contentPlanner?: unknown;
     };
     plannerPresets?: unknown;
     noteFolders?: unknown;
-    contentIdeas?: unknown;
-    contentPlannerOptions?: unknown;
+    contentBoard?: unknown;
+    contentCards?: unknown;
   };
 
   if (!candidate.uiState || typeof candidate.uiState !== "object") {
@@ -295,16 +290,16 @@ function normalizeLegacyState(parsed: unknown): unknown {
       candidate.plannerPresets && typeof candidate.plannerPresets === "object"
         ? candidate.plannerPresets
         : {},
-    contentIdeas:
-      candidate.contentIdeas && typeof candidate.contentIdeas === "object"
-        ? candidate.contentIdeas
+    contentBoard:
+      candidate.contentBoard && typeof candidate.contentBoard === "object"
+        ? candidate.contentBoard
+        : createDefaultContentBoard(),
+    contentCards:
+      candidate.contentCards && typeof candidate.contentCards === "object"
+        ? candidate.contentCards
         : {},
     noteFolders:
       candidate.noteFolders && typeof candidate.noteFolders === "object" ? candidate.noteFolders : {},
-    contentPlannerOptions:
-      candidate.contentPlannerOptions && typeof candidate.contentPlannerOptions === "object"
-        ? candidate.contentPlannerOptions
-        : undefined,
     uiState: {
       ...candidate.uiState,
       themeMode: normalizedThemeMode,
@@ -313,11 +308,6 @@ function normalizeLegacyState(parsed: unknown): unknown {
         typeof candidate.uiState.selectedPlannerPresetId === "string" ||
         candidate.uiState.selectedPlannerPresetId === null
           ? candidate.uiState.selectedPlannerPresetId
-          : null,
-      selectedContentIdeaId:
-        typeof candidate.uiState.selectedContentIdeaId === "string" ||
-        candidate.uiState.selectedContentIdeaId === null
-          ? candidate.uiState.selectedContentIdeaId
           : null,
       selectedNoteFolderId:
         typeof candidate.uiState.selectedNoteFolderId === "string" ||
@@ -377,10 +367,6 @@ function normalizeLegacyState(parsed: unknown): unknown {
       expandedNoteFolders: Array.isArray(candidate.uiState.expandedNoteFolders)
         ? candidate.uiState.expandedNoteFolders.filter((value): value is string => typeof value === "string")
         : [],
-      contentPlanner:
-        candidate.uiState.contentPlanner && typeof candidate.uiState.contentPlanner === "object"
-          ? candidate.uiState.contentPlanner
-          : undefined,
     },
   };
 }
@@ -411,18 +397,12 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
       ensureContentPlannerState(
         ensurePlannerState({
           ...validated.data,
-          contentPlannerOptions: validated.data.contentPlannerOptions
-            ? createContentPlannerOptions(
-                validated.data.contentPlannerOptions as Partial<ContentPlannerOptions>,
-              )
-            : createDefaultContentPlannerOptions(),
           uiState: {
             ...validated.data.uiState,
             themeMode: validated.data.uiState.themeMode ?? "dark",
             categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
             isFocusMode: validated.data.uiState.isFocusMode ?? false,
             focusedTodoId: validated.data.uiState.focusedTodoId ?? null,
-            selectedContentIdeaId: validated.data.uiState.selectedContentIdeaId ?? null,
             focusTimerStatus: validated.data.uiState.focusTimerStatus ?? "idle",
             focusTimerRemainingSeconds: validated.data.uiState.focusTimerRemainingSeconds ?? null,
             focusTimerStartedAt: validated.data.uiState.focusTimerStartedAt ?? null,
@@ -438,17 +418,6 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
             contentFontScale: clampContentFontScale(
               validated.data.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT,
             ),
-            contentPlanner: {
-              layout: validated.data.uiState.contentPlanner?.layout ?? "split",
-              density: validated.data.uiState.contentPlanner?.density ?? "comfortable",
-              viewMode: validated.data.uiState.contentPlanner?.viewMode ?? "list",
-              showLlmPanel: validated.data.uiState.contentPlanner?.showLlmPanel ?? true,
-              statusFilter: validated.data.uiState.contentPlanner?.statusFilter ?? "all",
-              pillarFilter: validated.data.uiState.contentPlanner?.pillarFilter ?? "all",
-              channelFilter: validated.data.uiState.contentPlanner?.channelFilter ?? "all",
-              tagFilter: validated.data.uiState.contentPlanner?.tagFilter ?? "all",
-              searchQuery: validated.data.uiState.contentPlanner?.searchQuery ?? "",
-            },
           },
         }),
       ),
@@ -476,7 +445,6 @@ export function extractSyncableUIState(uiState: UIState): SyncableUIState {
 export function extractSyncableWorkspaceState(state: AppState): SyncableWorkspaceState {
   return {
     uiState: extractSyncableUIState(state.uiState),
-    contentPlannerOptions: state.contentPlannerOptions,
   };
 }
 
@@ -489,14 +457,12 @@ export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
     categoryTheme: uiState.categoryTheme,
     isFocusMode: uiState.isFocusMode,
     focusedTodoId: uiState.focusedTodoId,
-    selectedContentIdeaId: uiState.selectedContentIdeaId,
     focusTimerStatus: uiState.focusTimerStatus,
     focusTimerRemainingSeconds: uiState.focusTimerRemainingSeconds,
     focusTimerStartedAt: uiState.focusTimerStartedAt,
     focusTimerBaseEstimateMinutes: uiState.focusTimerBaseEstimateMinutes,
     isFocusTimerCompletionPromptOpen: uiState.isFocusTimerCompletionPromptOpen,
     expandedNoteFolders: uiState.expandedNoteFolders,
-    contentPlanner: uiState.contentPlanner,
   };
 }
 

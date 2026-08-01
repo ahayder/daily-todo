@@ -213,7 +213,7 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
       ],
     },
     {
-      name: "content_ideas",
+      name: "content_boards",
       type: "base",
       listRule: COLLECTION_ACCESS_RULE,
       viewRule: COLLECTION_ACCESS_RULE,
@@ -230,12 +230,7 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           cascadeDelete: true,
         },
         {
-          name: "idea_id",
-          type: "text",
-          required: true,
-        },
-        {
-          name: "payload_json",
+          name: "columns_json",
           type: "json",
           required: true,
         },
@@ -246,7 +241,61 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         },
       ],
       indexes: [
-        "CREATE UNIQUE INDEX idx_content_ideas_owner_idea_id ON content_ideas (owner, idea_id)",
+        "CREATE UNIQUE INDEX idx_content_boards_owner ON content_boards (owner)",
+      ],
+    },
+    {
+      name: "content_cards",
+      type: "base",
+      listRule: COLLECTION_ACCESS_RULE,
+      viewRule: COLLECTION_ACCESS_RULE,
+      createRule: COLLECTION_ACCESS_RULE,
+      updateRule: COLLECTION_ACCESS_RULE,
+      deleteRule: COLLECTION_ACCESS_RULE,
+      fields: [
+        {
+          name: "owner",
+          type: "relation",
+          required: true,
+          maxSelect: 1,
+          collectionId: usersCollectionId,
+          cascadeDelete: true,
+        },
+        {
+          name: "card_id",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "column_id",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "title",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "notes",
+          type: "text",
+        },
+        {
+          name: "position",
+          type: "number",
+          required: true,
+          onlyInt: true,
+          min: 0,
+        },
+        {
+          name: "updated_at_client",
+          type: "date",
+          required: true,
+        },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_content_cards_owner_card_id ON content_cards (owner, card_id)",
+        "CREATE INDEX idx_content_cards_owner_column_position ON content_cards (owner, column_id, position)",
       ],
     },
     {
@@ -289,16 +338,6 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         },
         {
           name: "expanded_months_json",
-          type: "json",
-          required: true,
-        },
-        {
-          name: "content_planner_pillars_json",
-          type: "json",
-          required: true,
-        },
-        {
-          name: "content_planner_platforms_json",
           type: "json",
           required: true,
         },

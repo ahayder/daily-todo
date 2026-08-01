@@ -19,72 +19,24 @@ export type PlannerEventColor =
   | "rose"
   | "sage"
   | "lavender";
-export type ContentIdeaStatus =
-  | "inbox"
-  | "curating"
-  | "outlined"
-  | "scripted"
-  | "published"
-  | "archived";
-export type ContentIdeaSourceType = "human" | "ai";
-export type ContentPlannerLayout = "split" | "kanban" | "detail-right";
-export type ContentPlannerDensity = "comfortable" | "compact";
-export type ContentPlannerViewMode = "list" | "kanban" | "grid";
-
-export type ContentIdeaScoreBreakdown = {
-  hook: number;
-  proof: number;
-  fit: number;
+export type ContentColumn = {
+  id: string;
+  title: string;
+  subtitle: string;
 };
 
-export type ContentIdeaHookVariant = {
-  id: string;
-  value: string;
-};
-
-export type ContentIdeaScriptStep = {
-  id: string;
-  label: string;
-  body: string;
-  placeholder?: boolean;
-  actionLabel: string;
-};
-
-export type ContentIdea = {
-  id: string;
-  code: string;
-  hook: string;
-  premise: string;
-  status: ContentIdeaStatus;
-  pillar: string;
-  channels: string[];
-  tags: string[];
-  score: number;
-  scoreBreakdown: ContentIdeaScoreBreakdown;
-  sourceLabel: string;
-  sourceType: ContentIdeaSourceType;
-  createdAt: string;
+export type ContentBoard = {
+  columns: ContentColumn[];
   updatedAt: string;
-  hooks: ContentIdeaHookVariant[];
-  activeHookId: string | null;
-  scriptSteps: ContentIdeaScriptStep[];
 };
 
-export type ContentPlannerUIState = {
-  layout: ContentPlannerLayout;
-  density: ContentPlannerDensity;
-  viewMode: ContentPlannerViewMode;
-  showLlmPanel: boolean;
-  statusFilter: string;
-  pillarFilter: string;
-  channelFilter: string;
-  tagFilter: string;
-  searchQuery: string;
-};
-
-export type ContentPlannerOptions = {
-  pillars: string[];
-  platforms: string[];
+export type ContentCard = {
+  id: string;
+  columnId: string;
+  title: string;
+  notes: string;
+  order: number;
+  updatedAt: string;
 };
 
 export type PlannerEvent = {
@@ -159,14 +111,12 @@ export type UIState = {
   selectedNoteId: string | null;
   selectedNoteFolderId: string | null;
   selectedPlannerPresetId: string | null;
-  selectedContentIdeaId: string | null;
   isSidebarCollapsed: boolean;
   dailyTaskPaneWidth: number;
   contentFontScale: number;
   expandedYears: string[];
   expandedMonths: string[];
   expandedNoteFolders: string[];
-  contentPlanner: ContentPlannerUIState;
   lastView: ViewMode;
   themeMode: ThemeMode;
   categoryTheme: CategoryTheme;
@@ -184,7 +134,7 @@ export type AppState = {
   notesDocs: Record<string, NoteDoc>;
   noteFolders: Record<string, NoteFolder>;
   plannerPresets: Record<string, PlannerPreset>;
-  contentIdeas: Record<string, ContentIdea>;
-  contentPlannerOptions: ContentPlannerOptions;
+  contentBoard: ContentBoard;
+  contentCards: Record<string, ContentCard>;
   uiState: UIState;
 };

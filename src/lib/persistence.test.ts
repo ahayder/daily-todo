@@ -11,7 +11,13 @@ import {
 } from "@/lib/persistence";
 import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
 import { SplitPersistenceRepository } from "@/lib/split-persistence-repository";
-import { DEFAULT_NOTES_FOLDER_ID, createInitialState } from "@/lib/store";
+import { getSyncRecordValuesFromState } from "@/lib/pocketbase/persistence-repository";
+import { appStateSchema } from "@/lib/schema";
+import {
+  DEFAULT_NOTES_FOLDER_ID,
+  createContentCard,
+  createInitialState,
+} from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
 describe("normalizeAppState", () => {
@@ -21,12 +27,17 @@ describe("normalizeAppState", () => {
     expect(state.dailyPages["2026-03-11"]).toBeDefined();
     expect(Object.keys(state.notesDocs).length).toBeGreaterThan(0);
     expect(Object.keys(state.plannerPresets).length).toBeGreaterThan(0);
-    expect(state.contentIdeas).toEqual({});
-    expect(state.contentPlannerOptions.pillars).toContain("Teach");
-    expect(state.uiState.contentPlanner.searchQuery).toBe("");
+    expect(state.contentBoard.columns.map((column) => column.title)).toEqual([
+      "Ideas",
+      "Planned",
+      "In Progress",
+      "Ready",
+      "Published",
+    ]);
+    expect(state.contentCards).toEqual({});
   });
 
-  test("normalizes missing themeMode and sidebar state", () => {
+  test("normalizes missing shared UI defaults", () => {
     const state = normalizeAppState(
       {
         dailyPages: {
@@ -43,11 +54,6 @@ describe("normalizeAppState", () => {
         },
         noteFolders: {},
         plannerPresets: {},
-        contentIdeas: {},
-        contentPlannerOptions: {
-          pillars: ["Teach"],
-          platforms: ["LinkedIn"],
-        },
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: "note_1",
@@ -67,13 +73,10 @@ describe("normalizeAppState", () => {
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
     expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
-    expect(state.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
-    expect(state.uiState.expandedNoteFolders).toContain(DEFAULT_NOTES_FOLDER_ID);
-    expect(state.uiState.contentPlanner.viewMode).toBe("list");
-    expect(state.contentPlannerOptions.pillars).toEqual(["Teach"]);
+    expect(state.contentBoard.columns).toHaveLength(5);
   });
 
-  test("maps legacy daily lastView state to todos", () => {
+  test("maps legacy daily lastView state to todos and discards planner branches", () => {
     const state = normalizeAppState(
       {
         dailyPages: {
@@ -82,16 +85,15 @@ describe("normalizeAppState", () => {
         notesDocs: {},
         noteFolders: {},
         plannerPresets: {},
-        contentIdeas: {},
-        contentPlannerOptions: {
-          pillars: ["Teach"],
-          platforms: ["LinkedIn"],
-        },
+        contentIdeas: { idea_1: { id: "idea_1", hook: "Legacy" } },
+        contentPlannerOptions: { pillars: [{ name: "Teach" }], platforms: [] },
         uiState: {
           selectedDailyDate: "2026-03-11",
           selectedNoteId: null,
           selectedNoteFolderId: null,
           selectedPlannerPresetId: null,
+          selectedContentIdeaId: "idea_1",
+          contentPlanner: { searchQuery: "legacy" },
           expandedYears: ["2026"],
           expandedMonths: ["2026-03"],
           lastView: "daily",
@@ -101,32 +103,17 @@ describe("normalizeAppState", () => {
     );
 
     expect(state.uiState.lastView).toBe("todos");
+    expect(state.contentCards).toEqual({});
+    expect("contentIdeas" in state).toBe(false);
+    expect("contentPlanner" in state.uiState).toBe(false);
   });
 
   test("clamps content font scale from persisted state", () => {
+    const initial = createInitialState("2026-03-11");
     const state = normalizeAppState(
       {
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {},
-        noteFolders: {},
-        plannerPresets: {},
-        contentIdeas: {},
-        contentPlannerOptions: {
-          pillars: ["Teach"],
-          platforms: ["LinkedIn"],
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: null,
-          selectedNoteFolderId: null,
-          selectedPlannerPresetId: null,
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "todos",
-          contentFontScale: 9,
-        },
+        ...initial,
+        uiState: { ...initial.uiState, contentFontScale: 9 },
       },
       new Date("2026-03-11T08:00:00Z"),
     );
@@ -134,9 +121,11 @@ describe("normalizeAppState", () => {
     expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_MAX);
   });
 
-  test("migrates legacy done-based todos into status and estimate fields", () => {
+  test("migrates legacy done-based todos without disturbing the content board", () => {
+    const initial = createInitialState("2026-03-11");
     const state = normalizeAppState(
       {
+        ...initial,
         dailyPages: {
           "2026-03-11": {
             date: "2026-03-11",
@@ -152,19 +141,6 @@ describe("normalizeAppState", () => {
             ],
           },
         },
-        notesDocs: {},
-        noteFolders: {},
-        plannerPresets: {},
-        contentIdeas: {},
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: null,
-          selectedNoteFolderId: null,
-          selectedPlannerPresetId: null,
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "todos",
-        },
       },
       new Date("2026-03-11T08:00:00Z"),
     );
@@ -173,110 +149,56 @@ describe("normalizeAppState", () => {
       status: "finished",
       estimatedMinutes: null,
     });
+    expect(state.contentBoard.columns).toHaveLength(5);
   });
 
-  test("backfills missing content planner ui state from persisted payload", () => {
+  test("rejects fractional card positions in persisted state", () => {
+    const state = createInitialState("2026-03-11");
+    const column = state.contentBoard.columns[0];
+    const card = createContentCard({
+      columnId: column.id,
+      title: "Invalid order",
+      order: 0,
+    })!;
+
+    const result = appStateSchema.safeParse({
+      ...state,
+      contentCards: {
+        [card.id]: { ...card, order: 1.5 },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.contentCards).toEqual({});
+    }
+  });
+
+  test("backfills missing content column subtitles", () => {
+    const initial = createInitialState("2026-03-11");
+    const legacyColumns = initial.contentBoard.columns.map((column) => ({
+      id: column.id,
+      title: column.title,
+    }));
+
     const state = normalizeAppState(
       {
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {},
-        noteFolders: {},
-        plannerPresets: {},
-        contentIdeas: {
-          idea_1: {
-            id: "idea_1",
-            code: "#0001",
-            hook: "Ship before polish",
-            premise: "Momentum creates clarity.",
-            status: "inbox",
-            pillar: "Teach",
-            channels: ["LinkedIn"],
-            tags: ["launch"],
-            score: 8.2,
-            scoreBreakdown: {
-              hook: 8,
-              proof: 8,
-              fit: 9,
-            },
-            sourceLabel: "manual",
-            sourceType: "human",
-            createdAt: "2026-03-11T08:00:00.000Z",
-            updatedAt: "2026-03-11T08:00:00.000Z",
-            hooks: [],
-            activeHookId: null,
-            scriptSteps: [],
-          },
-        },
-        contentPlannerOptions: {
-          pillars: ["Teach", "Build in public"],
-          platforms: ["LinkedIn", "Podcast"],
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: null,
-          selectedNoteFolderId: null,
-          selectedPlannerPresetId: null,
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "content-planner",
+        ...initial,
+        contentBoard: {
+          ...initial.contentBoard,
+          columns: legacyColumns,
         },
       },
       new Date("2026-03-11T08:00:00Z"),
     );
 
-    expect(state.uiState.selectedContentIdeaId).toBe("idea_1");
-    expect(state.uiState.contentPlanner.layout).toBe("split");
-    expect(state.uiState.contentPlanner.showLlmPanel).toBe(true);
-    expect(state.contentPlannerOptions.platforms).toContain("Podcast");
-  });
-
-  test("backfills missing synced planner options from saved ideas", () => {
-    const state = normalizeAppState(
-      {
-        dailyPages: {
-          "2026-03-11": { date: "2026-03-11", markdown: "", todos: [] },
-        },
-        notesDocs: {},
-        noteFolders: {},
-        plannerPresets: {},
-        contentIdeas: {
-          idea_1: {
-            id: "idea_1",
-            code: "#0001",
-            hook: "Ship the experiment log",
-            premise: "Turn the notes into a public teardown.",
-            status: "inbox",
-            pillar: "Build in public",
-            channels: ["Podcast"],
-            tags: [],
-            score: 8,
-            scoreBreakdown: { hook: 8, proof: 8, fit: 8 },
-            sourceLabel: "manual",
-            sourceType: "human",
-            createdAt: "2026-03-11T08:00:00.000Z",
-            updatedAt: "2026-03-11T08:00:00.000Z",
-            hooks: [],
-            activeHookId: null,
-            scriptSteps: [],
-          },
-        },
-        uiState: {
-          selectedDailyDate: "2026-03-11",
-          selectedNoteId: null,
-          selectedNoteFolderId: null,
-          selectedPlannerPresetId: null,
-          expandedYears: ["2026"],
-          expandedMonths: ["2026-03"],
-          lastView: "content-planner",
-        },
-      },
-      new Date("2026-03-11T08:00:00Z"),
-    );
-
-    expect(state.contentPlannerOptions.pillars).toContain("Build in public");
-    expect(state.contentPlannerOptions.platforms).toContain("Podcast");
+    expect(state.contentBoard.columns.map((column) => column.subtitle)).toEqual([
+      "Capture raw concepts",
+      "Ready to work on",
+      "Currently being created",
+      "Prepared to publish",
+      "Live and complete",
+    ]);
   });
 });
 
@@ -318,6 +240,64 @@ describe("browser local cache", () => {
       cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope?.state
         .uiState.selectedDailyDate,
     ).toBe("2026-03-11");
+  });
+
+  test("drops legacy content planner record metadata from cache", () => {
+    const cache = createBrowserLocalCacheStorage();
+    const state = createInitialState("2026-03-11");
+
+    window.localStorage.setItem(
+      getUserCacheStorageKey("user_1"),
+      JSON.stringify({
+        state,
+        metadata: {
+          ...createPersistenceMetadata(),
+          records: {
+            "content_idea:old": {
+              key: "content_idea:old",
+              kind: "content_idea",
+              fingerprint: "old",
+              lastRemoteUpdatedAt: null,
+              lastRemoteUpdatedAtClient: null,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(
+      cache.loadCached({ userId: "user_1", now: new Date("2026-03-11T08:00:00Z") }).envelope
+        ?.metadata.records,
+    ).toEqual({});
+  });
+});
+
+describe("content planner persistence records", () => {
+  test("serializes one board record and one record per card", () => {
+    const state = createInitialState("2026-03-11");
+    const column = state.contentBoard.columns[0];
+    const card = createContentCard({
+      columnId: column.id,
+      title: "Launch story",
+      notes: "Explain the change.",
+      order: 0,
+    })!;
+    state.contentCards[card.id] = card;
+
+    const records = getSyncRecordValuesFromState(state);
+
+    expect(records["content_board:self"]).toMatchObject({
+      key: "content_board:self",
+      kind: "content_board",
+      value: state.contentBoard,
+    });
+    expect(records[`content_card:${card.id}`]).toMatchObject({
+      kind: "content_card",
+      value: card,
+    });
+    expect(Object.values(records).map((record) => String(record.kind))).not.toContain(
+      "content_idea",
+    );
   });
 });
 
