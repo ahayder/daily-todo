@@ -660,24 +660,44 @@ export function ensureContentPlannerState(state: AppState): AppState {
   };
 }
 
-function cloneCarryoverTodos(todos: Todo[]): Todo[] {
-  return todos
-    .filter((todo) => todo.status !== "finished")
-    .map((todo) => ({
-      ...todo,
-      id: makeId("todo"),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    }));
-}
+function cloneCarryoverTodos(todos: Todo[], targetDateISO: string): Todo[] {
+  const carriedTodos = todos.filter((todo) => todo.status !== "finished");
+  const targetDateKey = targetDateISO.replaceAll("-", "");
+  const nextIdByPreviousId = new Map(
+    carriedTodos.map((todo, index) => [
+      todo.id,
+      `todo_carry_${targetDateKey}_${index}`,
+    ]),
+  );
 
-function getLatestDailyDate(state: AppState): string | null {
-  const dates = Object.keys(state.dailyPages).sort();
-  return dates.length ? dates[dates.length - 1] : null;
+  return carriedTodos.map((todo) => ({
+    ...todo,
+    id: nextIdByPreviousId.get(todo.id)!,
+    status: "pending",
+    createdAt: `${targetDateISO}T00:00:00.000Z`,
+    parentId: todo.parentId ? nextIdByPreviousId.get(todo.parentId) : undefined,
+  }));
 }
 
 function monthKey(dateISO: string): string {
   return getYearMonth(dateISO);
+}
+
+export function createCarryoverDailyPage(
+  dailyPages: Record<string, DailyPage>,
+  targetDateISO: string,
+): DailyPage {
+  const previousDate = Object.keys(dailyPages)
+    .filter((date) => date < targetDateISO)
+    .sort()
+    .at(-1);
+  const previous = previousDate ? dailyPages[previousDate] : null;
+
+  return {
+    date: targetDateISO,
+    markdown: previous?.markdown ?? "",
+    todos: previous ? cloneCarryoverTodos(previous.todos, targetDateISO) : [],
+  };
 }
 
 export function ensureDailyPageForDate(state: AppState, todayISO: string): AppState {
@@ -691,14 +711,7 @@ export function ensureDailyPageForDate(state: AppState, todayISO: string): AppSt
     };
   }
 
-  const latestDate = getLatestDailyDate(state);
-  const previous = latestDate ? state.dailyPages[latestDate] : null;
-
-  const nextPage: DailyPage = {
-    date: todayISO,
-    markdown: previous?.markdown ?? "",
-    todos: previous ? cloneCarryoverTodos(previous.todos) : [],
-  };
+  const nextPage = createCarryoverDailyPage(state.dailyPages, todayISO);
 
   return {
     ...state,

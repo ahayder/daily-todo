@@ -1,5 +1,6 @@
 import { createBrowserLocalCacheStorage } from "@/lib/local-cache-storage";
 import { createRecentNoteBodiesStorage } from "@/lib/recent-note-bodies-storage";
+import { toISODate } from "@/lib/date";
 import {
   APP_STATE_VERSION,
   compareTimestamps,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
+import { createCarryoverDailyPage } from "@/lib/store";
 import type {
   AppState,
   ContentBoard,
@@ -54,6 +56,7 @@ type PocketBaseDailyPageRecord = {
   date?: string;
   markdown?: string;
   todos_json?: unknown;
+  created?: string;
   updated?: string;
   updated_at_client?: string;
 };
@@ -137,7 +140,32 @@ type SplitWorkspacePayload = {
   state: AppState;
   records: Record<string, PersistenceRecordMetadata>;
   hasData: boolean;
+  hasRepairedDailyPage: boolean;
 };
+
+export function hasUnsavedDailyPage(
+  state: AppState,
+  records: Record<string, PersistenceRecordMetadata>,
+): boolean {
+  return Object.keys(state.dailyPages).some((date) => !records[`daily_page:${date}`]);
+}
+
+export function isUntouchedEmptyDailyPage(
+  page: DailyPage,
+  created: string | null | undefined,
+  updated: string | null | undefined,
+): boolean {
+  const createdAt = created ? Date.parse(created) : Number.NaN;
+  const updatedAt = updated ? Date.parse(updated) : Number.NaN;
+
+  return (
+    page.markdown.trim() === "" &&
+    page.todos.length === 0 &&
+    Number.isFinite(createdAt) &&
+    Number.isFinite(updatedAt) &&
+    Math.abs(updatedAt - createdAt) <= 1000
+  );
+}
 
 function isNotFoundError(error: unknown): boolean {
   return (
@@ -460,8 +488,17 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     const splitPayload = await this.loadSplitWorkspaceState(userId, cachedEnvelope?.state ?? null, now);
 
     if (splitPayload.hasData) {
-      if (!splitPayload.records["content_board:self"]) {
-        const seededBoard = await this.saveRemoteState({
+      const shouldBackfillDailyPage = hasUnsavedDailyPage(
+        splitPayload.state,
+        splitPayload.records,
+      );
+
+      if (
+        !splitPayload.records["content_board:self"] ||
+        shouldBackfillDailyPage ||
+        splitPayload.hasRepairedDailyPage
+      ) {
+        const backfilled = await this.saveRemoteState({
           userId,
           state: splitPayload.state,
           metadata: createPersistenceMetadata({
@@ -470,12 +507,12 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
           }),
           now,
         });
-        return toLoadResult(seededBoard.resolvedState ?? splitPayload.state, seededBoard.metadata, {
+        return toLoadResult(backfilled.resolvedState ?? splitPayload.state, backfilled.metadata, {
           source: cachedEnvelope ? "local" : "remote",
-          status: seededBoard.status,
-          conflictResolution: seededBoard.conflictResolution,
-          notice: seededBoard.notice,
-          errorMessage: seededBoard.errorMessage,
+          status: backfilled.status,
+          conflictResolution: backfilled.conflictResolution,
+          notice: backfilled.notice,
+          errorMessage: backfilled.errorMessage,
           persistenceAvailable: cacheAvailable,
         });
       }
@@ -616,9 +653,10 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         }
 
         if (localRecord && remoteRecord) {
-          const sameFingerprint = stableFingerprint(localRecord.value) === stableFingerprint(remoteRecord.value);
+          const localFingerprint = stableFingerprint(localRecord.value);
+          const sameFingerprint = localFingerprint === stableFingerprint(remoteRecord.value);
           if (sameFingerprint) {
-            if (!currentRemote) {
+            if (!currentRemote || currentRemote.fingerprint !== localFingerprint) {
               operations.push(
                 this.upsertRecord(
                   userId,
@@ -935,6 +973,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     const values: Record<string, SyncRecordValue> = {};
     const records: Record<string, PersistenceRecordMetadata> = {};
+    const loadedDailyPages: Record<string, DailyPage> = {};
+    const dailyPageRecords = new Map<string, PocketBaseDailyPageRecord>();
+    let hasRepairedDailyPage = false;
 
     for (const record of dailyPages) {
       if (!record.date) continue;
@@ -944,6 +985,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         todos: safeArray(record.todos_json),
       };
       const key = `daily_page:${record.date}`;
+      loadedDailyPages[record.date] = value;
+      dailyPageRecords.set(record.date, record);
       values[key] = { key, kind: "daily_page", value };
       records[key] = createRecordMetadata(
         key,
@@ -952,6 +995,28 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         record.updated ?? null,
         record.updated_at_client ?? null,
       );
+    }
+
+    const todayISO = toISODate(now);
+    const todayPage = loadedDailyPages[todayISO];
+    const todayRecord = dailyPageRecords.get(todayISO);
+    if (
+      todayPage &&
+      todayRecord &&
+      isUntouchedEmptyDailyPage(todayPage, todayRecord.created, todayRecord.updated)
+    ) {
+      const history = { ...loadedDailyPages };
+      delete history[todayISO];
+      const repairedPage = createCarryoverDailyPage(history, todayISO);
+
+      if (repairedPage.markdown.trim() !== "" || repairedPage.todos.length > 0) {
+        values[`daily_page:${todayISO}`] = {
+          key: `daily_page:${todayISO}`,
+          kind: "daily_page",
+          value: repairedPage,
+        };
+        hasRepairedDailyPage = true;
+      }
     }
 
     for (const record of notes) {
@@ -1077,6 +1142,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     return {
       state,
       records,
+      hasRepairedDailyPage,
       hasData:
         dailyPages.length > 0 ||
         notes.length > 0 ||

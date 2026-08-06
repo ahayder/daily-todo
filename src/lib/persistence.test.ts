@@ -11,7 +11,11 @@ import {
 } from "@/lib/persistence";
 import { SnapshotPersistenceRepository } from "@/lib/snapshot-persistence-repository";
 import { SplitPersistenceRepository } from "@/lib/split-persistence-repository";
-import { getSyncRecordValuesFromState } from "@/lib/pocketbase/persistence-repository";
+import {
+  getSyncRecordValuesFromState,
+  hasUnsavedDailyPage,
+  isUntouchedEmptyDailyPage,
+} from "@/lib/pocketbase/persistence-repository";
 import { appStateSchema } from "@/lib/schema";
 import {
   DEFAULT_NOTES_FOLDER_ID,
@@ -199,6 +203,61 @@ describe("normalizeAppState", () => {
       "Prepared to publish",
       "Live and complete",
     ]);
+  });
+});
+
+describe("PocketBase daily-page backfill", () => {
+  test("detects a synthesized rollover page that has not been written remotely", () => {
+    const state = createInitialState("2026-03-11");
+    const previousPageRecord = {
+      key: "daily_page:2026-03-10",
+      kind: "daily_page" as const,
+      fingerprint: "previous",
+      lastRemoteUpdatedAt: "2026-03-10T08:00:00.000Z",
+      lastRemoteUpdatedAtClient: "2026-03-10T08:00:00.000Z",
+    };
+
+    expect(
+      hasUnsavedDailyPage(state, {
+        "daily_page:2026-03-10": previousPageRecord,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasUnsavedDailyPage(state, {
+        "daily_page:2026-03-10": previousPageRecord,
+        "daily_page:2026-03-11": {
+          ...previousPageRecord,
+          key: "daily_page:2026-03-11",
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("repairs only an empty daily page that has not been edited since creation", () => {
+    const page = createInitialState("2026-03-11").dailyPages["2026-03-11"];
+
+    expect(
+      isUntouchedEmptyDailyPage(
+        page,
+        "2026-03-11T00:00:00.000Z",
+        "2026-03-11T00:00:00.500Z",
+      ),
+    ).toBe(true);
+    expect(
+      isUntouchedEmptyDailyPage(
+        page,
+        "2026-03-11T00:00:00.000Z",
+        "2026-03-11T00:10:00.000Z",
+      ),
+    ).toBe(false);
+    expect(
+      isUntouchedEmptyDailyPage(
+        { ...page, markdown: "User content" },
+        "2026-03-11T00:00:00.000Z",
+        "2026-03-11T00:00:00.000Z",
+      ),
+    ).toBe(false);
   });
 });
 

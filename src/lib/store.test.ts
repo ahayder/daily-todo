@@ -53,6 +53,95 @@ describe("ensureDailyPageForDate", () => {
     expect(rolled.dailyPages["2026-03-11"].todos[0].status).toBe("pending");
   });
 
+  test("carries subtasks with deterministic ids linked to their copied parent", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [
+      {
+        id: "parent",
+        text: "Parent task",
+        priority: 1,
+        status: "ongoing",
+        estimatedMinutes: 25,
+        createdAt: "2026-03-10T08:00:00.000Z",
+      },
+      {
+        id: "child",
+        text: "Child task",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T08:05:00.000Z",
+        parentId: "parent",
+      },
+    ];
+
+    const first = ensureDailyPageForDate(state, "2026-03-11");
+    const second = ensureDailyPageForDate(state, "2026-03-11");
+    const carried = first.dailyPages["2026-03-11"].todos;
+
+    expect(carried).toEqual([
+      expect.objectContaining({
+        id: "todo_carry_20260311_0",
+        text: "Parent task",
+        status: "pending",
+        parentId: undefined,
+      }),
+      expect.objectContaining({
+        id: "todo_carry_20260311_1",
+        text: "Child task",
+        status: "pending",
+        parentId: "todo_carry_20260311_0",
+      }),
+    ]);
+    expect(second.dailyPages["2026-03-11"]).toEqual(first.dailyPages["2026-03-11"]);
+  });
+
+  test("promotes an unfinished subtask when its finished parent is not carried", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [
+      {
+        id: "parent",
+        text: "Finished parent",
+        priority: 1,
+        status: "finished",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T08:00:00.000Z",
+      },
+      {
+        id: "child",
+        text: "Open child",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T08:05:00.000Z",
+        parentId: "parent",
+      },
+    ];
+
+    const rolled = ensureDailyPageForDate(state, "2026-03-11");
+
+    expect(rolled.dailyPages["2026-03-11"].todos).toEqual([
+      expect.objectContaining({
+        text: "Open child",
+        parentId: undefined,
+      }),
+    ]);
+  });
+
+  test("ignores future pages when selecting the carryover source", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].markdown = "Previous snapshot";
+    state.dailyPages["2026-03-12"] = {
+      date: "2026-03-12",
+      markdown: "Future snapshot",
+      todos: [],
+    };
+
+    const rolled = ensureDailyPageForDate(state, "2026-03-11");
+
+    expect(rolled.dailyPages["2026-03-11"].markdown).toBe("Previous snapshot");
+  });
+
   test("does not recreate when page already exists", () => {
     const state = createInitialState("2026-03-11");
     const next = ensureDailyPageForDate(state, "2026-03-11");
