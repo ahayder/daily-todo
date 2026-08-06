@@ -152,18 +152,40 @@ const markdownComponents: Components = {
   ),
 };
 
+const titleMarkdownComponents: Components = {
+  ...markdownComponents,
+  p: (props) => (
+    <p
+      {...withClassName(
+        props,
+        "text-base font-semibold leading-6 text-[var(--ink-900)]",
+      )}
+    />
+  ),
+};
+
 const remarkPlugins = [remarkGfm];
 
 export const ContentCardMarkdown = memo(function ContentCardMarkdown({
-  markdown,
+  title,
+  notes,
 }: {
-  markdown: string;
+  title: string;
+  notes?: string;
 }) {
   return (
     <div className="content-card-markdown space-y-2 overflow-x-auto">
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
-        {markdown}
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        components={titleMarkdownComponents}
+      >
+        {title}
       </ReactMarkdown>
+      {notes ? (
+        <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
+          {notes}
+        </ReactMarkdown>
+      ) : null}
     </div>
   );
 });

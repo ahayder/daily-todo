@@ -142,6 +142,7 @@ function ContentCardItem({
   onRequestDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [text, setText] = useState(() => getContentCardText(card));
   const {
     attributes,
@@ -161,6 +162,7 @@ function ContentCardItem({
   });
 
   const startEditing = () => {
+    setIsCollapsed(false);
     setText(getContentCardText(card));
     setIsEditing(true);
   };
@@ -186,7 +188,7 @@ function ContentCardItem({
         transition,
       }}
       className={cn(
-        "group relative rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
+        "group relative max-h-[10.5rem] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
         isDragging && "opacity-40",
         isOver && !isDragging && "ring-2 ring-[var(--brand)] ring-offset-2 ring-offset-[var(--paper)]",
       )}
@@ -214,20 +216,48 @@ function ContentCardItem({
               save();
             }
           }}
-          className="block min-h-28 w-full resize-y rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="block min-h-28 max-h-[10.5rem] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         />
       ) : (
         <div
           onClick={(event) => {
             if (!(event.target as Element).closest("a")) {
-              startEditing();
+              onView();
             }
           }}
-          className="min-h-28 cursor-text rounded-2xl px-4 py-3.5 pr-11 pb-11"
+          {...listeners}
+          className={cn(
+            "cursor-grab overflow-y-auto rounded-2xl px-4 py-3.5 pr-20 pb-11 active:cursor-grabbing",
+            isCollapsed ? "min-h-24" : "min-h-28 max-h-[10.5rem]",
+          )}
+          data-testid={`content-card-body-${card.id}`}
         >
-          <ContentCardMarkdown markdown={getContentCardText(card)} />
+          <ContentCardMarkdown
+            title={card.title}
+            notes={isCollapsed ? undefined : card.notes}
+          />
         </div>
       )}
+
+      {!isEditing ? (
+        <Tooltip>
+          <TooltipTrigger
+            aria-label={`${isCollapsed ? "Expand" : "Collapse"} card ${card.title}`}
+            aria-expanded={!isCollapsed}
+            onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+            className="absolute top-2.5 right-2.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+          >
+            {isCollapsed ? (
+              <ChevronDown className="size-4" />
+            ) : (
+              <ChevronUp className="size-4" />
+            )}
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {isCollapsed ? "Expand card" : "Collapse card"}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
 
       <Tooltip>
         <TooltipTrigger
@@ -273,7 +303,7 @@ function ContentCardItem({
       <Tooltip>
         <TooltipTrigger
           aria-label={`Move card ${card.title}`}
-          className="absolute top-2.5 right-2.5 inline-flex size-7 cursor-grab items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing group-hover:opacity-100 motion-reduce:transition-none"
+          className="absolute top-2.5 right-10 inline-flex size-7 cursor-grab items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing group-hover:opacity-100 motion-reduce:transition-none"
           {...attributes}
           {...listeners}
         >
@@ -403,7 +433,6 @@ function ContentColumnView({
 }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [isEditingSubtitle, setIsEditingSubtitle] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [subtitle, setSubtitle] = useState(column.subtitle);
   const {
@@ -451,12 +480,7 @@ function ContentColumnView({
       )}
       data-testid={`content-column-${column.id}`}
     >
-      <header
-        className={cn(
-          "flex items-start gap-2 px-1",
-          isCollapsed ? "mb-0" : "mb-3",
-        )}
-      >
+      <header className="mb-3 flex items-start gap-2 px-1">
         <Tooltip>
           <TooltipTrigger
             aria-label={`Move column ${column.title}`}
@@ -544,29 +568,6 @@ function ContentColumnView({
 
         <Tooltip>
           <TooltipTrigger
-            aria-label={`${isCollapsed ? "Expand" : "Collapse"} column ${column.title}`}
-            aria-expanded={!isCollapsed}
-            onClick={() => {
-              if (!isCollapsed) {
-                onCloseComposer();
-              }
-              setIsCollapsed((collapsed) => !collapsed);
-            }}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-          >
-            {isCollapsed ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronUp className="size-4" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            {isCollapsed ? "Expand column" : "Collapse column"}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger
             aria-label={`Delete column ${column.title}`}
             aria-disabled={!canDelete}
             onClick={() => {
@@ -587,45 +588,41 @@ function ContentColumnView({
         </Tooltip>
       </header>
 
-      {!isCollapsed ? (
-        <>
-          <div className="min-h-20 flex-1 overflow-y-auto px-0.5 pb-1">
-            <SortableContext
-              items={cards.map((card) => cardDragId(card.id))}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-2">
-                {cards.map((card) => (
-                  <ContentCardItem
-                    key={card.id}
-                    card={card}
-                    onView={() => onViewCard(card.id)}
-                    onUpdate={(title, notes) =>
-                      onUpdateCard(card.id, title, notes)
-                    }
-                    onRequestDelete={() => onRequestDeleteCard(card.id)}
-                  />
-                ))}
-                {cards.length === 0 ? (
-                  <div className="grid min-h-20 place-items-center rounded-xl border border-dashed border-[var(--line)] px-3 text-center text-xs text-[var(--ink-700)]">
-                    Drop cards here
-                  </div>
-                ) : null}
+      <div className="min-h-20 flex-1 overflow-y-auto px-0.5 pb-1">
+        <SortableContext
+          items={cards.map((card) => cardDragId(card.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-2">
+            {cards.map((card) => (
+              <ContentCardItem
+                key={card.id}
+                card={card}
+                onView={() => onViewCard(card.id)}
+                onUpdate={(title, notes) =>
+                  onUpdateCard(card.id, title, notes)
+                }
+                onRequestDelete={() => onRequestDeleteCard(card.id)}
+              />
+            ))}
+            {cards.length === 0 ? (
+              <div className="grid min-h-20 place-items-center rounded-xl border border-dashed border-[var(--line)] px-3 text-center text-xs text-[var(--ink-700)]">
+                Drop cards here
               </div>
-            </SortableContext>
+            ) : null}
           </div>
+        </SortableContext>
+      </div>
 
-          <div className="mt-2 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] pt-2">
-            <InlineCardComposer
-              column={column}
-              isOpen={isComposerOpen}
-              onOpen={onOpenComposer}
-              onClose={onCloseComposer}
-              onSubmit={onAddCard}
-            />
-          </div>
-        </>
-      ) : null}
+      <div className="mt-2 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] pt-2">
+        <InlineCardComposer
+          column={column}
+          isOpen={isComposerOpen}
+          onOpen={onOpenComposer}
+          onClose={onCloseComposer}
+          onSubmit={onAddCard}
+        />
+      </div>
     </section>
   );
 }
@@ -851,7 +848,8 @@ export function ContentPlannerView({
           {activeDrag?.type === "card" && cards[activeDrag.cardId] ? (
             <div className="w-[290px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3.5 shadow-[var(--surface-shadow)]">
               <ContentCardMarkdown
-                markdown={getContentCardText(cards[activeDrag.cardId])}
+                title={cards[activeDrag.cardId].title}
+                notes={cards[activeDrag.cardId].notes}
               />
             </div>
           ) : activeDrag?.type === "column" ? (
@@ -877,7 +875,10 @@ export function ContentPlannerView({
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-4">
-              <ContentCardMarkdown markdown={getContentCardText(viewingCard)} />
+              <ContentCardMarkdown
+                title={viewingCard.title}
+                notes={viewingCard.notes}
+              />
             </div>
           </DialogContent>
         ) : null}

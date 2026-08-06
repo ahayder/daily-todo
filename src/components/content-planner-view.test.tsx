@@ -85,6 +85,12 @@ describe("ContentPlannerView", () => {
     expect(
       screen.getByRole("button", { name: "View card Draft launch story" }),
     ).toBeInTheDocument();
+    const card = screen.getByTestId("content-card-card-1");
+    expect(card).toHaveClass("max-h-[10.5rem]");
+    expect(within(card).getByText("Draft launch story")).toHaveClass(
+      "text-base",
+      "font-semibold",
+    );
     expect(screen.getByText("what changed").tagName).toBe("STRONG");
     expect(screen.getByRole("link", { name: "Reference" })).toHaveAttribute(
       "href",
@@ -99,11 +105,23 @@ describe("ContentPlannerView", () => {
     const user = userEvent.setup();
     render(<ContentPlannerView {...createProps()} />);
 
+    const cardBody = screen.getByTestId("content-card-body-card-1");
+    expect(cardBody).toHaveClass("cursor-grab", "active:cursor-grabbing");
+    await user.click(cardBody);
+
+    let dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Card preview" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+
     await user.click(
       screen.getByRole("button", { name: "View card Draft launch story" }),
     );
 
-    const dialog = screen.getByRole("dialog");
+    dialog = screen.getByRole("dialog");
     expect(
       within(dialog).getByRole("heading", { name: "Card preview" }),
     ).toBeInTheDocument();
@@ -114,27 +132,31 @@ describe("ContentPlannerView", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  test("collapses and expands a column without changing board data", async () => {
+  test("collapses and expands a card without changing card data", async () => {
     const user = userEvent.setup();
     const props = createProps();
     render(<ContentPlannerView {...props} />);
 
     const collapseButton = screen.getByRole("button", {
-      name: "Collapse column Ideas",
+      name: "Collapse card Draft launch story",
     });
     expect(collapseButton).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("content-card-card-1")).toBeInTheDocument();
+    expect(screen.getByText("what changed")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse column Ideas" }),
+    ).not.toBeInTheDocument();
 
     await user.click(collapseButton);
     const expandButton = screen.getByRole("button", {
-      name: "Expand column Ideas",
+      name: "Expand card Draft launch story",
     });
     expect(expandButton).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByTestId("content-card-card-1")).not.toBeInTheDocument();
+    expect(screen.getByText("Draft launch story")).toBeInTheDocument();
+    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
     expect(props.onUpdateCard).not.toHaveBeenCalled();
 
     await user.click(expandButton);
-    expect(screen.getByTestId("content-card-card-1")).toBeInTheDocument();
+    expect(screen.getByText("what changed")).toBeInTheDocument();
   });
 
   test("adds a multiline card from a full text box", async () => {
@@ -179,6 +201,29 @@ describe("ContentPlannerView", () => {
       "Publish launch story",
       "Keep it concise.",
     );
+  });
+
+  test("only the edit button enters edit mode and editing expands the card", async () => {
+    const user = userEvent.setup();
+    render(<ContentPlannerView {...createProps()} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
+    );
+    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit card Draft launch story" }),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Edit card Draft launch story" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByText("what changed")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   test("confirms card deletion", async () => {
