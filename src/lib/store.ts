@@ -103,6 +103,49 @@ export function createTodo(text: string, priority: Priority, parentId?: string):
   };
 }
 
+export function makeTodoSubtask(
+  todos: Todo[],
+  todoId: string,
+  parentId: string,
+): Todo[] {
+  const todo = todos.find((item) => item.id === todoId);
+  const parent = todos.find((item) => item.id === parentId);
+
+  if (
+    !todo ||
+    !parent ||
+    todo.id === parent.id ||
+    todo.parentId ||
+    parent.parentId
+  ) {
+    return todos;
+  }
+
+  const movedIds = new Set([todo.id]);
+  let foundDescendant = true;
+
+  while (foundDescendant) {
+    foundDescendant = false;
+    for (const item of todos) {
+      if (item.parentId && movedIds.has(item.parentId) && !movedIds.has(item.id)) {
+        movedIds.add(item.id);
+        foundDescendant = true;
+      }
+    }
+  }
+
+  const movedTodos = todos
+    .filter((item) => movedIds.has(item.id))
+    .map((item) => ({
+      ...item,
+      parentId: parent.id,
+      priority: parent.priority,
+    }));
+  const remainingTodos = todos.filter((item) => !movedIds.has(item.id));
+
+  return [...remainingTodos, ...movedTodos];
+}
+
 export function createNoteDoc(
   title = "Untitled Note",
   folderId: string | null = DEFAULT_NOTES_FOLDER_ID,

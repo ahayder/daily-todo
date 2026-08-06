@@ -84,6 +84,7 @@ export type AppAction =
     }
   | { type: "delete-planner-event"; presetId: string; dayKey: PlannerDayKey; eventId: string }
   | { type: "edit-todo"; date: string; todoId: string; text: string }
+  | { type: "make-todo-subtask"; date: string; todoId: string; parentId: string }
   | { type: "move-todo-priority"; date: string; todoId: string; newPriority: Priority; newIndex: number }
   | { type: "set-focus-mode"; isFocus: boolean; todoId?: string | null }
   | { type: "start-focus-timer"; date: string; todoId: string; estimateMinutes?: number | null }

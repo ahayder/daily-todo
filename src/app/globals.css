@@ -1437,6 +1437,11 @@ select {
   position: relative;
 }
 
+.task-entry--subtask > .task-item {
+  border-left: 2px solid color-mix(in srgb, var(--brand) 42%, var(--line));
+  padding-left: 0.58rem;
+}
+
 .task-entry--drop-before::before,
 .task-entry--drop-after::after {
   content: "";
@@ -1446,6 +1451,23 @@ select {
   height: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--brand) 72%, var(--paper-strong));
+}
+
+.task-entry--subtask-target .task-item {
+  background: color-mix(in srgb, var(--brand-soft) 72%, var(--paper-strong));
+  outline: 1px solid color-mix(in srgb, var(--brand) 52%, var(--line));
+  outline-offset: -1px;
+}
+
+.task-subtask-drop-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0.55rem 0.3rem 1.35rem;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .task-entry--drop-before::before {

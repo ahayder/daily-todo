@@ -27,6 +27,7 @@ import {
   duplicatePlannerPreset,
   getContentCardsForColumn,
   getSortedDailyDates,
+  makeTodoSubtask,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
@@ -532,6 +533,29 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
             ),
           },
         },
+      };
+    }
+    case "make-todo-subtask": {
+      const page = state.dailyPages[action.date];
+      if (!page) {
+        return state;
+      }
+
+      const todos = makeTodoSubtask(page.todos, action.todoId, action.parentId);
+      if (todos === page.todos) {
+        return state;
+      }
+
+      return {
+        ...state,
+        dailyPages: {
+          ...state.dailyPages,
+          [action.date]: {
+            ...page,
+            todos,
+          },
+        },
+        uiState: stopFocusTimerForTodo(state, action.todoId),
       };
     }
     case "move-todo-priority": {

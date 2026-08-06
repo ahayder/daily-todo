@@ -14,12 +14,104 @@ import {
   ensureNoteState,
   ensurePlannerState,
   groupTodosByPriority,
+  makeTodoSubtask,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
   updateContentColumnSubtitle,
 } from "@/lib/store";
 import type { Todo } from "@/lib/types";
+
+describe("makeTodoSubtask", () => {
+  test("nests a main task under another main task and preserves its children", () => {
+    const todos: Todo[] = [
+      {
+        id: "parent",
+        text: "Parent",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+      {
+        id: "existing-child",
+        text: "Existing child",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:01:00.000Z",
+        parentId: "parent",
+      },
+      {
+        id: "moving",
+        text: "Moving",
+        priority: 2,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:02:00.000Z",
+      },
+      {
+        id: "moving-child",
+        text: "Moving child",
+        priority: 2,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:03:00.000Z",
+        parentId: "moving",
+      },
+    ];
+
+    const nested = makeTodoSubtask(todos, "moving", "parent");
+
+    expect(nested.map((todo) => todo.id)).toEqual([
+      "parent",
+      "existing-child",
+      "moving",
+      "moving-child",
+    ]);
+    expect(nested.find((todo) => todo.id === "moving")).toMatchObject({
+      parentId: "parent",
+      priority: 1,
+    });
+    expect(nested.find((todo) => todo.id === "moving-child")).toMatchObject({
+      parentId: "parent",
+      priority: 1,
+    });
+  });
+
+  test("rejects invalid or multi-level nesting", () => {
+    const todos: Todo[] = [
+      {
+        id: "parent",
+        text: "Parent",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+      {
+        id: "child",
+        text: "Child",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:01:00.000Z",
+        parentId: "parent",
+      },
+      {
+        id: "moving",
+        text: "Moving",
+        priority: 2,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:02:00.000Z",
+      },
+    ];
+
+    expect(makeTodoSubtask(todos, "moving", "child")).toBe(todos);
+    expect(makeTodoSubtask(todos, "moving", "moving")).toBe(todos);
+  });
+});
 
 describe("ensureDailyPageForDate", () => {
   test("creates today's page with carryover unchecked todos and full markdown", () => {

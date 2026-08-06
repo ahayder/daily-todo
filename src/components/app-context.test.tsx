@@ -412,6 +412,47 @@ describe("appReducer theme mode", () => {
     expect(started.uiState.focusTimerRemainingSeconds).toBe(1500);
   });
 
+  test("makes a main todo a subtask and clears its active focus timer", () => {
+    const initial = createInitialState("2026-03-11");
+    initial.dailyPages["2026-03-11"].todos = [
+      {
+        id: "todo_parent",
+        text: "Parent task",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+      {
+        id: "todo_moving",
+        text: "Moving task",
+        priority: 2,
+        status: "ongoing",
+        estimatedMinutes: 25,
+        createdAt: "2026-03-11T08:05:00.000Z",
+      },
+    ];
+    initial.uiState.isFocusMode = true;
+    initial.uiState.focusedTodoId = "todo_moving";
+    initial.uiState.focusTimerStatus = "running";
+    initial.uiState.focusTimerRemainingSeconds = 1200;
+
+    const nested = appReducer(initial, {
+      type: "make-todo-subtask",
+      date: "2026-03-11",
+      todoId: "todo_moving",
+      parentId: "todo_parent",
+    });
+
+    expect(nested.dailyPages["2026-03-11"].todos[1]).toMatchObject({
+      id: "todo_moving",
+      parentId: "todo_parent",
+      priority: 1,
+    });
+    expect(nested.uiState.focusedTodoId).toBeNull();
+    expect(nested.uiState.focusTimerStatus).toBe("idle");
+  });
+
   test("opens the completion prompt at zero and can resolve by finishing the task", () => {
     const initial = createInitialState("2026-03-11");
     initial.dailyPages["2026-03-11"].todos = [

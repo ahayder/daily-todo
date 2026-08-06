@@ -7,6 +7,7 @@ import {
   TodosView,
   getDropIndicatorPosition,
   getDropInsertionIndex,
+  getSubtaskDropTargetId,
 } from "@/components/todos/todos-view";
 import { appReducer } from "@/components/app/app-context";
 import { createInitialState } from "@/lib/store";
@@ -89,6 +90,61 @@ describe("TodosView", () => {
         position: "before",
       }),
     ).toBe(1);
+  });
+
+  test("only offers subtask nesting after a clear rightward drag over a main task", () => {
+    const todos = [
+      {
+        id: "todo-1",
+        text: "Task one",
+        priority: 1 as const,
+        status: "pending" as const,
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T10:00:00.000Z",
+      },
+      {
+        id: "todo-2",
+        text: "Task two",
+        priority: 1 as const,
+        status: "pending" as const,
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T10:05:00.000Z",
+      },
+      {
+        id: "todo-3",
+        text: "Nested",
+        priority: 1 as const,
+        status: "pending" as const,
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T10:10:00.000Z",
+        parentId: "todo-1",
+      },
+    ];
+
+    expect(
+      getSubtaskDropTargetId({
+        activeId: "todo-2",
+        overId: "todo-1",
+        horizontalOffset: 47,
+        todos,
+      }),
+    ).toBeNull();
+    expect(
+      getSubtaskDropTargetId({
+        activeId: "todo-2",
+        overId: "todo-1",
+        horizontalOffset: 48,
+        todos,
+      }),
+    ).toBe("todo-1");
+    expect(
+      getSubtaskDropTargetId({
+        activeId: "todo-2",
+        overId: "todo-3",
+        horizontalOffset: 80,
+        todos,
+      }),
+    ).toBeNull();
   });
 
   test("applies strikethrough when status is advanced to finished", async () => {
@@ -275,7 +331,9 @@ describe("TodosView", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Add subtask" }));
     await userEvent.type(screen.getByPlaceholderText("Add a subtask"), "Nested task{enter}");
 
-    expect(screen.getByText("Nested task")).toBeInTheDocument();
+    const nestedTask = screen.getByText("Nested task");
+    expect(nestedTask).toBeInTheDocument();
+    expect(nestedTask.closest(".task-entry")).toHaveClass("task-entry--subtask");
     expect(screen.queryByPlaceholderText("Add a subtask")).not.toBeInTheDocument();
   });
 

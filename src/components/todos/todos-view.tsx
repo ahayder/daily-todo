@@ -83,6 +83,8 @@ type DropIndicator = {
   isGroup?: boolean;
 };
 
+const SUBTASK_INDENT_THRESHOLD = 48;
+
 type PriorityLabels = {
   label: string;
   placeholder: string;
@@ -214,6 +216,31 @@ export function getDropInsertionIndex({
   return overIndex + 1;
 }
 
+export function getSubtaskDropTargetId({
+  activeId,
+  overId,
+  horizontalOffset,
+  todos,
+}: {
+  activeId: string;
+  overId: string;
+  horizontalOffset: number;
+  todos: import("@/lib/types").Todo[];
+}): string | null {
+  if (horizontalOffset < SUBTASK_INDENT_THRESHOLD || activeId === overId) {
+    return null;
+  }
+
+  const activeTodo = todos.find((todo) => todo.id === activeId);
+  const targetTodo = todos.find((todo) => todo.id === overId);
+
+  if (!activeTodo || activeTodo.parentId || !targetTodo || targetTodo.parentId) {
+    return null;
+  }
+
+  return targetTodo.id;
+}
+
 function getPriorityMeta(theme: CategoryTheme, priority: Priority) {
   return {
     ...PRIORITY_COLORS[priority],
@@ -284,6 +311,7 @@ function EditableTaskItem({
   onRequestFocus,
   dragSurfaceProps,
   dropIndicatorPosition,
+  isSubtaskDropTarget = false,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
@@ -293,6 +321,7 @@ function EditableTaskItem({
   onRequestFocus?: (todoId: string) => void;
   dragSurfaceProps?: HTMLAttributes<HTMLDivElement>;
   dropIndicatorPosition?: DropIndicatorPosition | null;
+  isSubtaskDropTarget?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isTaskActive, setIsTaskActive] = useState(false);
@@ -429,8 +458,10 @@ function EditableTaskItem({
     <div
       className={cn(
         "task-entry flex flex-col w-full",
+        isSubtask && "task-entry--subtask",
         dropIndicatorPosition === "before" && "task-entry--drop-before",
         dropIndicatorPosition === "after" && "task-entry--drop-after",
+        isSubtaskDropTarget && "task-entry--subtask-target",
       )}
       onMouseEnter={() => {
         setIsTaskActive(true);
@@ -757,6 +788,13 @@ function EditableTaskItem({
         </AlertDialogContent>
       </AlertDialog>
 
+      {isSubtaskDropTarget ? (
+        <div className="task-subtask-drop-hint" role="status">
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Make subtask of {todo.text}</span>
+        </div>
+      ) : null}
+
       {/* Sub-tasks rendering */}
       {subtasks.length > 0 && !isSubtasksCollapsed && (
         <ul className="subtask-list">
@@ -822,6 +860,7 @@ function SortableTaskItem({
   onCelebrate,
   onRequestFocus,
   dropIndicatorPosition,
+  isSubtaskDropTarget,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
@@ -830,6 +869,7 @@ function SortableTaskItem({
   onCelebrate?: (target: HTMLElement) => void;
   onRequestFocus?: (todoId: string) => void;
   dropIndicatorPosition?: DropIndicatorPosition | null;
+  isSubtaskDropTarget?: boolean;
 }) {
   const {
     attributes,
@@ -860,6 +900,7 @@ function SortableTaskItem({
         onRequestFocus={onRequestFocus}
         dragSurfaceProps={{ ...attributes, ...listeners }}
         dropIndicatorPosition={dropIndicatorPosition}
+        isSubtaskDropTarget={isSubtaskDropTarget}
       />
     </div>
   );
@@ -890,6 +931,7 @@ export function TodosView({ state, dispatch }: Props) {
   );
   const categoryTheme = state.uiState.categoryTheme;
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+  const [subtaskDropTargetId, setSubtaskDropTargetId] = useState<string | null>(null);
   const [isResizeHandleHovered, setIsResizeHandleHovered] = useState(false);
   const [isResizingTaskPane, setIsResizingTaskPane] = useState(false);
   const [renderDate, setRenderDate] = useState(date);
@@ -927,6 +969,7 @@ export function TodosView({ state, dispatch }: Props) {
 
   const clearDropIndicator = () => {
     setDropIndicator(null);
+    setSubtaskDropTargetId(null);
   };
 
   useEffect(() => {
@@ -990,6 +1033,19 @@ export function TodosView({ state, dispatch }: Props) {
 
     const overId = String(over.id);
 
+    const nextSubtaskTargetId = getSubtaskDropTargetId({
+      activeId: String(active.id),
+      overId,
+      horizontalOffset: event.delta.x,
+      todos: page?.todos ?? [],
+    });
+    setSubtaskDropTargetId(nextSubtaskTargetId);
+
+    if (nextSubtaskTargetId) {
+      setDropIndicator(null);
+      return;
+    }
+
     if (overId.startsWith("priority-group-")) {
       const priority = Number.parseInt(overId.replace("priority-group-", ""), 10) as Priority;
       setDropIndicator({
@@ -1034,7 +1090,23 @@ export function TodosView({ state, dispatch }: Props) {
     const activeId = active.id as string;
     const activePriority = active.data.current?.priority as Priority;
     const indicator = dropIndicator;
+    const nextSubtaskTargetId = getSubtaskDropTargetId({
+      activeId,
+      overId: String(over.id),
+      horizontalOffset: event.delta.x,
+      todos: page?.todos ?? [],
+    });
     clearDropIndicator();
+
+    if (nextSubtaskTargetId) {
+      dispatch({
+        type: "make-todo-subtask",
+        date,
+        todoId: activeId,
+        parentId: nextSubtaskTargetId,
+      });
+      return;
+    }
 
     if (indicator && !indicator.isGroup && activeId !== indicator.overId) {
       const targetPriority = indicator.priority;
@@ -1564,6 +1636,7 @@ export function TodosView({ state, dispatch }: Props) {
                                 ? dropIndicator.position
                                 : null
                             }
+                            isSubtaskDropTarget={subtaskDropTargetId === parentTodo.id}
                           />
                         );
                       })}
