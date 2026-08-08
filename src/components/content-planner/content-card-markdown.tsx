@@ -169,22 +169,46 @@ const remarkPlugins = [remarkGfm];
 export const ContentCardMarkdown = memo(function ContentCardMarkdown({
   title,
   notes,
+  variant = "plain",
 }: {
   title: string;
   notes?: string;
+  variant?: "card" | "plain";
 }) {
+  const isCard = variant === "card";
+
   return (
-    <div className="content-card-markdown space-y-2 overflow-x-auto">
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        components={titleMarkdownComponents}
+    <div
+      className={
+        isCard
+          ? "content-card-markdown overflow-x-auto"
+          : "content-card-markdown space-y-2 overflow-x-auto"
+      }
+    >
+      <div
+        className={
+          isCard
+            ? "border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--brand-soft)_62%,var(--paper-strong))] px-4 py-2.5"
+            : undefined
+        }
+        data-card-section={isCard ? "header" : undefined}
       >
-        {title}
-      </ReactMarkdown>
-      {notes ? (
-        <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
-          {notes}
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          components={titleMarkdownComponents}
+        >
+          {title}
         </ReactMarkdown>
+      </div>
+      {notes ? (
+        <div className={isCard ? "px-4 py-3.5" : undefined}>
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            components={markdownComponents}
+          >
+            {notes}
+          </ReactMarkdown>
+        </div>
       ) : null}
     </div>
   );

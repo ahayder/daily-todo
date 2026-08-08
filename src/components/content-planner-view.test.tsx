@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   ContentPlannerView,
+  resolveContentBoardDragHighlight,
   resolveContentBoardDrop,
   type ContentPlannerViewProps,
 } from "@/components/content-planner-view";
@@ -69,6 +70,54 @@ describe("ContentPlannerView", () => {
       targetColumnId: props.board.columns[1].id,
       targetIndex: 0,
     });
+
+    const sameColumnCards = [
+      { ...card, id: "card-a", order: 0 },
+      { ...card, id: "card-b", order: 1 },
+      { ...card, id: "card-c", order: 2 },
+    ];
+    const cardsByColumn = { [card.columnId]: sameColumnCards };
+
+    expect(
+      resolveContentBoardDrop(
+        { type: "card", cardId: "card-a", columnId: card.columnId },
+        { type: "card", cardId: "card-c", columnId: card.columnId },
+        cardsByColumn,
+        "before",
+      ),
+    ).toMatchObject({ targetIndex: 1 });
+    expect(
+      resolveContentBoardDrop(
+        { type: "card", cardId: "card-a", columnId: card.columnId },
+        { type: "card", cardId: "card-c", columnId: card.columnId },
+        cardsByColumn,
+        "after",
+      ),
+    ).toMatchObject({ targetIndex: 2 });
+  });
+
+  test("resolves the destination column and insertion card highlight", () => {
+    expect(
+      resolveContentBoardDragHighlight(
+        { type: "card", cardId: "card-1", columnId: "ideas" },
+        { type: "card", cardId: "card-2", columnId: "planned" },
+        "after",
+      ),
+    ).toEqual({ columnId: "planned", cardId: "card-2", edge: "after" });
+
+    expect(
+      resolveContentBoardDragHighlight(
+        { type: "card", cardId: "card-1", columnId: "ideas" },
+        { type: "column", columnId: "ready" },
+      ),
+    ).toEqual({ columnId: "ready", cardId: null, edge: null });
+
+    expect(
+      resolveContentBoardDragHighlight(
+        { type: "column", columnId: "ideas" },
+        { type: "card", cardId: "card-2", columnId: "planned" },
+      ),
+    ).toBeNull();
   });
 
   test("renders the default workflow and persisted cards as safe Markdown", () => {
@@ -76,7 +125,13 @@ describe("ContentPlannerView", () => {
 
     expect(screen.getByRole("heading", { name: "Content Planner" })).toBeInTheDocument();
     for (const title of ["Ideas", "Planned", "In Progress", "Ready", "Published"]) {
-      expect(screen.getByRole("button", { name: `Rename column ${title}` })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: `Rename column ${title}` })).toHaveClass(
+        "cursor-grab",
+        "active:cursor-grabbing",
+      );
+      expect(
+        screen.queryByRole("button", { name: `Move column ${title}` }),
+      ).not.toBeInTheDocument();
     }
     expect(screen.getByText("Capture raw concepts")).toBeInTheDocument();
     expect(
@@ -86,10 +141,32 @@ describe("ContentPlannerView", () => {
       screen.getByRole("button", { name: "View card Draft launch story" }),
     ).toBeInTheDocument();
     const card = screen.getByTestId("content-card-card-1");
-    expect(card).toHaveClass("max-h-[10.5rem]");
+    const cardBody = screen.getByTestId("content-card-body-card-1");
+    const toolbar = screen.getByTestId("content-card-toolbar-card-1");
+    expect(toolbar).toHaveAttribute(
+      "aria-label",
+      "Card toolbar for Draft launch story",
+    );
+    expect(card).not.toHaveClass("max-h-[10.5rem]");
+    expect(cardBody).toHaveClass("max-h-[10.5rem]");
+    expect(within(toolbar).getByRole("button", {
+      name: "More actions for card Draft launch story",
+    })).toBeInTheDocument();
+    expect(
+      within(toolbar).queryByRole("button", {
+        name: "Move card Draft launch story",
+      }),
+    ).not.toBeInTheDocument();
     expect(within(card).getByText("Draft launch story")).toHaveClass(
       "text-base",
       "font-semibold",
+    );
+    expect(
+      within(card).getByText("Draft launch story").closest('[data-card-section="header"]'),
+    ).toHaveClass(
+      "border-b",
+      "border-[var(--line)]",
+      "bg-[color:color-mix(in_srgb,var(--brand-soft)_62%,var(--paper-strong))]",
     );
     expect(screen.getByText("what changed").tagName).toBe("STRONG");
     expect(screen.getByRole("link", { name: "Reference" })).toHaveAttribute(
@@ -101,12 +178,15 @@ describe("ContentPlannerView", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  test("opens the complete Markdown card in a read-only preview dialog", async () => {
+  test("opens the complete Markdown card and edits it from the preview dialog", async () => {
     const user = userEvent.setup();
-    render(<ContentPlannerView {...createProps()} />);
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
 
     const cardBody = screen.getByTestId("content-card-body-card-1");
     expect(cardBody).toHaveClass("cursor-grab", "active:cursor-grabbing");
+    expect(cardBody).not.toHaveClass("pr-20");
+    expect(cardBody.querySelector(".pr-16")).toBeNull();
     await user.click(cardBody);
 
     let dialog = screen.getByRole("dialog");
@@ -128,8 +208,39 @@ describe("ContentPlannerView", () => {
     expect(within(dialog).getByText("what changed").tagName).toBe("STRONG");
     expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const previewSurface = within(dialog).getByTestId("content-card-preview-surface");
+    const previewEditButton = within(previewSurface).getByRole("button", {
+      name: "Edit card Draft launch story from preview",
+    });
+    expect(previewEditButton).toHaveClass("absolute", "top-2.5", "right-2.5");
+    await user.click(previewEditButton);
+    expect(
+      within(dialog).getByRole("heading", { name: "Card preview" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("heading", { name: "Edit card" })).toBeNull();
+    const previewEditor = within(previewSurface).getByRole("textbox", {
+      name: "Edit card Draft launch story in preview",
+    });
+    await user.clear(previewEditor);
+    await user.type(
+      previewEditor,
+      "Publish launch story{Enter}{Enter}Keep the preview edit concise.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    expect(props.onUpdateCard).toHaveBeenCalledWith(
+      "card-1",
+      "Publish launch story",
+      "Keep the preview edit concise.",
+    );
+    expect(
+      within(dialog).getByRole("heading", { name: "Card preview" }),
+    ).toBeInTheDocument();
+    expect(
+      within(previewSurface).getByRole("button", {
+        name: "Edit card Draft launch story from preview",
+      }),
+    ).toBeInTheDocument();
   });
 
   test("collapses and expands a card without changing card data", async () => {
@@ -147,16 +258,53 @@ describe("ContentPlannerView", () => {
     ).not.toBeInTheDocument();
 
     await user.click(collapseButton);
+    const card = screen.getByTestId("content-card-card-1");
+    const cardBody = screen.getByTestId("content-card-body-card-1");
     const expandButton = screen.getByRole("button", {
       name: "Expand card Draft launch story",
     });
     expect(expandButton).toHaveAttribute("aria-expanded", "false");
+    expect(card).toHaveClass("min-h-20");
+    expect(cardBody).not.toHaveClass("min-h-20");
+    expect(cardBody).not.toHaveClass("min-h-24");
+    expect(cardBody).not.toHaveClass("min-h-28");
+    expect(cardBody).not.toHaveClass("max-h-[10.5rem]");
     expect(screen.getByText("Draft launch story")).toBeInTheDocument();
     expect(screen.queryByText("what changed")).not.toBeInTheDocument();
     expect(props.onUpdateCard).not.toHaveBeenCalled();
 
     await user.click(expandButton);
+    expect(card).not.toHaveClass("min-h-20");
+    expect(card).not.toHaveClass("max-h-[10.5rem]");
+    expect(cardBody).toHaveClass("min-h-28", "max-h-[10.5rem]");
     expect(screen.getByText("what changed")).toBeInTheDocument();
+  });
+
+  test("copies the complete Markdown source from a collapsed card", async () => {
+    const user = userEvent.setup();
+    render(<ContentPlannerView {...createProps()} />);
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+
+    await user.click(
+      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
+    );
+    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Copy card Draft launch story" }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Draft launch story\n\nExplain **what changed** and why it matters.\n\n- [x] Outline the story\n- [ ] Add proof\n\n[Reference](https://example.com)\n\n<script>unsafe</script>",
+    );
+    expect(
+      screen.getByRole("button", { name: "Copied card Draft launch story" }),
+    ).toHaveClass("text-[var(--brand)]");
+    expect(
+      within(screen.getByTestId("content-card-toolbar-card-1")).getByRole(
+        "status",
+      ),
+    ).toHaveTextContent("Copied card Draft launch story");
   });
 
   test("adds a multiline card from a full text box", async () => {
@@ -203,7 +351,7 @@ describe("ContentPlannerView", () => {
     );
   });
 
-  test("only the edit button enters edit mode and editing expands the card", async () => {
+  test("the toolbar pencil enters inline editing and expands the card", async () => {
     const user = userEvent.setup();
     render(<ContentPlannerView {...createProps()} />);
 
@@ -231,7 +379,13 @@ describe("ContentPlannerView", () => {
     const props = createProps();
     render(<ContentPlannerView {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "Delete card Draft launch story" }));
+    await user.click(screen.getByRole("button", {
+      name: "More actions for card Draft launch story",
+    }));
+    const menu = await screen.findByRole("menu", {
+      name: "Card actions for Draft launch story",
+    });
+    await user.click(within(menu).getByRole("menuitem", { name: "Delete card" }));
     expect(screen.getByText("Delete this card?")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
@@ -249,8 +403,20 @@ describe("ContentPlannerView", () => {
     });
     render(<ContentPlannerView {...props} />);
 
-    const deleteButton = screen.getByRole("button", { name: "Delete column Ideas" });
+    await user.click(
+      screen.getByRole("button", { name: "More actions for column Ideas" }),
+    );
+    const menu = await screen.findByRole("menu", {
+      name: "Column actions for Ideas",
+    });
+    const deleteButton = within(menu).getByRole("menuitem", {
+      name: "Delete column",
+    });
+    expect(deleteButton).toBeDisabled();
     expect(deleteButton).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(menu).getByText("The board needs at least one column."),
+    ).toBeInTheDocument();
     await user.click(deleteButton);
     expect(screen.queryByText("Delete this column?")).not.toBeInTheDocument();
   });
@@ -288,7 +454,15 @@ describe("ContentPlannerView", () => {
       "Next in the queue",
     );
 
-    await user.click(screen.getByRole("button", { name: "Delete column Planned" }));
+    await user.click(
+      screen.getByRole("button", { name: "More actions for column Planned" }),
+    );
+    const columnMenu = await screen.findByRole("menu", {
+      name: "Column actions for Planned",
+    });
+    await user.click(
+      within(columnMenu).getByRole("menuitem", { name: "Delete column" }),
+    );
     expect(screen.getByText("Delete this column?")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(props.onDeleteColumn).toHaveBeenCalledWith(props.board.columns[1].id);

@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -21,10 +24,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
+  Ellipsis,
   Eye,
-  GripVertical,
   Pencil,
   Plus,
   Trash2,
@@ -45,9 +50,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getContentCardsForColumn } from "@/lib/store";
 import type { ContentBoard, ContentCard, ContentColumn } from "@/lib/types";
@@ -71,12 +78,81 @@ type DragData =
   | { type: "column"; columnId: string }
   | { type: "card"; cardId: string; columnId: string };
 
+type CardDropHighlight = {
+  columnId: string;
+  cardId: string | null;
+  edge: "before" | "after" | null;
+};
+
 function columnDragId(columnId: string) {
   return `content-column:${columnId}`;
 }
 
 function cardDragId(cardId: string) {
   return `content-card:${cardId}`;
+}
+
+const contentBoardCollisionDetection: CollisionDetection = (args) => {
+  const activeType = (args.active.data.current as DragData | undefined)?.type;
+  const availableContainers = args.droppableContainers.filter(
+    (container) => container.id !== args.active.id,
+  );
+
+  if (activeType === "column") {
+    return closestCenter({
+      ...args,
+      droppableContainers: availableContainers.filter(
+        (container) =>
+          (container.data.current as DragData | undefined)?.type === "column",
+      ),
+    });
+  }
+
+  if (activeType === "card") {
+    const cardContainers = availableContainers.filter(
+      (container) =>
+        (container.data.current as DragData | undefined)?.type === "card",
+    );
+    const cardHits = pointerWithin({
+      ...args,
+      droppableContainers: cardContainers,
+    });
+    if (cardHits.length > 0) {
+      return cardHits;
+    }
+
+    const columnContainers = availableContainers.filter(
+      (container) =>
+        (container.data.current as DragData | undefined)?.type === "column",
+    );
+    const columnHits = pointerWithin({
+      ...args,
+      droppableContainers: columnContainers,
+    });
+    if (columnHits.length > 0) {
+      return columnHits;
+    }
+
+    return closestCenter({
+      ...args,
+      droppableContainers: [...cardContainers, ...columnContainers],
+    });
+  }
+
+  return [];
+};
+
+function getCardDropEdge(event: DragOverEvent | DragEndEvent) {
+  const overTarget = event.over;
+  const over = overTarget?.data.current as DragData | undefined;
+  if (!overTarget || over?.type !== "card") return null;
+
+  const translatedRect = event.active.rect.current.translated;
+  if (!translatedRect) return "before" as const;
+
+  const activeCenter = translatedRect.top + translatedRect.height / 2;
+  const overCenter = overTarget.rect.top + overTarget.rect.height / 2;
+  return activeCenter > overCenter ? ("after" as const) : ("before" as const);
 }
 
 function getContentCardText(card: Pick<ContentCard, "title" | "notes">): string {
@@ -98,6 +174,7 @@ export function resolveContentBoardDrop(
   active: DragData | undefined,
   over: DragData | undefined,
   cardsByColumn: Record<string, ContentCard[]>,
+  edge: "before" | "after" | null = "before",
 ):
   | { type: "column"; activeColumnId: string; overColumnId: string }
   | { type: "card"; cardId: string; targetColumnId: string; targetIndex: number }
@@ -116,34 +193,70 @@ export function resolveContentBoardDrop(
 
   const targetColumnId = over.columnId;
   const targetCards = cardsByColumn[targetColumnId] ?? [];
+  const overIndex =
+    over.type === "card"
+      ? targetCards.findIndex((card) => card.id === over.cardId)
+      : -1;
+  const activeIndex =
+    active.columnId === targetColumnId
+      ? targetCards.findIndex((card) => card.id === active.cardId)
+      : -1;
+  let targetIndex = over.type === "card" ? Math.max(0, overIndex) : targetCards.length;
+
+  if (over.type === "card" && edge === "after") {
+    targetIndex += 1;
+  }
+  if (activeIndex >= 0 && activeIndex < targetIndex) {
+    targetIndex -= 1;
+  }
+
   return {
     type: "card",
     cardId: active.cardId,
     targetColumnId,
-    targetIndex:
-      over.type === "card"
-        ? Math.max(
-            0,
-            targetCards.findIndex((card) => card.id === over.cardId),
-          )
-        : targetCards.length,
+    targetIndex,
+  };
+}
+
+export function resolveContentBoardDragHighlight(
+  active: DragData | undefined,
+  over: DragData | undefined,
+  edge: "before" | "after" | null = "before",
+): CardDropHighlight | null {
+  if (active?.type !== "card" || !over) return null;
+
+  return {
+    columnId: over.columnId,
+    cardId:
+      over.type === "card" && over.cardId !== active.cardId
+        ? over.cardId
+        : null,
+    edge:
+      over.type === "card" && over.cardId !== active.cardId ? edge : null,
   };
 }
 
 function ContentCardItem({
   card,
+  isDropTarget,
+  dropEdge,
   onView,
   onUpdate,
   onRequestDelete,
 }: {
   card: ContentCard;
+  isDropTarget: boolean;
+  dropEdge: "before" | "after" | null;
   onView: () => void;
   onUpdate: (title: string, notes: string) => void;
   onRequestDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [text, setText] = useState(() => getContentCardText(card));
+  const didDragRef = useRef(false);
   const {
     attributes,
     listeners,
@@ -151,7 +264,6 @@ function ContentCardItem({
     transform,
     transition,
     isDragging,
-    isOver,
   } = useSortable({
     id: cardDragId(card.id),
     data: {
@@ -165,6 +277,28 @@ function ContentCardItem({
     setIsCollapsed(false);
     setText(getContentCardText(card));
     setIsEditing(true);
+  };
+
+  useEffect(() => {
+    if (!isCopied) return;
+
+    const resetCopiedState = window.setTimeout(() => setIsCopied(false), 1500);
+    return () => window.clearTimeout(resetCopiedState);
+  }, [isCopied]);
+
+  useEffect(() => {
+    if (isDragging) {
+      didDragRef.current = true;
+    }
+  }, [isDragging]);
+
+  const copyCard = async () => {
+    try {
+      await navigator.clipboard.writeText(getContentCardText(card));
+      setIsCopied(true);
+    } catch {
+      setIsCopied(false);
+    }
   };
 
   const save = () => {
@@ -188,12 +322,26 @@ function ContentCardItem({
         transition,
       }}
       className={cn(
-        "group relative max-h-[10.5rem] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
+        "relative overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
+        isCollapsed && "min-h-20",
         isDragging && "opacity-40",
-        isOver && !isDragging && "ring-2 ring-[var(--brand)] ring-offset-2 ring-offset-[var(--paper)]",
+        isDropTarget &&
+          !isDragging &&
+          "border-[var(--brand)] bg-[color:color-mix(in_srgb,var(--brand-soft)_26%,var(--paper-strong))]",
       )}
+      data-drop-target={isDropTarget ? "true" : undefined}
       data-testid={`content-card-${card.id}`}
     >
+      {isDropTarget && dropEdge ? (
+        <span
+          aria-hidden="true"
+          data-testid={`content-card-drop-${dropEdge}-${card.id}`}
+          className={cn(
+            "pointer-events-none absolute right-3 left-3 z-20 h-0.5 rounded-full bg-[var(--brand)] shadow-[0_0_0_2px_var(--brand-soft)]",
+            dropEdge === "before" ? "top-1" : "bottom-1",
+          )}
+        />
+      ) : null}
       {isEditing ? (
         <textarea
           autoFocus
@@ -220,99 +368,150 @@ function ContentCardItem({
         />
       ) : (
         <div
+          onPointerDownCapture={() => {
+            didDragRef.current = false;
+          }}
           onClick={(event) => {
+            if (didDragRef.current) {
+              didDragRef.current = false;
+              return;
+            }
             if (!(event.target as Element).closest("a")) {
               onView();
             }
           }}
+          {...attributes}
           {...listeners}
           className={cn(
-            "cursor-grab overflow-y-auto rounded-2xl px-4 py-3.5 pr-20 pb-11 active:cursor-grabbing",
-            isCollapsed ? "min-h-24" : "min-h-28 max-h-[10.5rem]",
+            "cursor-grab overflow-y-auto active:cursor-grabbing",
+            !isCollapsed && "min-h-28 max-h-[10.5rem]",
           )}
           data-testid={`content-card-body-${card.id}`}
         >
           <ContentCardMarkdown
             title={card.title}
             notes={isCollapsed ? undefined : card.notes}
+            variant="card"
           />
         </div>
       )}
 
       {!isEditing ? (
-        <Tooltip>
-          <TooltipTrigger
-            aria-label={`${isCollapsed ? "Expand" : "Collapse"} card ${card.title}`}
-            aria-expanded={!isCollapsed}
-            onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-            className="absolute top-2.5 right-2.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
-          >
-            {isCollapsed ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronUp className="size-4" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            {isCollapsed ? "Expand card" : "Collapse card"}
-          </TooltipContent>
-        </Tooltip>
+        <div
+          role="toolbar"
+          aria-label={`Card toolbar for ${card.title}`}
+          className="flex min-h-10 items-center justify-between border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] px-2 py-1"
+          data-testid={`content-card-toolbar-${card.id}`}
+        >
+          <div className="flex items-center gap-0.5">
+            <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`More actions for card ${card.title}`}
+                      className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                    >
+                      <Ellipsis className="size-4" />
+                    </button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  More actions
+                </TooltipContent>
+              </Tooltip>
+              <PopoverContent side="top" align="start" className="w-44 p-1.5">
+                <div role="menu" aria-label={`Card actions for ${card.title}`}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      onRequestDelete();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] motion-reduce:transition-none"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete card
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger
+                aria-label={`View card ${card.title}`}
+                onClick={onView}
+                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+              >
+                <Eye className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                View card
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                aria-label={`${isCopied ? "Copied" : "Copy"} card ${card.title}`}
+                onClick={copyCard}
+                className={cn(
+                  "inline-flex size-7 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none",
+                  isCopied
+                    ? "text-[var(--brand)]"
+                    : "text-[var(--ink-700)] hover:text-[var(--ink-900)]",
+                )}
+              >
+                {isCopied ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {isCopied ? "Copied" : "Copy Markdown"}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                aria-label={`Edit card ${card.title}`}
+                onClick={startEditing}
+                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+              >
+                <Pencil className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Edit Markdown
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                aria-label={`${isCollapsed ? "Expand" : "Collapse"} card ${card.title}`}
+                aria-expanded={!isCollapsed}
+                onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+              >
+                {isCollapsed ? (
+                  <ChevronDown className="size-4" />
+                ) : (
+                  <ChevronUp className="size-4" />
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {isCollapsed ? "Expand card" : "Collapse card"}
+              </TooltipContent>
+            </Tooltip>
+            <span className="sr-only" role="status">
+              {isCopied ? `Copied card ${card.title}` : null}
+            </span>
+          </div>
+        </div>
       ) : null}
-
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={`View card ${card.title}`}
-          onClick={onView}
-          className="absolute right-[4.5rem] bottom-2.5 inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] group-hover:opacity-100 motion-reduce:transition-none"
-        >
-          <Eye className="size-3.5" />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          View card
-        </TooltipContent>
-      </Tooltip>
-
-      {!isEditing ? (
-        <Tooltip>
-          <TooltipTrigger
-            aria-label={`Edit card ${card.title}`}
-            onClick={startEditing}
-            className="absolute right-10 bottom-2.5 inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] group-hover:opacity-100 motion-reduce:transition-none"
-          >
-            <Pencil className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Edit Markdown
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
-
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={`Delete card ${card.title}`}
-          onClick={onRequestDelete}
-          className="absolute right-2.5 bottom-2.5 inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] hover:text-[var(--warn)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] group-hover:opacity-100 motion-reduce:transition-none"
-        >
-          <Trash2 className="size-3.5" />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          Delete card
-        </TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={`Move card ${card.title}`}
-          className="absolute top-2.5 right-10 inline-flex size-7 cursor-grab items-center justify-center rounded-lg text-[var(--ink-700)] opacity-0 transition-all duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing group-hover:opacity-100 motion-reduce:transition-none"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-4" />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          Drag to move card
-        </TooltipContent>
-      </Tooltip>
     </article>
   );
 }
@@ -403,6 +602,9 @@ function InlineCardComposer({
 function ContentColumnView({
   column,
   cards,
+  isCardDropTarget,
+  dropTargetCardId,
+  dropTargetEdge,
   canDelete,
   deleteDisabledReason,
   isComposerOpen,
@@ -418,6 +620,9 @@ function ContentColumnView({
 }: {
   column: ContentColumn;
   cards: ContentCard[];
+  isCardDropTarget: boolean;
+  dropTargetCardId: string | null;
+  dropTargetEdge: "before" | "after" | null;
   canDelete: boolean;
   deleteDisabledReason: string | null;
   isComposerOpen: boolean;
@@ -433,8 +638,10 @@ function ContentColumnView({
 }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [isEditingSubtitle, setIsEditingSubtitle] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [subtitle, setSubtitle] = useState(column.subtitle);
+  const didDragRef = useRef(false);
   const {
     attributes,
     listeners,
@@ -450,6 +657,12 @@ function ContentColumnView({
       columnId: column.id,
     } satisfies DragData,
   });
+
+  useEffect(() => {
+    if (isDragging) {
+      didDragRef.current = true;
+    }
+  }, [isDragging]);
 
   const saveTitle = () => {
     const normalized = title.trim();
@@ -474,27 +687,16 @@ function ContentColumnView({
         transition,
       }}
       className={cn(
-        "flex max-h-full w-[300px] shrink-0 flex-col rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,var(--paper))] p-3 shadow-[var(--surface-shadow)] md:w-[320px]",
+        "flex max-h-full w-[300px] shrink-0 flex-col rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,var(--paper))] p-3 shadow-[var(--surface-shadow)] transition-colors duration-150 motion-reduce:transition-none md:w-[320px]",
         isDragging && "opacity-40",
         isOver && !isDragging && "border-[var(--brand)] ring-2 ring-[var(--brand-soft)]",
+        isCardDropTarget &&
+          "border-[var(--brand)] bg-[color:color-mix(in_srgb,var(--brand-soft)_38%,var(--paper))] ring-2 ring-[var(--brand-soft)]",
       )}
+      data-card-drop-target={isCardDropTarget ? "true" : undefined}
       data-testid={`content-column-${column.id}`}
     >
       <header className="mb-3 flex items-start gap-2 px-1">
-        <Tooltip>
-          <TooltipTrigger
-            aria-label={`Move column ${column.title}`}
-            className="inline-flex size-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Drag to reorder column
-          </TooltipContent>
-        </Tooltip>
-
         <div className="min-w-0 flex-1">
           {isRenaming ? (
             <input
@@ -519,8 +721,19 @@ function ContentColumnView({
             <button
               type="button"
               aria-label={`Rename column ${column.title}`}
-              onClick={() => setIsRenaming(true)}
-              className="block w-full truncate rounded-lg px-1 py-1 text-left text-sm font-semibold text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              onPointerDownCapture={() => {
+                didDragRef.current = false;
+              }}
+              onClick={() => {
+                if (didDragRef.current) {
+                  didDragRef.current = false;
+                  return;
+                }
+                setIsRenaming(true);
+              }}
+              className="block w-full cursor-grab truncate rounded-lg px-1 py-1 text-left text-sm font-semibold text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing"
+              {...attributes}
+              {...listeners}
             >
               {column.title}
             </button>
@@ -566,26 +779,47 @@ function ContentColumnView({
           {cards.length}
         </span>
 
-        <Tooltip>
-          <TooltipTrigger
-            aria-label={`Delete column ${column.title}`}
-            aria-disabled={!canDelete}
-            onClick={() => {
-              if (canDelete) onRequestDelete();
-            }}
-            className={cn(
-              "inline-flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-              canDelete
-                ? "text-[var(--ink-700)] hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] hover:text-[var(--warn)]"
-                : "cursor-not-allowed text-[var(--ink-700)] opacity-35",
-            )}
-          >
-            <Trash2 className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-52 text-xs">
-            {deleteDisabledReason ?? "Delete column"}
-          </TooltipContent>
-        </Tooltip>
+        <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`More actions for column ${column.title}`}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                >
+                  <Ellipsis className="size-4" />
+                </button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              More actions
+            </TooltipContent>
+          </Tooltip>
+          <PopoverContent side="bottom" align="end" className="w-52 p-1.5">
+            <div role="menu" aria-label={`Column actions for ${column.title}`}>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canDelete}
+                aria-disabled={!canDelete}
+                onClick={() => {
+                  setIsActionsOpen(false);
+                  onRequestDelete();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+              >
+                <Trash2 className="size-3.5" />
+                Delete column
+              </button>
+              {deleteDisabledReason ? (
+                <p className="px-2.5 pt-1 pb-1.5 text-xs leading-4 text-[var(--ink-700)]">
+                  {deleteDisabledReason}
+                </p>
+              ) : null}
+            </div>
+          </PopoverContent>
+        </Popover>
       </header>
 
       <div className="min-h-20 flex-1 overflow-y-auto px-0.5 pb-1">
@@ -598,6 +832,8 @@ function ContentColumnView({
               <ContentCardItem
                 key={card.id}
                 card={card}
+                isDropTarget={dropTargetCardId === card.id}
+                dropEdge={dropTargetCardId === card.id ? dropTargetEdge : null}
                 onView={() => onViewCard(card.id)}
                 onUpdate={(title, notes) =>
                   onUpdateCard(card.id, title, notes)
@@ -645,11 +881,14 @@ export function ContentPlannerView({
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [newColumnSubtitle, setNewColumnSubtitle] = useState("");
   const [viewingCardId, setViewingCardId] = useState<string | null>(null);
+  const [isEditingViewingCard, setIsEditingViewingCard] = useState(false);
+  const [viewingCardText, setViewingCardText] = useState("");
   const [pendingDeleteCardId, setPendingDeleteCardId] = useState<string | null>(null);
   const [pendingDeleteColumnId, setPendingDeleteColumnId] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  const [cardDropHighlight, setCardDropHighlight] = useState<CardDropHighlight | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -671,17 +910,40 @@ export function ContentPlannerView({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDrag((event.active.data.current as DragData | undefined) ?? null);
+    setCardDropHighlight(null);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const edge = getCardDropEdge(event);
+    const nextHighlight = resolveContentBoardDragHighlight(
+      event.active.data.current as DragData | undefined,
+      event.over?.data.current as DragData | undefined,
+      edge,
+    );
+    setCardDropHighlight((current) =>
+      current?.columnId === nextHighlight?.columnId &&
+      current?.cardId === nextHighlight?.cardId &&
+      current?.edge === nextHighlight?.edge
+        ? current
+        : nextHighlight,
+    );
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDrag(null);
+    setCardDropHighlight(null);
     if (!event.over) return;
 
     const active = event.active.data.current as DragData | undefined;
     const over = event.over.data.current as DragData | undefined;
     if (!active || !over) return;
 
-    const drop = resolveContentBoardDrop(active, over, cardsByColumn);
+    const drop = resolveContentBoardDrop(
+      active,
+      over,
+      cardsByColumn,
+      getCardDropEdge(event),
+    );
     if (!drop) return;
 
     if (drop.type === "column") {
@@ -699,6 +961,30 @@ export function ContentPlannerView({
     setNewColumnTitle("");
     setNewColumnSubtitle("");
     setIsAddingColumn(false);
+  };
+
+  const startEditingViewingCard = () => {
+    if (!viewingCard) return;
+    setViewingCardText(getContentCardText(viewingCard));
+    setIsEditingViewingCard(true);
+  };
+
+  const cancelEditingViewingCard = () => {
+    setViewingCardText(viewingCard ? getContentCardText(viewingCard) : "");
+    setIsEditingViewingCard(false);
+  };
+
+  const saveViewingCard = () => {
+    if (!viewingCard) return;
+    const content = splitContentCardText(viewingCardText);
+    if (!content) return;
+    if (
+      content.title !== viewingCard.title ||
+      content.notes !== viewingCard.notes
+    ) {
+      onUpdateCard(viewingCard.id, content.title, content.notes);
+    }
+    setIsEditingViewingCard(false);
   };
 
   return (
@@ -722,10 +1008,14 @@ export function ContentPlannerView({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={contentBoardCollisionDetection}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => setActiveDrag(null)}
+        onDragCancel={() => {
+          setActiveDrag(null);
+          setCardDropHighlight(null);
+        }}
       >
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
           <SortableContext
@@ -747,6 +1037,17 @@ export function ContentPlannerView({
                     key={column.id}
                     column={column}
                     cards={columnCards}
+                    isCardDropTarget={cardDropHighlight?.columnId === column.id}
+                    dropTargetCardId={
+                      cardDropHighlight?.columnId === column.id
+                        ? cardDropHighlight.cardId
+                        : null
+                    }
+                    dropTargetEdge={
+                      cardDropHighlight?.columnId === column.id
+                        ? cardDropHighlight.edge
+                        : null
+                    }
                     canDelete={!deleteDisabledReason}
                     deleteDisabledReason={deleteDisabledReason}
                     isComposerOpen={composerColumnId === column.id}
@@ -863,7 +1164,11 @@ export function ContentPlannerView({
       <Dialog
         open={Boolean(viewingCard)}
         onOpenChange={(open) => {
-          if (!open) setViewingCardId(null);
+          if (!open) {
+            setViewingCardId(null);
+            setIsEditingViewingCard(false);
+            setViewingCardText("");
+          }
         }}
       >
         {viewingCard ? (
@@ -871,15 +1176,78 @@ export function ContentPlannerView({
             <DialogHeader>
               <DialogTitle>Card preview</DialogTitle>
               <DialogDescription>
-                Read the complete rendered Markdown card.
+                Read the complete rendered Markdown card or edit it directly.
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-4">
-              <ContentCardMarkdown
-                title={viewingCard.title}
-                notes={viewingCard.notes}
-              />
+            <div
+              className="relative overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper)] focus-within:border-[var(--brand)]"
+              data-testid="content-card-preview-surface"
+            >
+              {isEditingViewingCard ? (
+                <textarea
+                  autoFocus
+                  aria-label={`Edit card ${viewingCard.title} in preview`}
+                  value={viewingCardText}
+                  rows={12}
+                  maxLength={2000}
+                  onChange={(event) => setViewingCardText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      cancelEditingViewingCard();
+                    } else if (
+                      event.key === "Enter" &&
+                      (event.metaKey || event.ctrlKey)
+                    ) {
+                      event.preventDefault();
+                      saveViewingCard();
+                    }
+                  }}
+                  className="block min-h-72 max-h-[70vh] w-full resize-y overflow-y-auto border-0 bg-transparent p-4 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
+                />
+              ) : (
+                <>
+                  <div className="min-h-72 max-h-[70vh] overflow-y-auto p-4 pr-12">
+                    <ContentCardMarkdown
+                      title={viewingCard.title}
+                      notes={viewingCard.notes}
+                    />
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger
+                      aria-label={`Edit card ${viewingCard.title} from preview`}
+                      onClick={startEditingViewingCard}
+                      className="absolute top-2.5 right-2.5 inline-flex size-8 items-center justify-center rounded-lg bg-[var(--paper-strong)] text-[var(--ink-700)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                    >
+                      <Pencil className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="text-xs">
+                      Edit card
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
             </div>
+            {isEditingViewingCard ? (
+              <DialogFooter className="sm:justify-end">
+                <button
+                  type="button"
+                  onClick={cancelEditingViewingCard}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!viewingCardText.trim()}
+                  onClick={saveViewingCard}
+                  className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                >
+                  Save changes
+                </button>
+              </DialogFooter>
+            ) : null}
           </DialogContent>
         ) : null}
       </Dialog>
