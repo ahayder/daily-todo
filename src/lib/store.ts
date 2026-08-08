@@ -439,6 +439,103 @@ export function moveContentCard(
   return nextCards;
 }
 
+function hasOwnKey(record: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function serializedValuesMatch(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergeHydratedRecord<T>(
+  base: Record<string, T>,
+  local: Record<string, T>,
+  remote: Record<string, T>,
+): Record<string, T> {
+  const merged: Record<string, T> = {};
+  const keys = new Set([
+    ...Object.keys(base),
+    ...Object.keys(local),
+    ...Object.keys(remote),
+  ]);
+
+  for (const key of keys) {
+    const localChanged =
+      hasOwnKey(local, key) !== hasOwnKey(base, key) ||
+      !serializedValuesMatch(local[key], base[key]);
+
+    if (localChanged) {
+      if (hasOwnKey(local, key)) {
+        merged[key] = local[key];
+      }
+      continue;
+    }
+
+    if (hasOwnKey(remote, key)) {
+      merged[key] = remote[key];
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Applies a completed remote hydration without discarding edits made after the
+ * cache-first state became interactive. Unchanged records take the fresh
+ * PocketBase value; records changed locally during hydration keep that edit.
+ */
+export function mergeHydratedAppState(
+  base: AppState,
+  local: AppState,
+  remote: AppState,
+): AppState {
+  const uiState = Object.fromEntries(
+    Object.keys(remote.uiState).map((key) => {
+      const uiKey = key as keyof AppState["uiState"];
+      const localValue = local.uiState[uiKey];
+      const baseValue = base.uiState[uiKey];
+      return [
+        uiKey,
+        serializedValuesMatch(localValue, baseValue)
+          ? remote.uiState[uiKey]
+          : localValue,
+      ];
+    }),
+  ) as AppState["uiState"];
+
+  return {
+    dailyPages: mergeHydratedRecord(
+      base.dailyPages,
+      local.dailyPages,
+      remote.dailyPages,
+    ),
+    notesDocs: mergeHydratedRecord(
+      base.notesDocs,
+      local.notesDocs,
+      remote.notesDocs,
+    ),
+    noteFolders: mergeHydratedRecord(
+      base.noteFolders,
+      local.noteFolders,
+      remote.noteFolders,
+    ),
+    plannerPresets: mergeHydratedRecord(
+      base.plannerPresets,
+      local.plannerPresets,
+      remote.plannerPresets,
+    ),
+    contentBoard: serializedValuesMatch(local.contentBoard, base.contentBoard)
+      ? remote.contentBoard
+      : local.contentBoard,
+    contentCards: mergeHydratedRecord(
+      base.contentCards,
+      local.contentCards,
+      remote.contentCards,
+    ),
+    uiState,
+  };
+}
+
 export function updateContentCard(
   cards: Record<string, ContentCard>,
   cardId: string,

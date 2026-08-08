@@ -15,6 +15,7 @@ import {
   ensurePlannerState,
   groupTodosByPriority,
   makeTodoSubtask,
+  mergeHydratedAppState,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
@@ -394,6 +395,46 @@ describe("planner state", () => {
 
     expect(repaired.contentBoard.columns[0].subtitle).toBe("Capture raw concepts");
     expect(repaired.contentBoard.columns[1].subtitle).toBe("");
+  });
+
+  test("merges remote hydration without discarding a local card drag", () => {
+    const base = createInitialState("2026-03-11");
+    const [ideas, planned] = base.contentBoard.columns;
+    const draggedCard = createContentCard({
+      columnId: ideas.id,
+      title: "Drag me",
+      order: 0,
+    })!;
+    base.contentCards = { [draggedCard.id]: draggedCard };
+
+    const local = {
+      ...base,
+      contentCards: moveContentCard(
+        base.contentCards,
+        draggedCard.id,
+        planned.id,
+        0,
+      ),
+    };
+    const remoteOnlyCard = createContentCard({
+      columnId: ideas.id,
+      title: "Created elsewhere",
+      order: 1,
+    })!;
+    const remote = {
+      ...base,
+      contentBoard: renameContentColumn(base.contentBoard, ideas.id, "Inbox"),
+      contentCards: {
+        ...base.contentCards,
+        [remoteOnlyCard.id]: remoteOnlyCard,
+      },
+    };
+
+    const merged = mergeHydratedAppState(base, local, remote);
+
+    expect(merged.contentBoard.columns[0].title).toBe("Inbox");
+    expect(merged.contentCards[draggedCard.id].columnId).toBe(planned.id);
+    expect(merged.contentCards[remoteOnlyCard.id]).toBe(remoteOnlyCard);
   });
 
   test("backfills planner state when missing", () => {

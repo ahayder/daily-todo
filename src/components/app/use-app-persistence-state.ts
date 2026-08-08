@@ -14,11 +14,13 @@ import type { AuthSession, AuthStatus } from "@/lib/auth";
 import {
   createPersistenceMetadata,
   seedAppState,
+  type PersistenceLoadResult,
   type PersistenceMetadata,
   type PersistenceRepository,
   type PersistenceStatus,
 } from "@/lib/persistence";
 import { isDevelopmentWorkspaceSession } from "@/lib/dev-mode";
+import { mergeHydratedAppState } from "@/lib/store";
 import type { AppState, NoteBodyStatus } from "@/lib/types";
 import { appReducer, loadDevelopmentWorkspaceState, saveDevelopmentWorkspaceState, serializeStateForSync } from "./app-context.reducer";
 import type { AppAction, AppContextValue } from "./app-context.types";
@@ -67,7 +69,11 @@ export function useAppPersistenceState({
 
   const dispatch = useMemo<Dispatch<AppAction>>(
     () => (action) => {
-      setState((current) => (current ? appReducer(current, action) : current));
+      setState((current) => {
+        const next = current ? appReducer(current, action) : current;
+        latestStateRef.current = next;
+        return next;
+      });
     },
     [],
   );
@@ -334,6 +340,96 @@ export function useAppPersistenceState({
     }
 
     let mounted = true;
+    let hydrationBaseState: AppState | null = null;
+    let hydrationComplete = false;
+    let lastRefreshStartedAt = 0;
+    let pendingRemoteResult: PersistenceLoadResult | null = null;
+
+    const applyRemoteHydration = (
+      remoteResult: PersistenceLoadResult,
+      baseState = hydrationBaseState,
+    ) => {
+      if (!mounted) {
+        return;
+      }
+
+      if (!baseState) {
+        pendingRemoteResult = remoteResult;
+        return;
+      }
+
+      const localState = latestStateRef.current ?? baseState;
+      const nextState = mergeHydratedAppState(
+        baseState,
+        localState,
+        remoteResult.state,
+      );
+      const remoteSnapshot = serializeStateForSync(remoteResult.state);
+      const nextSnapshot = serializeStateForSync(nextState);
+      const keptLocalChanges = nextSnapshot !== remoteSnapshot;
+
+      metadataRef.current = remoteResult.metadata;
+      saveSnapshotRef.current = remoteSnapshot;
+      dirtySnapshotRef.current = keptLocalChanges ? nextSnapshot : null;
+      latestStateRef.current = nextState;
+      setState(nextState);
+      setHasPendingChanges(keptLocalChanges);
+      setHasUnsyncedChanges(keptLocalChanges || remoteResult.status !== "synced");
+      setIsSaving(keptLocalChanges);
+      setHasSyncIssue(!keptLocalChanges && remoteResult.status === "error");
+      setSyncStatus(keptLocalChanges ? "syncing" : remoteResult.status);
+      setSyncNotice(
+        keptLocalChanges
+          ? "Keeping your latest changes on this device while PocketBase catches up."
+          : remoteResult.notice,
+      );
+      setSyncError(keptLocalChanges ? null : remoteResult.errorMessage);
+      setLastSavedAt(
+        remoteResult.metadata.lastRemoteUpdatedAt ??
+          remoteResult.metadata.lastLocalMutationAt,
+      );
+      setLastSyncedAt(remoteResult.metadata.lastRemoteUpdatedAt);
+      setPersistenceAvailable(remoteResult.persistenceAvailable);
+
+      if (keptLocalChanges) {
+        queueSave(WORKSPACE_REMOTE_SAVE_DEBOUNCE_MS);
+      }
+    };
+
+    const refreshFromRemote = async () => {
+      const baseState = latestStateRef.current;
+      if (
+        !mounted ||
+        !hydrationComplete ||
+        !baseState ||
+        dirtySnapshotRef.current ||
+        remoteSaveInFlightRef.current ||
+        Date.now() - lastRefreshStartedAt < 5000
+      ) {
+        return;
+      }
+
+      lastRefreshStartedAt = Date.now();
+      let appliedRemoteResult = false;
+
+      try {
+        const result = await repository.load({
+          userId: session.userId,
+          now: new Date(),
+          onRemoteSync: (remoteResult) => {
+            appliedRemoteResult = true;
+            applyRemoteHydration(remoteResult, baseState);
+          },
+        });
+
+        if (!appliedRemoteResult && result.source === "remote") {
+          applyRemoteHydration(result, baseState);
+        }
+      } catch {
+        // Keep the current cache-first state; the existing sync indicator will
+        // report a problem on the next attempted save or manual retry.
+      }
+    };
 
     const hydrate = async () => {
       try {
@@ -342,37 +438,18 @@ export function useAppPersistenceState({
         const result = await repository.load({
           userId: session.userId,
           now: new Date(),
-          onRemoteSync: (remoteResult) => {
-            if (!mounted) {
-              return;
-            }
-
-            const snapshot = serializeStateForSync(remoteResult.state);
-            saveSnapshotRef.current = snapshot;
-            dirtySnapshotRef.current = null;
-            setHasPendingChanges(false);
-            setHasUnsyncedChanges(remoteResult.status !== "synced");
-            setIsSaving(false);
-            setHasSyncIssue(remoteResult.status === "error");
-            metadataRef.current = remoteResult.metadata;
-            setState(remoteResult.state);
-            setSyncStatus(remoteResult.status);
-            setSyncNotice(remoteResult.notice);
-            setSyncError(remoteResult.errorMessage);
-            setLastSavedAt(
-              remoteResult.metadata.lastRemoteUpdatedAt ?? remoteResult.metadata.lastLocalMutationAt,
-            );
-            setLastSyncedAt(remoteResult.metadata.lastRemoteUpdatedAt);
-            setPersistenceAvailable(remoteResult.persistenceAvailable);
-          },
+          onRemoteSync: applyRemoteHydration,
         });
         if (!mounted) {
           return;
         }
 
         const snapshot = serializeStateForSync(result.state);
+        hydrationBaseState = result.state;
+        hydrationComplete = true;
         saveSnapshotRef.current = snapshot;
         dirtySnapshotRef.current = null;
+        latestStateRef.current = result.state;
         setHasPendingChanges(false);
         setHasUnsyncedChanges(result.status !== "synced");
         setIsSaving(false);
@@ -385,6 +462,12 @@ export function useAppPersistenceState({
         setLastSavedAt(result.metadata.lastRemoteUpdatedAt ?? result.metadata.lastLocalMutationAt);
         setLastSyncedAt(result.metadata.lastRemoteUpdatedAt);
         setPersistenceAvailable(result.persistenceAvailable);
+
+        if (pendingRemoteResult) {
+          const remoteResult = pendingRemoteResult;
+          pendingRemoteResult = null;
+          applyRemoteHydration(remoteResult);
+        }
       } catch {
         if (!mounted) {
           return;
@@ -403,10 +486,31 @@ export function useAppPersistenceState({
 
     void hydrate();
 
+    const handleFocus = () => {
+      void refreshFromRemote();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshFromRemote();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authStatus, clearNoteBodySaveTimer, clearSaveTimer, repository, session]);
+  }, [
+    authStatus,
+    clearNoteBodySaveTimer,
+    clearSaveTimer,
+    queueSave,
+    repository,
+    session,
+  ]);
 
   const selectedNoteId = state?.uiState.selectedNoteId ?? null;
   const selectedNote = selectedNoteId ? state?.notesDocs[selectedNoteId] ?? null : null;

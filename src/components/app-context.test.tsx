@@ -9,7 +9,7 @@ import {
   CONTENT_FONT_SCALE_MIN,
 } from "@/lib/content-font-scale";
 import { createPersistenceMetadata } from "@/lib/persistence";
-import { createInitialState } from "@/lib/store";
+import { createInitialState, renameContentColumn } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 vi.mock("next/navigation", () => ({
@@ -90,6 +90,34 @@ function Harness() {
           })
         }
       />
+    </div>
+  );
+}
+
+function ContentPlannerSyncHarness() {
+  const { state, dispatch } = useAppState();
+  const card = Object.values(state.contentCards)[0];
+  const targetColumn = state.contentBoard.columns[1];
+
+  return (
+    <div>
+      <p data-testid="hydrated-column-title">{state.contentBoard.columns[0].title}</p>
+      <p data-testid="dragged-card-column">{card?.columnId ?? "missing"}</p>
+      <button
+        type="button"
+        disabled={!card || !targetColumn}
+        onClick={() => {
+          if (!card || !targetColumn) return;
+          dispatch({
+            type: "move-content-card",
+            cardId: card.id,
+            targetColumnId: targetColumn.id,
+            targetIndex: 0,
+          });
+        }}
+      >
+        move planner card
+      </button>
     </div>
   );
 }
@@ -994,5 +1022,156 @@ describe("AppProvider save queue", () => {
       await Promise.resolve();
     });
     expect(persistence.repository.save).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("AppProvider cache-first hydration", () => {
+  test("keeps a local card drag when a later remote hydration finishes", async () => {
+    installMatchMedia(false);
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const cachedState = appReducer(createInitialState("2026-03-11"), {
+      type: "create-content-card",
+      columnId: "content-column-ideas",
+      title: "Move this card",
+    });
+    const persistence = createMockPersistenceRepository(cachedState);
+    let finishRemoteHydration:
+      | NonNullable<Parameters<typeof persistence.repository.load>[0]["onRemoteSync"]>
+      | undefined;
+
+    persistence.repository.load = vi.fn(async ({ onRemoteSync }) => {
+      finishRemoteHydration = onRemoteSync;
+      return {
+        state: cachedState,
+        source: "local" as const,
+        status: "syncing" as const,
+        metadata: createPersistenceMetadata({
+          lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
+          lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
+        }),
+        conflictResolution: "none" as const,
+        notice: null,
+        errorMessage: null,
+        persistenceAvailable: true,
+      };
+    });
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <AppProvider repository={persistence.repository}>
+          <ContentPlannerSyncHarness />
+        </AppProvider>
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("dragged-card-column")).toHaveTextContent(
+      "content-column-ideas",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "move planner card" }));
+    expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
+      "content-column-planned",
+    );
+
+    const remoteState = {
+      ...cachedState,
+      contentBoard: renameContentColumn(
+        cachedState.contentBoard,
+        "content-column-ideas",
+        "Inbox",
+      ),
+    };
+    await act(async () => {
+      finishRemoteHydration?.({
+        state: remoteState,
+        source: "remote",
+        status: "synced",
+        metadata: createPersistenceMetadata({
+          lastRemoteUpdatedAt: "2026-03-11T08:01:00.000Z",
+          lastRemoteUpdatedAtClient: "2026-03-11T08:01:00.000Z",
+        }),
+        conflictResolution: "remote-overwrote-local",
+        notice: "Newer changes from another device were loaded.",
+        errorMessage: null,
+        persistenceAvailable: true,
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Inbox");
+    expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
+      "content-column-planned",
+    );
+  });
+
+  test("refreshes a clean workspace from PocketBase when the window regains focus", async () => {
+    installMatchMedia(false);
+    const auth = createMockAuthRepository({
+      userId: "user_1",
+      email: "test@example.com",
+      isVerified: true,
+      accessToken: "token_1",
+    });
+    const initialState = createInitialState("2026-03-11");
+    const refreshedState = {
+      ...initialState,
+      contentBoard: renameContentColumn(
+        initialState.contentBoard,
+        "content-column-ideas",
+        "Inbox",
+      ),
+    };
+    const persistence = createMockPersistenceRepository(initialState);
+    const metadata = createPersistenceMetadata({
+      lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
+      lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
+    });
+    const loadResult = {
+      state: initialState,
+      source: "remote" as const,
+      status: "synced" as const,
+      metadata,
+      conflictResolution: "none" as const,
+      notice: null,
+      errorMessage: null,
+      persistenceAvailable: true,
+    };
+
+    persistence.repository.load = vi
+      .fn()
+      .mockResolvedValueOnce(loadResult)
+      .mockResolvedValueOnce({
+        ...loadResult,
+        state: refreshedState,
+        metadata: createPersistenceMetadata({
+          lastRemoteUpdatedAt: "2026-03-11T08:02:00.000Z",
+          lastRemoteUpdatedAtClient: "2026-03-11T08:02:00.000Z",
+        }),
+      });
+
+    render(
+      <AuthProvider repository={auth.repository}>
+        <AppProvider repository={persistence.repository}>
+          <ContentPlannerSyncHarness />
+        </AppProvider>
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId("hydrated-column-title")).toHaveTextContent(
+      "Ideas",
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(persistence.repository.load).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Inbox");
   });
 });
