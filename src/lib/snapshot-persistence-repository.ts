@@ -134,6 +134,25 @@ export class SnapshotPersistenceRepository implements PersistenceRepository {
     return this.trySaveRemote(userId, state, metadata);
   }
 
+  saveLocalCache({
+    userId,
+    state,
+    baseMetadata,
+  }: {
+    userId: string;
+    state: AppState;
+    baseMetadata: PersistenceMetadata;
+    now?: Date;
+  }): void {
+    this.localCache.saveCached({
+      userId,
+      envelope: {
+        state,
+        metadata: baseMetadata,
+      },
+    });
+  }
+
   async clearUserData({ userId }: { userId: string }): Promise<void> {
     this.localCache.clearCached({ userId });
   }

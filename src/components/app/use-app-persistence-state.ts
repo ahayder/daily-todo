@@ -71,6 +71,12 @@ export function useAppPersistenceState({
     () => (action) => {
       setState((current) => {
         const next = current ? appReducer(current, action) : current;
+        if (next !== current) {
+          metadataRef.current = {
+            ...metadataRef.current,
+            lastLocalMutationAt: new Date().toISOString(),
+          };
+        }
         latestStateRef.current = next;
         return next;
       });
@@ -523,8 +529,12 @@ export function useAppPersistenceState({
       return;
     }
 
-    if (typeof selectedNote.markdown === "string") {
-      noteBodySnapshotRef.current[selectedNoteId] ??= selectedNote.markdown;
+    const lastSnapshotMarkdown = noteBodySnapshotRef.current[selectedNoteId];
+    const isCachedBodyUpToDate =
+      typeof selectedNote.markdown === "string" &&
+      lastSnapshotMarkdown === selectedNote.markdown;
+
+    if (isCachedBodyUpToDate) {
       setSelectedBodyStatus("ready");
       setSelectedBodyNotice(null);
       setSelectedBodyError(null);
@@ -691,6 +701,7 @@ export function useAppPersistenceState({
     }
 
     if (isDevelopmentWorkspaceSession(session)) {
+      saveDevelopmentWorkspaceState(state);
       dirtySnapshotRef.current = nextSnapshot;
       startTransition(() => {
         setHasPendingChanges(true);
@@ -703,6 +714,12 @@ export function useAppPersistenceState({
     }
 
     dirtySnapshotRef.current = nextSnapshot;
+    repository.saveLocalCache?.({
+      userId: session.userId,
+      state,
+      baseMetadata: metadataRef.current,
+    });
+
     startTransition(() => {
       setHasPendingChanges(true);
       setHasUnsyncedChanges(true);
@@ -715,7 +732,7 @@ export function useAppPersistenceState({
 
     queueSave(WORKSPACE_REMOTE_SAVE_DEBOUNCE_MS);
     return clearSaveTimer;
-  }, [authStatus, clearSaveTimer, queueSave, session, state]);
+  }, [authStatus, clearSaveTimer, queueSave, repository, session, state]);
 
   const retrySync = useCallback(async () => {
     if (!session || !state || authStatus !== "authenticated") {

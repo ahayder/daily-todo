@@ -152,9 +152,7 @@ describe("TodosView", () => {
 
     const statusButton = screen.getByRole("button", { name: "Status for Task one" });
     await userEvent.click(statusButton);
-    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await userEvent.click(statusButton);
-    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     const taskText = screen.getByText("Task one");
     expect(taskText).toHaveClass("task-text--done");

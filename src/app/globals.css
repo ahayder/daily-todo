@@ -1089,13 +1089,13 @@ select {
   min-height: 100%;
   outline: none;
   font-size: var(--content-font-size-editor, 18px);
-  line-height: 1.8; /* Increased line spacing */
+  line-height: 1;
   color: var(--ink-900);
   caret-color: var(--brand); /* Strongly colored classic blinking cursor */
 }
 
 .tiptap-editor > * + * {
-  margin-top: 0.75em;
+  margin-top: 0.5em;
 }
 
 .tiptap-editor h1 {
@@ -1215,7 +1215,7 @@ select {
 }
 
 .tiptap-editor ul[data-type="taskList"] li > div > p {
-  line-height: 1.7;
+  line-height: 1;
 }
 
 .tiptap-editor a {
@@ -1395,12 +1395,37 @@ select {
 }
 
 .task-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.42rem;
-  padding: 0.5rem 0.46rem; /* Slightly more spacious for ADHD readability */
+  padding: 0.5rem 0.46rem 0.5rem 0.6rem;
   border-radius: 8px;
-  transition: background 150ms ease;
+  border-left: 3px solid transparent;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.task-priority-1 > .task-item {
+  border-left-color: var(--priority-1);
+}
+
+.task-priority-2 > .task-item {
+  border-left-color: var(--priority-2);
+}
+
+.task-priority-3 > .task-item {
+  border-left-color: var(--priority-3);
+}
+
+.subtask-progress-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 60%, transparent);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  line-height: 1;
+  user-select: none;
 }
 
 .task-item:hover {
@@ -1409,6 +1434,17 @@ select {
 
 .task-entry:focus-within .task-item {
   background: color-mix(in srgb, var(--brand-soft) 40%, transparent);
+}
+
+/* ── Dark mode explicit overrides for task items ── */
+.dark .task-item:hover,
+.dark .task-entry:focus-within .task-item {
+  background: color-mix(in srgb, var(--brand-soft) 55%, transparent);
+}
+
+.dark .subtask-progress-badge {
+  background: color-mix(in srgb, var(--brand-soft) 70%, var(--paper-strong));
+  color: var(--brand);
 }
 
 /* ── ADHD Focus Dimming: when hovering a task, others subtly recede ── */

@@ -48,6 +48,7 @@ import {
   Target,
   X,
   Pause,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, differenceInDays } from "date-fns";
@@ -420,7 +421,12 @@ function EditableTaskItem({
     !todo.parentId && (isSubtaskComposerVisible || isSubtaskFocused);
   const isSubtask = Boolean(todo.parentId);
   const showSubtaskAction = !isSubtask && !isEditing && (isTaskActive || showSubtaskComposer);
-  const canCollapseSubtasks = !isSubtask && subtasks.length > 0;
+  const completedSubtasksCount = useMemo(
+    () => subtasks.filter((st) => st.status === "finished").length,
+    [subtasks],
+  );
+  const totalSubtasksCount = subtasks.length;
+  const canCollapseSubtasks = !isSubtask && totalSubtasksCount > 0;
   const statusMeta = STATUS_META[todo.status];
   const nextStatus =
     todo.status === "pending"
@@ -458,6 +464,7 @@ function EditableTaskItem({
     <div
       className={cn(
         "task-entry flex flex-col w-full",
+        `task-priority-${todo.priority}`,
         isSubtask && "task-entry--subtask",
         dropIndicatorPosition === "before" && "task-entry--drop-before",
         dropIndicatorPosition === "after" && "task-entry--drop-after",
@@ -481,48 +488,68 @@ function EditableTaskItem({
       <Popover open={isEstimateEditorOpen} onOpenChange={setIsEstimateEditorOpen}>
         <li className="task-item group">
           {canCollapseSubtasks ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="task-collapse-btn"
-                  aria-label={isSubtasksCollapsed ? "Expand subtasks" : "Collapse subtasks"}
-                  onClick={() => {
-                    if (!isSubtasksCollapsed) {
-                      setIsSubtaskComposerVisible(false);
-                      setIsSubtaskFocused(false);
-                      setSubtaskText("");
-                    }
-                    setIsSubtasksCollapsed((value) => !value);
-                  }}
-                >
-                  {isSubtasksCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                {isSubtasksCollapsed ? "Expand subtasks" : "Collapse subtasks"}
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="task-collapse-btn"
+                    aria-label={isSubtasksCollapsed ? "Expand subtasks" : "Collapse subtasks"}
+                    onClick={() => {
+                      if (!isSubtasksCollapsed) {
+                        setIsSubtaskComposerVisible(false);
+                        setIsSubtaskFocused(false);
+                        setSubtaskText("");
+                      }
+                      setIsSubtasksCollapsed((value) => !value);
+                    }}
+                  >
+                    {isSubtasksCollapsed ? (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {isSubtasksCollapsed ? "Expand subtasks" : "Collapse subtasks"}
+                </TooltipContent>
+              </Tooltip>
+              <span
+                className="subtask-progress-badge"
+                title={`${completedSubtasksCount} of ${totalSubtasksCount} subtasks completed`}
+              >
+                {completedSubtasksCount}/{totalSubtasksCount}
+              </span>
+            </div>
           ) : null}
 
-          <button
-            type="button"
-            aria-label={`Status for ${todo.text}`}
-            onClick={() => {
-              setPendingStatus(nextStatus);
-              setIsStatusConfirmOpen(true);
-          }}
-          className={cn(
-            "inline-flex h-5.5 min-w-[72px] items-center justify-center rounded-full border px-1.5 text-[9px] font-semibold tracking-[0.08em] uppercase transition-colors",
-            statusMeta.className,
-          )}
-        >
-            {statusMeta.shortLabel}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Status for ${todo.text}`}
+                onClick={(e) => {
+                  handleStatusChange(nextStatus, e.currentTarget);
+                }}
+                className={cn(
+                  "task-status-btn inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all hover:scale-105",
+                  statusMeta.className,
+                )}
+              >
+                {todo.status === "pending" ? (
+                  <span className="h-1.5 w-1.5 rounded-full border border-current bg-transparent opacity-65" />
+                ) : todo.status === "ongoing" ? (
+                  <span className="h-2 w-2 rounded-full bg-current animate-pulse" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Status: {statusMeta.shortLabel} (click to change)
+            </TooltipContent>
+          </Tooltip>
 
           {isEditing ? (
             <input
@@ -544,10 +571,11 @@ function EditableTaskItem({
             />
           ) : (
             <div
-              className="task-drag-surface"
+              className="task-drag-surface flex items-center gap-1 flex-1 min-w-0"
               {...dragSurfaceProps}
             >
-              <div className="flex flex-1 flex-col gap-1">
+              <GripVertical className="task-drag-grip h-3.5 w-3.5 text-[var(--ink-700)] opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0 cursor-grab active:cursor-grabbing" />
+              <div className="flex flex-1 flex-col gap-1 min-w-0">
                 <span
                   className={cn(
                     "task-text flex items-center gap-2",

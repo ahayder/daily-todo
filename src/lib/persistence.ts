@@ -171,6 +171,12 @@ export type PersistenceRepository = {
     now?: Date;
   }): Promise<void>;
   evictExpiredCachedBodies(input: { userId?: string; now?: Date }): Promise<void>;
+  saveLocalCache?(input: {
+    userId: string;
+    state: AppState;
+    baseMetadata: PersistenceMetadata;
+    now?: Date;
+  }): void;
   clearUserData(input: { userId: string }): Promise<void>;
 };
 
