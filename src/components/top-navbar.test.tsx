@@ -115,6 +115,13 @@ describe("TopNavbar", () => {
 
     expect(screen.queryByRole("button", { name: "Collapse sidebar" })).not.toBeInTheDocument();
     expect(screen.getByText(/Last saved/)).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toHaveClass("top-navbar--content-planner");
+    expect(screen.getByRole("tablist", { name: "Main navigation" })).toHaveClass(
+      "nav-pills",
+    );
+    expect(screen.getByText(/Last saved/).closest(".top-navbar__sync")).toHaveClass(
+      "max-sm:hidden",
+    );
   });
 
   test("shows plain text saving status", () => {

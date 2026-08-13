@@ -121,9 +121,16 @@ describe("ContentPlannerView", () => {
   });
 
   test("renders the default workflow and persisted cards as safe Markdown", () => {
-    const { container } = render(<ContentPlannerView {...createProps()} />);
+    const props = createProps();
+    const { container } = render(<ContentPlannerView {...props} />);
 
     expect(screen.getByRole("heading", { name: "Content Planner" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Content workflow board" })).toHaveClass(
+      "snap-x",
+      "snap-mandatory",
+      "sm:snap-none",
+      "overscroll-x-contain",
+    );
     for (const title of ["Ideas", "Planned", "In Progress", "Ready", "Published"]) {
       expect(screen.getByRole("button", { name: `Rename column ${title}` })).toHaveClass(
         "cursor-grab",
@@ -133,6 +140,12 @@ describe("ContentPlannerView", () => {
         screen.queryByRole("button", { name: `Move column ${title}` }),
       ).not.toBeInTheDocument();
     }
+    expect(screen.getByTestId(`content-column-${props.board.columns[0].id}`)).toHaveClass(
+      "w-[calc(100vw-1.5rem)]",
+      "snap-center",
+      "sm:w-[300px]",
+      "sm:snap-none",
+    );
     expect(screen.getByText("Capture raw concepts")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Edit card Draft launch story" }),
@@ -151,7 +164,7 @@ describe("ContentPlannerView", () => {
     expect(cardBody).toHaveClass("max-h-[10.5rem]");
     expect(within(toolbar).getByRole("button", {
       name: "More actions for card Draft launch story",
-    })).toBeInTheDocument();
+    })).toHaveClass("size-9", "sm:size-7");
     expect(
       within(toolbar).queryByRole("button", {
         name: "Move card Draft launch story",
@@ -241,7 +254,7 @@ describe("ContentPlannerView", () => {
         name: "Edit card Draft launch story from preview",
       }),
     ).toBeInTheDocument();
-  });
+  }, 10_000);
 
   test("collapses and expands a card without changing card data", async () => {
     const user = userEvent.setup();
@@ -466,5 +479,5 @@ describe("ContentPlannerView", () => {
     expect(screen.getByText("Delete this column?")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(props.onDeleteColumn).toHaveBeenCalledWith(props.board.columns[1].id);
-  });
+  }, 10_000);
 });

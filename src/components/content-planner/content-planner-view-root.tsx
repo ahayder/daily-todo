@@ -411,7 +411,7 @@ function ContentCardItem({
                     <button
                       type="button"
                       aria-label={`More actions for card ${card.title}`}
-                      className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                      className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
                     >
                       <Ellipsis className="size-4" />
                     </button>
@@ -445,7 +445,7 @@ function ContentCardItem({
               <TooltipTrigger
                 aria-label={`View card ${card.title}`}
                 onClick={onView}
-                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
               >
                 <Eye className="size-3.5" />
               </TooltipTrigger>
@@ -459,7 +459,7 @@ function ContentCardItem({
                 aria-label={`${isCopied ? "Copied" : "Copy"} card ${card.title}`}
                 onClick={copyCard}
                 className={cn(
-                  "inline-flex size-7 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none",
+                  "inline-flex size-9 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7",
                   isCopied
                     ? "text-[var(--brand)]"
                     : "text-[var(--ink-700)] hover:text-[var(--ink-900)]",
@@ -480,7 +480,7 @@ function ContentCardItem({
               <TooltipTrigger
                 aria-label={`Edit card ${card.title}`}
                 onClick={startEditing}
-                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
               >
                 <Pencil className="size-3.5" />
               </TooltipTrigger>
@@ -494,7 +494,7 @@ function ContentCardItem({
                 aria-label={`${isCollapsed ? "Expand" : "Collapse"} card ${card.title}`}
                 aria-expanded={!isCollapsed}
                 onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-                className="inline-flex size-7 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
               >
                 {isCollapsed ? (
                   <ChevronDown className="size-4" />
@@ -687,7 +687,7 @@ function ContentColumnView({
         transition,
       }}
       className={cn(
-        "flex max-h-full w-[300px] shrink-0 flex-col rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,var(--paper))] p-3 shadow-[var(--surface-shadow)] transition-colors duration-150 motion-reduce:transition-none md:w-[320px]",
+        "flex max-h-full w-[calc(100vw-1.5rem)] shrink-0 snap-center flex-col rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,var(--paper))] p-3 shadow-[var(--surface-shadow)] transition-colors duration-150 motion-reduce:transition-none sm:w-[300px] sm:snap-none md:w-[320px]",
         isDragging && "opacity-40",
         isOver && !isDragging && "border-[var(--brand)] ring-2 ring-[var(--brand-soft)]",
         isCardDropTarget &&
@@ -786,7 +786,7 @@ function ContentColumnView({
                 <button
                   type="button"
                   aria-label={`More actions for column ${column.title}`}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
                 >
                   <Ellipsis className="size-4" />
                 </button>
@@ -992,10 +992,10 @@ export function ContentPlannerView({
       data-testid="content-planner-view"
       className="flex h-full min-h-0 flex-col bg-[var(--paper)]"
     >
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-4 py-4 md:px-6">
+      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-3 py-3 sm:px-4 sm:py-4 md:px-6">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-[var(--ink-900)]">Content Planner</h1>
+            <h1 className="text-lg font-semibold text-[var(--ink-900)] sm:text-xl">Content Planner</h1>
             <span className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[11px] text-[var(--ink-700)]">
               {totalCards} {totalCards === 1 ? "card" : "cards"}
             </span>
@@ -1017,7 +1017,11 @@ export function ContentPlannerView({
           setCardDropHighlight(null);
         }}
       >
-        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
+        <div
+          aria-label="Content workflow board"
+          className="min-h-0 flex-1 snap-x snap-mandatory scroll-px-3 overflow-x-auto overflow-y-hidden overscroll-x-contain p-3 sm:snap-none sm:scroll-px-4 sm:p-4 md:scroll-px-6 md:p-6"
+          role="region"
+        >
           <SortableContext
             items={board.columns.map((column) => columnDragId(column.id))}
             strategy={horizontalListSortingStrategy}
@@ -1069,7 +1073,7 @@ export function ContentPlannerView({
                 );
               })}
 
-              <div className="w-[280px] shrink-0">
+              <div className="w-[calc(100vw-1.5rem)] shrink-0 snap-center sm:w-[280px] sm:snap-none">
                 {isAddingColumn ? (
                   <div className="space-y-2 rounded-2xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_72%,var(--paper))] p-3 shadow-[var(--surface-shadow)]">
                     <input
@@ -1147,14 +1151,14 @@ export function ContentPlannerView({
 
         <DragOverlay>
           {activeDrag?.type === "card" && cards[activeDrag.cardId] ? (
-            <div className="w-[290px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3.5 shadow-[var(--surface-shadow)]">
+            <div className="w-[calc(100vw-2rem)] max-w-[290px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3.5 shadow-[var(--surface-shadow)]">
               <ContentCardMarkdown
                 title={cards[activeDrag.cardId].title}
                 notes={cards[activeDrag.cardId].notes}
               />
             </div>
           ) : activeDrag?.type === "column" ? (
-            <div className="w-[300px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3 text-sm font-semibold text-[var(--ink-900)] shadow-[var(--surface-shadow)]">
+            <div className="w-[calc(100vw-2rem)] max-w-[300px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3 text-sm font-semibold text-[var(--ink-900)] shadow-[var(--surface-shadow)]">
               {board.columns.find((column) => column.id === activeDrag.columnId)?.title}
             </div>
           ) : null}
@@ -1172,7 +1176,7 @@ export function ContentPlannerView({
         }}
       >
         {viewingCard ? (
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-3xl overflow-y-auto p-4 sm:max-h-[calc(100dvh-2rem)] sm:p-5">
             <DialogHeader>
               <DialogTitle>Card preview</DialogTitle>
               <DialogDescription>
@@ -1204,11 +1208,11 @@ export function ContentPlannerView({
                       saveViewingCard();
                     }
                   }}
-                  className="block min-h-72 max-h-[70vh] w-full resize-y overflow-y-auto border-0 bg-transparent p-4 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
+                  className="block min-h-[42dvh] max-h-[55dvh] w-full resize-y overflow-y-auto border-0 bg-transparent p-4 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)] sm:min-h-72 sm:max-h-[70vh]"
                 />
               ) : (
                 <>
-                  <div className="min-h-72 max-h-[70vh] overflow-y-auto p-4 pr-12">
+                  <div className="min-h-[42dvh] max-h-[55dvh] overflow-y-auto p-4 pr-12 sm:min-h-72 sm:max-h-[70vh]">
                     <ContentCardMarkdown
                       title={viewingCard.title}
                       notes={viewingCard.notes}

@@ -171,8 +171,19 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   }, [sync.errorMessage, sync.indicator, sync.lastSavedAt, sync.notice]);
 
   return (
-    <header className="top-navbar">
-      <div className="flex items-center gap-2.5">
+    <header
+      className={cn(
+        "top-navbar",
+        isContentPlanner &&
+          "top-navbar--content-planner max-sm:!grid max-sm:!h-auto max-sm:!min-h-[52px] max-sm:!grid-cols-[minmax(0,1fr)_auto] max-sm:!gap-x-2 max-sm:!gap-y-1.5 max-sm:!px-3 max-sm:!py-2",
+      )}
+    >
+      <div
+        className={cn(
+          "top-navbar__brand flex items-center gap-2.5",
+          isContentPlanner && "max-sm:min-w-0",
+        )}
+      >
         {!isContentPlanner ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -196,7 +207,15 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         </span>
       </div>
 
-      <nav className="nav-pills" role="tablist" aria-label="Main navigation">
+      <nav
+        className={cn(
+          "nav-pills",
+          isContentPlanner &&
+            "max-sm:col-span-2 max-sm:row-start-2 max-sm:w-full max-sm:overflow-x-auto max-sm:overscroll-x-contain max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&_.nav-pill]:!flex-1 max-sm:[&_.nav-pill]:!px-2 max-sm:[&_.nav-pill]:!text-xs max-sm:[&_.nav-pill]:text-center max-sm:[&_.nav-pill]:whitespace-nowrap",
+        )}
+        role="tablist"
+        aria-label="Main navigation"
+      >
         <Link
           href="/todos"
           role="tab"
@@ -235,11 +254,17 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         </Link>
       </nav>
 
-      <div className="flex items-center gap-1">
+      <div
+        className={cn(
+          "top-navbar__actions flex items-center gap-1",
+          isContentPlanner && "max-sm:col-start-2 max-sm:row-start-1 max-sm:gap-0",
+        )}
+      >
         <div
           aria-live="polite"
           className={cn(
-            "inline-flex min-h-8 items-center px-1 text-xs font-medium",
+            "top-navbar__sync inline-flex min-h-8 items-center px-1 text-xs font-medium",
+            isContentPlanner && "max-sm:hidden",
             syncPresentation.tone,
           )}
         >
