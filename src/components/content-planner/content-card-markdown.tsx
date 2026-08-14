@@ -29,7 +29,7 @@ const markdownComponents: Components = {
     <h3
       {...withClassName(
         props,
-        "text-base font-semibold leading-6 text-[var(--ink-900)]",
+        "text-[length:var(--content-planner-font-base,1rem)] font-semibold leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -37,7 +37,7 @@ const markdownComponents: Components = {
     <h4
       {...withClassName(
         props,
-        "text-sm font-semibold leading-6 text-[var(--ink-900)]",
+        "text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -45,7 +45,7 @@ const markdownComponents: Components = {
     <h5
       {...withClassName(
         props,
-        "text-sm font-semibold leading-6 text-[var(--ink-900)]",
+        "text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -53,7 +53,7 @@ const markdownComponents: Components = {
     <p
       {...withClassName(
         props,
-        "text-sm font-normal leading-6 text-[var(--ink-900)]",
+        "text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -62,8 +62,8 @@ const markdownComponents: Components = {
       {...withClassName(
         props,
         props.className?.includes("contains-task-list")
-          ? "list-none space-y-1 pl-0 text-sm leading-6"
-          : "list-disc space-y-1 pl-5 text-sm leading-6",
+          ? "list-none space-y-1 pl-0 text-[length:var(--content-planner-font-sm,0.875rem)] leading-[var(--content-planner-leading-6,1.5rem)]"
+          : "list-disc space-y-1 pl-5 text-[length:var(--content-planner-font-sm,0.875rem)] leading-[var(--content-planner-leading-6,1.5rem)]",
       )}
     />
   ),
@@ -71,7 +71,7 @@ const markdownComponents: Components = {
     <ol
       {...withClassName(
         props,
-        "list-decimal space-y-1 pl-5 text-sm leading-6",
+        "list-decimal space-y-1 pl-5 text-[length:var(--content-planner-font-sm,0.875rem)] leading-[var(--content-planner-leading-6,1.5rem)]",
       )}
     />
   ),
@@ -100,8 +100,8 @@ const markdownComponents: Components = {
       <code
         className={
           className
-            ? `font-mono text-xs ${className}`
-            : "rounded bg-[var(--paper)] px-1 py-0.5 font-mono text-xs text-[var(--ink-900)]"
+            ? `font-mono text-[length:var(--content-planner-font-xs,0.75rem)] ${className}`
+            : "rounded bg-[var(--paper)] px-1 py-0.5 font-mono text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-900)]"
         }
         {...elementProps}
       />
@@ -111,7 +111,7 @@ const markdownComponents: Components = {
     <pre
       {...withClassName(
         props,
-        "overflow-x-auto rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 font-mono text-xs leading-5 text-[var(--ink-900)]",
+        "overflow-x-auto rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 font-mono text-[length:var(--content-planner-font-xs,0.75rem)] leading-[var(--content-planner-leading-5,1.25rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -124,7 +124,7 @@ const markdownComponents: Components = {
     <table
       {...withClassName(
         props,
-        "w-full border-collapse text-left text-xs text-[var(--ink-900)]",
+        "w-full border-collapse text-left text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-900)]",
       )}
     />
   ),
@@ -158,7 +158,7 @@ const titleMarkdownComponents: Components = {
     <p
       {...withClassName(
         props,
-        "text-base font-semibold leading-6 text-[var(--ink-900)]",
+        "text-[length:var(--content-planner-font-base,1rem)] font-semibold leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)]",
       )}
     />
   ),

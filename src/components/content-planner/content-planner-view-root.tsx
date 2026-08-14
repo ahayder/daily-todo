@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import {
   closestCenter,
   DndContext,
@@ -24,12 +31,17 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowRightLeft,
   Check,
   ChevronDown,
   ChevronUp,
+  Columns3,
   Copy,
   Ellipsis,
   Eye,
+  LayoutGrid,
   Pencil,
   Plus,
   Trash2,
@@ -55,6 +67,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getContentCardsForColumn } from "@/lib/store";
 import type { ContentBoard, ContentCard, ContentColumn } from "@/lib/types";
@@ -63,6 +82,7 @@ import { cn } from "@/lib/utils";
 export type ContentPlannerViewProps = {
   board: ContentBoard;
   cards: Record<string, ContentCard>;
+  fontScale?: number;
   onAddColumn: (title: string, subtitle: string) => void;
   onRenameColumn: (columnId: string, title: string) => void;
   onUpdateColumnSubtitle: (columnId: string, subtitle: string) => void;
@@ -83,6 +103,63 @@ type CardDropHighlight = {
   cardId: string | null;
   edge: "before" | "after" | null;
 };
+
+type MovePlacement = "top" | "bottom";
+type ContentPlannerLayout = "board" | "gallery";
+const touchFirstInputQuery = "(hover: none), (pointer: coarse)";
+const desktopLayoutQuery = "(min-width: 768px)";
+
+function subscribeToTouchFirstInput(onChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+
+  const mediaQuery = window.matchMedia(touchFirstInputQuery);
+  mediaQuery.addEventListener("change", onChange);
+  return () => mediaQuery.removeEventListener("change", onChange);
+}
+
+function getTouchFirstInputSnapshot() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(touchFirstInputQuery).matches
+  );
+}
+
+function useTouchFirstInput() {
+  return useSyncExternalStore(
+    subscribeToTouchFirstInput,
+    getTouchFirstInputSnapshot,
+    () => false,
+  );
+}
+
+function subscribeToDesktopLayout(onChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+
+  const mediaQuery = window.matchMedia(desktopLayoutQuery);
+  mediaQuery.addEventListener("change", onChange);
+  return () => mediaQuery.removeEventListener("change", onChange);
+}
+
+function getDesktopLayoutSnapshot() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(desktopLayoutQuery).matches
+  );
+}
+
+function useDesktopLayout() {
+  return useSyncExternalStore(
+    subscribeToDesktopLayout,
+    getDesktopLayoutSnapshot,
+    () => false,
+  );
+}
 
 function columnDragId(columnId: string) {
   return `content-column:${columnId}`;
@@ -240,15 +317,23 @@ function ContentCardItem({
   card,
   isDropTarget,
   dropEdge,
+  isTouchFirstInput,
+  layout,
+  typographyStyle,
   onView,
   onUpdate,
+  onRequestMove,
   onRequestDelete,
 }: {
   card: ContentCard;
   isDropTarget: boolean;
   dropEdge: "before" | "after" | null;
+  isTouchFirstInput: boolean;
+  layout: ContentPlannerLayout;
+  typographyStyle: CSSProperties;
   onView: () => void;
   onUpdate: (title: string, notes: string) => void;
+  onRequestMove: () => void;
   onRequestDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -257,6 +342,7 @@ function ContentCardItem({
   const [isCopied, setIsCopied] = useState(false);
   const [text, setText] = useState(() => getContentCardText(card));
   const didDragRef = useRef(false);
+  const isDragEnabled = !isTouchFirstInput && layout === "board";
   const {
     attributes,
     listeners,
@@ -266,6 +352,7 @@ function ContentCardItem({
     isDragging,
   } = useSortable({
     id: cardDragId(card.id),
+    disabled: !isDragEnabled,
     data: {
       type: "card",
       cardId: card.id,
@@ -322,7 +409,7 @@ function ContentCardItem({
         transition,
       }}
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
+        "relative overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] shadow-[var(--surface-shadow)] transition-colors duration-150 [@media(hover:hover)_and_(pointer:fine)]:hover:border-[color:color-mix(in_srgb,var(--brand)_26%,var(--line))] motion-reduce:transition-none",
         isCollapsed && "min-h-20",
         isDragging && "opacity-40",
         isDropTarget &&
@@ -364,7 +451,7 @@ function ContentCardItem({
               save();
             }
           }}
-          className="block min-h-28 max-h-[10.5rem] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="block min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         />
       ) : (
         <div
@@ -380,11 +467,16 @@ function ContentCardItem({
               onView();
             }
           }}
-          {...attributes}
-          {...listeners}
+          {...(isDragEnabled ? attributes : {})}
+          {...(isDragEnabled ? listeners : {})}
           className={cn(
-            "cursor-grab overflow-y-auto active:cursor-grabbing",
-            !isCollapsed && "min-h-28 max-h-[10.5rem]",
+            isDragEnabled
+              ? "cursor-grab overflow-y-auto active:cursor-grabbing"
+              : "cursor-pointer overflow-visible",
+            !isCollapsed &&
+              (isDragEnabled
+                ? "min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)]"
+                : "min-h-28"),
           )}
           data-testid={`content-card-body-${card.id}`}
         >
@@ -421,8 +513,27 @@ function ContentCardItem({
                   More actions
                 </TooltipContent>
               </Tooltip>
-              <PopoverContent side="top" align="start" className="w-44 p-1.5">
+              <PopoverContent
+                side="top"
+                align="start"
+                className="w-44 p-1.5"
+                style={typographyStyle}
+              >
                 <div role="menu" aria-label={`Card actions for ${card.title}`}>
+                  {!isDragEnabled ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsActionsOpen(false);
+                        onRequestMove();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                    >
+                      <ArrowRightLeft className="size-3.5" />
+                      Move card…
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -430,7 +541,7 @@ function ContentCardItem({
                       setIsActionsOpen(false);
                       onRequestDelete();
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] motion-reduce:transition-none"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] motion-reduce:transition-none"
                   >
                     <Trash2 className="size-3.5" />
                     Delete card
@@ -536,7 +647,7 @@ function InlineCardComposer({
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
       >
         <Plus className="size-4" />
         Add card
@@ -573,7 +684,7 @@ function InlineCardComposer({
           }
         }}
         placeholder="Write your card in Markdown…"
-        className="min-h-28 w-full resize-y rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-3 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        className="min-h-28 w-full resize-y rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
       />
       <div className="flex justify-end gap-2">
         <button
@@ -582,7 +693,7 @@ function InlineCardComposer({
             setText("");
             onClose();
           }}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="rounded-lg px-3 py-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           Cancel
         </button>
@@ -590,7 +701,7 @@ function InlineCardComposer({
           type="button"
           disabled={!text.trim()}
           onClick={submit}
-          className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Add card
         </button>
@@ -602,6 +713,8 @@ function InlineCardComposer({
 function ContentColumnView({
   column,
   cards,
+  isTouchFirstInput,
+  typographyStyle,
   isCardDropTarget,
   dropTargetCardId,
   dropTargetEdge,
@@ -613,6 +726,11 @@ function ContentColumnView({
   onAddCard,
   onViewCard,
   onUpdateCard,
+  onRequestMoveCard,
+  canMoveLeft,
+  canMoveRight,
+  onMoveLeft,
+  onMoveRight,
   onRequestDeleteCard,
   onRename,
   onUpdateSubtitle,
@@ -620,6 +738,8 @@ function ContentColumnView({
 }: {
   column: ContentColumn;
   cards: ContentCard[];
+  isTouchFirstInput: boolean;
+  typographyStyle: CSSProperties;
   isCardDropTarget: boolean;
   dropTargetCardId: string | null;
   dropTargetEdge: "before" | "after" | null;
@@ -631,6 +751,11 @@ function ContentColumnView({
   onAddCard: (title: string, notes: string) => void;
   onViewCard: (cardId: string) => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onRequestMoveCard: (cardId: string) => void;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
   onRequestDeleteCard: (cardId: string) => void;
   onRename: (title: string) => void;
   onUpdateSubtitle: (subtitle: string) => void;
@@ -652,6 +777,7 @@ function ContentColumnView({
     isOver,
   } = useSortable({
     id: columnDragId(column.id),
+    disabled: isTouchFirstInput,
     data: {
       type: "column",
       columnId: column.id,
@@ -715,7 +841,7 @@ function ContentColumnView({
                   setIsRenaming(false);
                 }
               }}
-              className="h-8 w-full rounded-lg border border-[var(--brand)] bg-[var(--paper)] px-2 text-sm font-semibold text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="h-8 w-full rounded-lg border border-[var(--brand)] bg-[var(--paper)] px-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             />
           ) : (
             <button
@@ -731,9 +857,14 @@ function ContentColumnView({
                 }
                 setIsRenaming(true);
               }}
-              className="block w-full cursor-grab truncate rounded-lg px-1 py-1 text-left text-sm font-semibold text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] active:cursor-grabbing"
-              {...attributes}
-              {...listeners}
+              className={cn(
+                "block w-full truncate rounded-lg px-1 py-1 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+                isTouchFirstInput
+                  ? "cursor-pointer"
+                  : "cursor-grab active:cursor-grabbing",
+              )}
+              {...(isTouchFirstInput ? {} : attributes)}
+              {...(isTouchFirstInput ? {} : listeners)}
             >
               {column.title}
             </button>
@@ -757,7 +888,7 @@ function ContentColumnView({
                 }
               }}
               placeholder="Column subtitle"
-              className="mt-1 h-7 w-full rounded-lg border border-[var(--brand)] bg-[var(--paper)] px-2 text-xs text-[var(--ink-700)] outline-none placeholder:text-[var(--ink-700)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="mt-1 h-7 w-full rounded-lg border border-[var(--brand)] bg-[var(--paper)] px-2 text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)] outline-none placeholder:text-[var(--ink-700)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             />
           ) : (
             <button
@@ -768,14 +899,14 @@ function ContentColumnView({
                   : `Add subtitle to ${column.title}`
               }
               onClick={() => setIsEditingSubtitle(true)}
-              className="mt-0.5 block w-full truncate rounded-lg px-1 py-0.5 text-left text-xs font-normal text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="mt-0.5 block w-full truncate rounded-lg px-1 py-0.5 text-left text-[length:var(--content-planner-font-xs,0.75rem)] font-normal text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             >
               {column.subtitle || "Add a subtitle"}
             </button>
           )}
         </div>
 
-        <span className="mt-1 rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--ink-700)]">
+        <span className="mt-1 rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
           {cards.length}
         </span>
 
@@ -796,8 +927,46 @@ function ContentColumnView({
               More actions
             </TooltipContent>
           </Tooltip>
-          <PopoverContent side="bottom" align="end" className="w-52 p-1.5">
+          <PopoverContent
+            side="bottom"
+            align="end"
+            className="w-52 p-1.5"
+            style={typographyStyle}
+          >
             <div role="menu" aria-label={`Column actions for ${column.title}`}>
+              {isTouchFirstInput ? (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canMoveLeft}
+                    aria-disabled={!canMoveLeft}
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      onMoveLeft();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                  >
+                    <ArrowLeft className="size-3.5" />
+                    Move left
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canMoveRight}
+                    aria-disabled={!canMoveRight}
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      onMoveRight();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                  >
+                    <ArrowRight className="size-3.5" />
+                    Move right
+                  </button>
+                  <div className="my-1 border-t border-[var(--line)]" />
+                </>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
@@ -807,13 +976,13 @@ function ContentColumnView({
                   setIsActionsOpen(false);
                   onRequestDelete();
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--warn)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
               >
                 <Trash2 className="size-3.5" />
                 Delete column
               </button>
               {deleteDisabledReason ? (
-                <p className="px-2.5 pt-1 pb-1.5 text-xs leading-4 text-[var(--ink-700)]">
+                <p className="px-2.5 pt-1 pb-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] leading-4 text-[var(--ink-700)]">
                   {deleteDisabledReason}
                 </p>
               ) : null}
@@ -832,17 +1001,21 @@ function ContentColumnView({
               <ContentCardItem
                 key={card.id}
                 card={card}
+                isTouchFirstInput={isTouchFirstInput}
+                layout="board"
+                typographyStyle={typographyStyle}
                 isDropTarget={dropTargetCardId === card.id}
                 dropEdge={dropTargetCardId === card.id ? dropTargetEdge : null}
                 onView={() => onViewCard(card.id)}
                 onUpdate={(title, notes) =>
                   onUpdateCard(card.id, title, notes)
                 }
+                onRequestMove={() => onRequestMoveCard(card.id)}
                 onRequestDelete={() => onRequestDeleteCard(card.id)}
               />
             ))}
             {cards.length === 0 ? (
-              <div className="grid min-h-20 place-items-center rounded-xl border border-dashed border-[var(--line)] px-3 text-center text-xs text-[var(--ink-700)]">
+              <div className="grid min-h-20 place-items-center rounded-xl border border-dashed border-[var(--line)] px-3 text-center text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
                 Drop cards here
               </div>
             ) : null}
@@ -863,9 +1036,96 @@ function ContentColumnView({
   );
 }
 
+function ContentGalleryView({
+  board,
+  cardsByColumn,
+  isTouchFirstInput,
+  typographyStyle,
+  onViewCard,
+  onUpdateCard,
+  onRequestMoveCard,
+  onRequestDeleteCard,
+}: {
+  board: ContentBoard;
+  cardsByColumn: Record<string, ContentCard[]>;
+  isTouchFirstInput: boolean;
+  typographyStyle: CSSProperties;
+  onViewCard: (cardId: string) => void;
+  onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onRequestMoveCard: (cardId: string) => void;
+  onRequestDeleteCard: (cardId: string) => void;
+}) {
+  const galleryItems = board.columns.flatMap((column) =>
+    (cardsByColumn[column.id] ?? []).map((card) => ({ card, column })),
+  );
+
+  return (
+    <div
+      aria-label="Content gallery"
+      className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
+      role="region"
+    >
+      {galleryItems.length > 0 ? (
+        <SortableContext
+          disabled
+          items={galleryItems.map(({ card }) => cardDragId(card.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="columns-2 gap-4 xl:columns-3 2xl:columns-4">
+            {galleryItems.map(({ card, column }) => (
+              <div
+                key={card.id}
+                className="mb-4 break-inside-avoid"
+                data-testid={`content-gallery-card-${card.id}`}
+              >
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full bg-[var(--brand)]"
+                  />
+                  <span className="truncate text-[length:var(--content-planner-font-xs,0.75rem)] font-semibold text-[var(--ink-700)]">
+                    {column.title}
+                  </span>
+                </div>
+                <ContentCardItem
+                  card={card}
+                  isTouchFirstInput={isTouchFirstInput}
+                  layout="gallery"
+                  typographyStyle={typographyStyle}
+                  isDropTarget={false}
+                  dropEdge={null}
+                  onView={() => onViewCard(card.id)}
+                  onUpdate={(title, notes) =>
+                    onUpdateCard(card.id, title, notes)
+                  }
+                  onRequestMove={() => onRequestMoveCard(card.id)}
+                  onRequestDelete={() => onRequestDeleteCard(card.id)}
+                />
+              </div>
+            ))}
+          </div>
+        </SortableContext>
+      ) : (
+        <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_52%,var(--paper))] px-6 text-center">
+          <div>
+            <LayoutGrid className="mx-auto mb-3 size-5 text-[var(--brand)]" />
+            <p className="text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)]">
+              Your gallery is ready for its first card.
+            </p>
+            <p className="mt-1 text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
+              Switch to Board to add an idea to a workflow column.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ContentPlannerView({
   board,
   cards,
+  fontScale = 1,
   onAddColumn,
   onRenameColumn,
   onUpdateColumnSubtitle,
@@ -885,8 +1145,18 @@ export function ContentPlannerView({
   const [viewingCardText, setViewingCardText] = useState("");
   const [pendingDeleteCardId, setPendingDeleteCardId] = useState<string | null>(null);
   const [pendingDeleteColumnId, setPendingDeleteColumnId] = useState<string | null>(null);
+  const [movingCardId, setMovingCardId] = useState<string | null>(null);
+  const [moveTargetColumnId, setMoveTargetColumnId] = useState("");
+  const [movePlacement, setMovePlacement] = useState<MovePlacement>("bottom");
+  const [preferredLayout, setPreferredLayout] =
+    useState<ContentPlannerLayout>("gallery");
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
   const [cardDropHighlight, setCardDropHighlight] = useState<CardDropHighlight | null>(null);
+  const isTouchFirstInput = useTouchFirstInput();
+  const isDesktopLayout = useDesktopLayout();
+  const activeLayout: ContentPlannerLayout = isDesktopLayout
+    ? preferredLayout
+    : "board";
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -906,7 +1176,23 @@ export function ContentPlannerView({
   const pendingDeleteCard = pendingDeleteCardId ? cards[pendingDeleteCardId] ?? null : null;
   const pendingDeleteColumn =
     board.columns.find((column) => column.id === pendingDeleteColumnId) ?? null;
+  const movingCard = movingCardId ? cards[movingCardId] ?? null : null;
   const totalCards = Object.keys(cards).length;
+  const plannerTypographyStyle = useMemo(() => {
+    const normalizedScale = Math.max(0.5, Math.min(2, fontScale));
+    return {
+      fontSize: `${normalizedScale}rem`,
+      "--content-planner-font-micro": `${0.6875 * normalizedScale}rem`,
+      "--content-planner-font-xs": `${0.75 * normalizedScale}rem`,
+      "--content-planner-font-sm": `${0.875 * normalizedScale}rem`,
+      "--content-planner-font-base": `${normalizedScale}rem`,
+      "--content-planner-font-lg": `${1.125 * normalizedScale}rem`,
+      "--content-planner-font-xl": `${1.25 * normalizedScale}rem`,
+      "--content-planner-leading-5": `${1.25 * normalizedScale}rem`,
+      "--content-planner-leading-6": `${1.5 * normalizedScale}rem`,
+      "--content-planner-card-max-height": `${10.5 * normalizedScale}rem`,
+    } as CSSProperties;
+  }, [fontScale]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDrag((event.active.data.current as DragData | undefined) ?? null);
@@ -963,6 +1249,31 @@ export function ContentPlannerView({
     setIsAddingColumn(false);
   };
 
+  const requestMoveCard = (cardId: string) => {
+    const card = cards[cardId];
+    if (!card) return;
+    setMovingCardId(cardId);
+    setMoveTargetColumnId(card.columnId);
+    setMovePlacement("bottom");
+  };
+
+  const closeMoveCard = () => {
+    setMovingCardId(null);
+    setMoveTargetColumnId("");
+    setMovePlacement("bottom");
+  };
+
+  const submitMoveCard = () => {
+    if (!movingCard || !moveTargetColumnId) return;
+    const targetCards = cardsByColumn[moveTargetColumnId] ?? [];
+    onMoveCard(
+      movingCard.id,
+      moveTargetColumnId,
+      movePlacement === "top" ? 0 : targetCards.length,
+    );
+    closeMoveCard();
+  };
+
   const startEditingViewingCard = () => {
     if (!viewingCard) return;
     setViewingCardText(getContentCardText(viewingCard));
@@ -990,19 +1301,48 @@ export function ContentPlannerView({
   return (
     <section
       data-testid="content-planner-view"
+      data-touch-first-input={isTouchFirstInput ? "true" : undefined}
+      data-layout={activeLayout}
       className="flex h-full min-h-0 flex-col bg-[var(--paper)]"
+      style={plannerTypographyStyle}
     >
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-3 py-3 sm:px-4 sm:py-4 md:px-6">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-semibold text-[var(--ink-900)] sm:text-xl">Content Planner</h1>
-            <span className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[11px] text-[var(--ink-700)]">
+            <h1 className="text-[length:var(--content-planner-font-lg,1.125rem)] font-semibold text-[var(--ink-900)] sm:text-[length:var(--content-planner-font-xl,1.25rem)]">Content Planner</h1>
+            <span className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
               {totalCards} {totalCards === 1 ? "card" : "cards"}
             </span>
           </div>
-          <p className="mt-1 text-sm text-[var(--ink-700)]">
+          <p className="mt-1 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-700)]">
             Shape ideas into published work, one calm step at a time.
           </p>
+        </div>
+        <div
+          aria-label="Content planner view"
+          className="hidden items-center rounded-lg border border-[var(--line)] bg-[var(--paper)] p-1 md:flex"
+          role="group"
+        >
+          {([
+            { value: "board" as const, label: "Board", Icon: Columns3 },
+            { value: "gallery" as const, label: "Gallery", Icon: LayoutGrid },
+          ]).map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={preferredLayout === value}
+              onClick={() => setPreferredLayout(value)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none",
+                preferredLayout === value
+                  ? "bg-[var(--paper-strong)] text-[var(--ink-900)] shadow-[var(--surface-shadow)]"
+                  : "text-[var(--ink-700)] hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)]",
+              )}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -1017,17 +1357,18 @@ export function ContentPlannerView({
           setCardDropHighlight(null);
         }}
       >
-        <div
-          aria-label="Content workflow board"
-          className="min-h-0 flex-1 snap-x snap-mandatory scroll-px-3 overflow-x-auto overflow-y-hidden overscroll-x-contain p-3 sm:snap-none sm:scroll-px-4 sm:p-4 md:scroll-px-6 md:p-6"
-          role="region"
-        >
+        {activeLayout === "board" ? (
+          <div
+            aria-label="Content workflow board"
+            className="min-h-0 flex-1 snap-x snap-mandatory scroll-px-3 overflow-x-auto overflow-y-hidden overscroll-x-contain p-3 sm:snap-none sm:scroll-px-4 sm:p-4 md:scroll-px-6 md:p-6"
+            role="region"
+          >
           <SortableContext
             items={board.columns.map((column) => columnDragId(column.id))}
             strategy={horizontalListSortingStrategy}
           >
             <div className="flex h-full min-w-max items-start gap-3">
-              {board.columns.map((column) => {
+              {board.columns.map((column, columnIndex) => {
                 const columnCards = cardsByColumn[column.id] ?? [];
                 const deleteDisabledReason =
                   board.columns.length <= 1
@@ -1041,6 +1382,8 @@ export function ContentPlannerView({
                     key={column.id}
                     column={column}
                     cards={columnCards}
+                    isTouchFirstInput={isTouchFirstInput}
+                    typographyStyle={plannerTypographyStyle}
                     isCardDropTarget={cardDropHighlight?.columnId === column.id}
                     dropTargetCardId={
                       cardDropHighlight?.columnId === column.id
@@ -1063,6 +1406,21 @@ export function ContentPlannerView({
                     }}
                     onViewCard={setViewingCardId}
                     onUpdateCard={onUpdateCard}
+                    onRequestMoveCard={requestMoveCard}
+                    canMoveLeft={columnIndex > 0}
+                    canMoveRight={columnIndex < board.columns.length - 1}
+                    onMoveLeft={() => {
+                      const previousColumn = board.columns[columnIndex - 1];
+                      if (previousColumn) {
+                        onReorderColumns(column.id, previousColumn.id);
+                      }
+                    }}
+                    onMoveRight={() => {
+                      const nextColumn = board.columns[columnIndex + 1];
+                      if (nextColumn) {
+                        onReorderColumns(column.id, nextColumn.id);
+                      }
+                    }}
                     onRequestDeleteCard={setPendingDeleteCardId}
                     onRename={(title) => onRenameColumn(column.id, title)}
                     onUpdateSubtitle={(subtitle) =>
@@ -1092,7 +1450,7 @@ export function ContentPlannerView({
                         }
                       }}
                       placeholder="Column title"
-                      className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-sm text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                      className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                     />
                     <input
                       aria-label="New column subtitle"
@@ -1110,7 +1468,7 @@ export function ContentPlannerView({
                         }
                       }}
                       placeholder="Subtitle (optional)"
-                      className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-sm text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                      className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                     />
                     <div className="flex justify-end gap-2">
                       <button
@@ -1120,7 +1478,7 @@ export function ContentPlannerView({
                           setNewColumnSubtitle("");
                           setIsAddingColumn(false);
                         }}
-                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                        className="rounded-lg px-3 py-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                       >
                         Cancel
                       </button>
@@ -1128,7 +1486,7 @@ export function ContentPlannerView({
                         type="button"
                         disabled={!newColumnTitle.trim()}
                         onClick={submitColumn}
-                        className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Add column
                       </button>
@@ -1138,7 +1496,7 @@ export function ContentPlannerView({
                   <button
                     type="button"
                     onClick={() => setIsAddingColumn(true)}
-                    className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_52%,var(--paper))] px-4 py-3 text-sm font-semibold text-[var(--ink-700)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_28%,var(--line))] hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                    className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_52%,var(--paper))] px-4 py-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-700)] transition-colors duration-150 hover:border-[color:color-mix(in_srgb,var(--brand)_28%,var(--line))] hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                   >
                     <Plus className="size-4" />
                     Add column
@@ -1147,23 +1505,126 @@ export function ContentPlannerView({
               </div>
             </div>
           </SortableContext>
-        </div>
+          </div>
+        ) : (
+          <ContentGalleryView
+            board={board}
+            cardsByColumn={cardsByColumn}
+            isTouchFirstInput={isTouchFirstInput}
+            typographyStyle={plannerTypographyStyle}
+            onViewCard={setViewingCardId}
+            onUpdateCard={onUpdateCard}
+            onRequestMoveCard={requestMoveCard}
+            onRequestDeleteCard={setPendingDeleteCardId}
+          />
+        )}
 
         <DragOverlay>
-          {activeDrag?.type === "card" && cards[activeDrag.cardId] ? (
+          {activeLayout === "board" &&
+          activeDrag?.type === "card" &&
+          cards[activeDrag.cardId] ? (
             <div className="w-[calc(100vw-2rem)] max-w-[290px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3.5 shadow-[var(--surface-shadow)]">
               <ContentCardMarkdown
                 title={cards[activeDrag.cardId].title}
                 notes={cards[activeDrag.cardId].notes}
               />
             </div>
-          ) : activeDrag?.type === "column" ? (
-            <div className="w-[calc(100vw-2rem)] max-w-[300px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3 text-sm font-semibold text-[var(--ink-900)] shadow-[var(--surface-shadow)]">
+          ) : activeLayout === "board" && activeDrag?.type === "column" ? (
+            <div className="w-[calc(100vw-2rem)] max-w-[300px] rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] px-4 py-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)] shadow-[var(--surface-shadow)]">
               {board.columns.find((column) => column.id === activeDrag.columnId)?.title}
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      <Dialog
+        open={Boolean(movingCard)}
+        onOpenChange={(open) => {
+          if (!open) closeMoveCard();
+        }}
+      >
+        {movingCard ? (
+          <DialogContent
+            className="max-w-md"
+            style={plannerTypographyStyle}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-[length:var(--content-planner-font-lg,1.125rem)]">Move card</DialogTitle>
+              <DialogDescription className="text-[length:var(--content-planner-font-sm,0.875rem)]">
+                Choose where “{movingCard.title}” should go.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <label className="grid gap-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)]">
+                Destination column
+                <Select
+                  value={moveTargetColumnId}
+                  onValueChange={(value) => setMoveTargetColumnId(value ?? "")}
+                >
+                  <SelectTrigger
+                    aria-label={`Destination column for ${movingCard.title}`}
+                    className="h-11 w-full border-[var(--line)] bg-[var(--paper)] px-3 text-[var(--ink-900)]"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className="border border-[var(--line)] text-[length:var(--content-planner-font-sm,0.875rem)]"
+                    style={plannerTypographyStyle}
+                  >
+                    {board.columns.map((column) => (
+                      <SelectItem key={column.id} value={column.id} className="py-2.5">
+                        {column.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <fieldset className="grid gap-2">
+                <legend className="text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)]">Placement</legend>
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Card placement">
+                  {(["top", "bottom"] as const).map((placement) => (
+                    <button
+                      key={placement}
+                      type="button"
+                      aria-pressed={movePlacement === placement}
+                      onClick={() => setMovePlacement(placement)}
+                      className={cn(
+                        "min-h-11 rounded-lg border px-3 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium capitalize transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none",
+                        movePlacement === placement
+                          ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                          : "border-[var(--line)] bg-[var(--paper)] text-[var(--ink-700)] hover:border-[color:color-mix(in_srgb,var(--brand)_28%,var(--line))] hover:text-[var(--ink-900)]",
+                      )}
+                    >
+                      {placement}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
+            <DialogFooter className="sm:justify-end">
+              <button
+                type="button"
+                onClick={closeMoveCard}
+                className="rounded-lg px-3 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!moveTargetColumnId}
+                onClick={submitMoveCard}
+                className="rounded-lg bg-[var(--brand)] px-3 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+              >
+                Move card
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={Boolean(viewingCard)}
@@ -1176,10 +1637,13 @@ export function ContentPlannerView({
         }}
       >
         {viewingCard ? (
-          <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-3xl overflow-y-auto p-4 sm:max-h-[calc(100dvh-2rem)] sm:p-5">
+          <DialogContent
+            className="max-h-[calc(100dvh-1rem)] max-w-3xl overflow-y-auto p-4 sm:max-h-[calc(100dvh-2rem)] sm:p-5"
+            style={plannerTypographyStyle}
+          >
             <DialogHeader>
-              <DialogTitle>Card preview</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-[length:var(--content-planner-font-lg,1.125rem)]">Card preview</DialogTitle>
+              <DialogDescription className="text-[length:var(--content-planner-font-sm,0.875rem)]">
                 Read the complete rendered Markdown card or edit it directly.
               </DialogDescription>
             </DialogHeader>
@@ -1208,7 +1672,7 @@ export function ContentPlannerView({
                       saveViewingCard();
                     }
                   }}
-                  className="block min-h-[42dvh] max-h-[55dvh] w-full resize-y overflow-y-auto border-0 bg-transparent p-4 text-sm font-normal leading-6 text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)] sm:min-h-72 sm:max-h-[70vh]"
+                  className="block min-h-[42dvh] max-h-[55dvh] w-full resize-y overflow-y-auto border-0 bg-transparent p-4 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)] sm:min-h-72 sm:max-h-[70vh]"
                 />
               ) : (
                 <>
@@ -1238,7 +1702,7 @@ export function ContentPlannerView({
                 <button
                   type="button"
                   onClick={cancelEditingViewingCard}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                  className="rounded-lg px-3 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
                 >
                   Cancel
                 </button>
@@ -1246,7 +1710,7 @@ export function ContentPlannerView({
                   type="button"
                   disabled={!viewingCardText.trim()}
                   onClick={saveViewingCard}
-                  className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                  className="rounded-lg bg-[var(--brand)] px-3 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                 >
                   Save changes
                 </button>
@@ -1262,7 +1726,10 @@ export function ContentPlannerView({
           if (!open) setPendingDeleteCardId(null);
         }}
       >
-        <AlertDialogContent className="alert-dialog-content">
+        <AlertDialogContent
+          className="alert-dialog-content"
+          style={plannerTypographyStyle}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
               Delete this card?
@@ -1293,7 +1760,10 @@ export function ContentPlannerView({
           if (!open) setPendingDeleteColumnId(null);
         }}
       >
-        <AlertDialogContent className="alert-dialog-content">
+        <AlertDialogContent
+          className="alert-dialog-content"
+          style={plannerTypographyStyle}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
               Delete this column?

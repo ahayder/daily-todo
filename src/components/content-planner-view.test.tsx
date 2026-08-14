@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   ContentPlannerView,
@@ -10,6 +10,47 @@ import {
 } from "@/components/content-planner-view";
 import { createDefaultContentBoard } from "@/lib/store";
 import type { ContentCard } from "@/lib/types";
+
+const originalMatchMedia = window.matchMedia;
+
+function setTouchFirstInput(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(hover: none), (pointer: coarse)" ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function setDesktopLayout() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(min-width: 768px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+afterEach(() => {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: originalMatchMedia,
+  });
+});
 
 function createProps(
   overrides: Partial<ContentPlannerViewProps> = {},
@@ -160,8 +201,10 @@ describe("ContentPlannerView", () => {
       "aria-label",
       "Card toolbar for Draft launch story",
     );
-    expect(card).not.toHaveClass("max-h-[10.5rem]");
-    expect(cardBody).toHaveClass("max-h-[10.5rem]");
+    expect(card).not.toHaveClass("max-h-[var(--content-planner-card-max-height,10.5rem)]");
+    expect(cardBody).toHaveClass(
+      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
+    );
     expect(within(toolbar).getByRole("button", {
       name: "More actions for card Draft launch story",
     })).toHaveClass("size-9", "sm:size-7");
@@ -171,7 +214,7 @@ describe("ContentPlannerView", () => {
       }),
     ).not.toBeInTheDocument();
     expect(within(card).getByText("Draft launch story")).toHaveClass(
-      "text-base",
+      "text-[length:var(--content-planner-font-base,1rem)]",
       "font-semibold",
     );
     expect(
@@ -189,6 +232,146 @@ describe("ContentPlannerView", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
     expect(container.querySelector("script")).toBeNull();
+  });
+
+  test("opens desktop in a wider Pinterest-like gallery", async () => {
+    setDesktopLayout();
+    const user = userEvent.setup();
+    const props = createProps();
+    const plannedColumn = props.board.columns[1];
+    props.cards["card-2"] = {
+      id: "card-2",
+      columnId: plannedColumn.id,
+      title: "Visual campaign references",
+      notes: "Collect layout inspiration and supporting screenshots.",
+      order: 0,
+      updatedAt: "2026-07-29T01:00:00.000Z",
+    };
+    render(<ContentPlannerView {...props} />);
+
+    const viewControl = screen.getByRole("group", {
+      name: "Content planner view",
+    });
+    expect(
+      within(viewControl).getByRole("button", { name: "Gallery" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
+      "data-layout",
+      "gallery",
+    );
+    expect(screen.queryByRole("region", { name: "Content workflow board" })).toBeNull();
+    const gallery = screen.getByRole("region", { name: "Content gallery" });
+    expect(gallery.firstElementChild).toHaveClass(
+      "columns-2",
+      "xl:columns-3",
+      "2xl:columns-4",
+    );
+    expect(gallery.firstElementChild).not.toHaveClass(
+      "lg:columns-3",
+      "xl:columns-4",
+      "2xl:columns-5",
+    );
+    expect(
+      within(screen.getByTestId("content-gallery-card-card-1")).getByText("Ideas"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("content-gallery-card-card-2")).getByText("Planned"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("content-card-body-card-1")).toHaveClass(
+      "cursor-pointer",
+      "overflow-visible",
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "More actions for card Draft launch story",
+      }),
+    );
+    const menu = await screen.findByRole("menu", {
+      name: "Card actions for Draft launch story",
+    });
+    expect(within(menu).getByRole("menuitem", { name: "Move card…" })).toBeInTheDocument();
+
+    await user.click(within(viewControl).getByRole("button", { name: "Board" }));
+    expect(screen.getByRole("region", { name: "Content workflow board" })).toBeInTheDocument();
+  });
+
+  test("applies the shared font scale to board and Markdown typography", () => {
+    const props = createProps({ fontScale: 1.25 });
+    render(<ContentPlannerView {...props} />);
+
+    const planner = screen.getByTestId("content-planner-view");
+    expect(planner).toHaveStyle({ fontSize: "1.25rem" });
+    expect(planner.style.getPropertyValue("--content-planner-font-sm")).toBe(
+      "1.09375rem",
+    );
+    expect(planner.style.getPropertyValue("--content-planner-font-base")).toBe(
+      "1.25rem",
+    );
+    expect(
+      planner.style.getPropertyValue("--content-planner-card-max-height"),
+    ).toBe("13.125rem");
+    expect(screen.getByText("Draft launch story")).toHaveClass(
+      "text-[length:var(--content-planner-font-base,1rem)]",
+    );
+  });
+
+  test("uses touch-first scrolling and an explicit move action on coarse pointers", async () => {
+    setTouchFirstInput(true);
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
+      "data-touch-first-input",
+      "true",
+    );
+    expect(screen.getByTestId("content-card-body-card-1")).toHaveClass(
+      "cursor-pointer",
+      "overflow-visible",
+    );
+    expect(screen.getByTestId("content-card-body-card-1")).not.toHaveClass(
+      "cursor-grab",
+      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
+    );
+    expect(screen.getByRole("button", { name: "Rename column Ideas" })).toHaveClass(
+      "cursor-pointer",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "More actions for column Ideas" }),
+    );
+    const columnMenu = await screen.findByRole("menu", {
+      name: "Column actions for Ideas",
+    });
+    expect(within(columnMenu).getByRole("menuitem", { name: "Move left" })).toBeDisabled();
+    await user.click(within(columnMenu).getByRole("menuitem", { name: "Move right" }));
+    expect(props.onReorderColumns).toHaveBeenCalledWith(
+      props.board.columns[0].id,
+      props.board.columns[1].id,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "More actions for card Draft launch story",
+      }),
+    );
+    const menu = await screen.findByRole("menu", {
+      name: "Card actions for Draft launch story",
+    });
+    await user.click(within(menu).getByRole("menuitem", { name: "Move card…" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Move card" })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /top/i }));
+    await user.click(within(dialog).getByRole("button", { name: "Move card" }));
+
+    expect(props.onMoveCard).toHaveBeenCalledWith(
+      "card-1",
+      props.board.columns[0].id,
+      0,
+    );
   });
 
   test("opens the complete Markdown card and edits it from the preview dialog", async () => {
@@ -281,15 +464,22 @@ describe("ContentPlannerView", () => {
     expect(cardBody).not.toHaveClass("min-h-20");
     expect(cardBody).not.toHaveClass("min-h-24");
     expect(cardBody).not.toHaveClass("min-h-28");
-    expect(cardBody).not.toHaveClass("max-h-[10.5rem]");
+    expect(cardBody).not.toHaveClass(
+      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
+    );
     expect(screen.getByText("Draft launch story")).toBeInTheDocument();
     expect(screen.queryByText("what changed")).not.toBeInTheDocument();
     expect(props.onUpdateCard).not.toHaveBeenCalled();
 
     await user.click(expandButton);
     expect(card).not.toHaveClass("min-h-20");
-    expect(card).not.toHaveClass("max-h-[10.5rem]");
-    expect(cardBody).toHaveClass("min-h-28", "max-h-[10.5rem]");
+    expect(card).not.toHaveClass(
+      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
+    );
+    expect(cardBody).toHaveClass(
+      "min-h-28",
+      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
+    );
     expect(screen.getByText("what changed")).toBeInTheDocument();
   });
 
