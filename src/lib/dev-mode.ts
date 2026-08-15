@@ -5,8 +5,23 @@ export const DEV_WORKSPACE_ENABLED_KEY = "dailytodo.dev-workspace.enabled";
 export const DEV_WORKSPACE_STATE_KEY = "dailytodo.dev-workspace.state";
 export const DEV_WORKSPACE_USER_ID = "dev-browser-workspace";
 
+function isLoopbackHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function isLocalDevelopmentWorkspaceForced() {
+  return (
+    typeof window !== "undefined" &&
+    process.env.NODE_ENV !== "test" &&
+    isLoopbackHostname(window.location.hostname)
+  );
+}
+
 export function canUseDevelopmentWorkspace() {
-  return process.env.NODE_ENV !== "production" && typeof window !== "undefined";
+  return (
+    typeof window !== "undefined" &&
+    (process.env.NODE_ENV !== "production" || isLocalDevelopmentWorkspaceForced())
+  );
 }
 
 export function setDevelopmentWorkspaceEnabled(enabled: boolean) {
@@ -27,6 +42,13 @@ export function getDevelopmentWorkspaceEnabled() {
   }
 
   const url = new URL(window.location.href);
+  if (isLocalDevelopmentWorkspaceForced()) {
+    url.searchParams.set(DEV_WORKSPACE_QUERY_KEY, "1");
+    window.history.replaceState(window.history.state, "", url);
+    setDevelopmentWorkspaceEnabled(true);
+    return true;
+  }
+
   const requested = url.searchParams.get(DEV_WORKSPACE_QUERY_KEY);
 
   if (requested === "1") {
