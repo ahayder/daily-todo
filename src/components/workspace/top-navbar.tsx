@@ -382,49 +382,56 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
           </Tooltip>
         ) : null}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="Decrease font size"
-              className="theme-cycle-btn"
-              disabled={isDecreaseFontDisabled}
-              onClick={() => dispatch({ type: "decrease-content-font-scale" })}
-            >
-              <span
-                aria-hidden="true"
-                className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+        <div
+          className={cn(
+            "flex items-center",
+            isContentPlanner && "max-sm:hidden",
+          )}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Decrease font size"
+                className="theme-cycle-btn"
+                disabled={isDecreaseFontDisabled}
+                onClick={() => dispatch({ type: "decrease-content-font-scale" })}
               >
-                A−
-              </span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Decrease font size
-          </TooltipContent>
-        </Tooltip>
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+                >
+                  A−
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Decrease font size
+            </TooltipContent>
+          </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="Increase font size"
-              className="theme-cycle-btn"
-              disabled={isIncreaseFontDisabled}
-              onClick={() => dispatch({ type: "increase-content-font-scale" })}
-            >
-              <span
-                aria-hidden="true"
-                className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Increase font size"
+                className="theme-cycle-btn"
+                disabled={isIncreaseFontDisabled}
+                onClick={() => dispatch({ type: "increase-content-font-scale" })}
               >
-                A+
-              </span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Increase font size
-          </TooltipContent>
-        </Tooltip>
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] font-semibold tracking-[-0.04em] text-current"
+                >
+                  A+
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Increase font size
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </header>
   );

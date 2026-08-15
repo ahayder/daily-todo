@@ -137,6 +137,12 @@ export function Workspace({ forcedView }: Props) {
               board={state.contentBoard}
               cards={state.contentCards}
               fontScale={contentFontScale}
+              onDecreaseFontScale={() =>
+                dispatch({ type: "decrease-content-font-scale" })
+              }
+              onIncreaseFontScale={() =>
+                dispatch({ type: "increase-content-font-scale" })
+              }
               onAddColumn={(title, subtitle) =>
                 dispatch({ type: "add-content-column", title, subtitle })
               }

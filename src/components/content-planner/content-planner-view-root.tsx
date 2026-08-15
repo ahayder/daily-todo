@@ -75,6 +75,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  CONTENT_FONT_SCALE_MAX,
+  CONTENT_FONT_SCALE_MIN,
+} from "@/lib/content-font-scale";
 import { getContentCardsForColumn } from "@/lib/store";
 import type { ContentBoard, ContentCard, ContentColumn } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -83,6 +87,8 @@ export type ContentPlannerViewProps = {
   board: ContentBoard;
   cards: Record<string, ContentCard>;
   fontScale?: number;
+  onDecreaseFontScale?: () => void;
+  onIncreaseFontScale?: () => void;
   onAddColumn: (title: string, subtitle: string) => void;
   onRenameColumn: (columnId: string, title: string) => void;
   onUpdateColumnSubtitle: (columnId: string, subtitle: string) => void;
@@ -524,20 +530,18 @@ function ContentCardItem({
                 style={typographyStyle}
               >
                 <div role="menu" aria-label={`Card actions for ${card.title}`}>
-                  {!isDragEnabled ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsActionsOpen(false);
-                        onRequestMove();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
-                    >
-                      <ArrowRightLeft className="size-3.5" />
-                      Move card…
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      onRequestMove();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)] transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+                  >
+                    <ArrowRightLeft className="size-3.5" />
+                    Move card…
+                  </button>
                   <button
                     type="button"
                     role="menuitem"
@@ -1130,6 +1134,8 @@ export function ContentPlannerView({
   board,
   cards,
   fontScale = 1,
+  onDecreaseFontScale,
+  onIncreaseFontScale,
   onAddColumn,
   onRenameColumn,
   onUpdateColumnSubtitle,
@@ -1182,6 +1188,11 @@ export function ContentPlannerView({
     board.columns.find((column) => column.id === pendingDeleteColumnId) ?? null;
   const movingCard = movingCardId ? cards[movingCardId] ?? null : null;
   const totalCards = Object.keys(cards).length;
+  const showMobileFontControls = Boolean(
+    onDecreaseFontScale && onIncreaseFontScale,
+  );
+  const isDecreaseFontDisabled = fontScale <= CONTENT_FONT_SCALE_MIN;
+  const isIncreaseFontDisabled = fontScale >= CONTENT_FONT_SCALE_MAX;
   const plannerTypographyStyle = useMemo(() => {
     const normalizedScale = Math.max(0.5, Math.min(2, fontScale));
     return {
@@ -1317,6 +1328,47 @@ export function ContentPlannerView({
             <span className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
               {totalCards} {totalCards === 1 ? "card" : "cards"}
             </span>
+            {showMobileFontControls ? (
+              <div
+                aria-label="Content planner font size"
+                className="flex items-center gap-1 sm:hidden"
+                role="group"
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Decrease content planner font size"
+                      className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--paper)] text-[13px] font-semibold tracking-[-0.04em] text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none"
+                      disabled={isDecreaseFontDisabled}
+                      onClick={onDecreaseFontScale}
+                    >
+                      A−
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Decrease font size
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Increase content planner font size"
+                      className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--paper)] text-[13px] font-semibold tracking-[-0.04em] text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none"
+                      disabled={isIncreaseFontDisabled}
+                      onClick={onIncreaseFontScale}
+                    >
+                      A+
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Increase font size
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : null}
           </div>
           <p className="mt-1 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-700)]">
             Shape ideas into published work, one calm step at a time.

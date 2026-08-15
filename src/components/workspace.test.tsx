@@ -80,8 +80,15 @@ describe("Workspace", () => {
     expect(props.board).toBe(state.contentBoard);
     expect(props.cards).toBe(state.contentCards);
     expect(props.fontScale).toBe(1.15);
+    expect(typeof props.onDecreaseFontScale).toBe("function");
+    expect(typeof props.onIncreaseFontScale).toBe("function");
     expect(typeof props.onAddColumn).toBe("function");
     expect(typeof props.onMoveCard).toBe("function");
+
+    (props.onDecreaseFontScale as () => void)();
+    (props.onIncreaseFontScale as () => void)();
+    expect(dispatch).toHaveBeenCalledWith({ type: "decrease-content-font-scale" });
+    expect(dispatch).toHaveBeenCalledWith({ type: "increase-content-font-scale" });
   });
 
   test("hides the top navbar and sidebar in focus mode", () => {

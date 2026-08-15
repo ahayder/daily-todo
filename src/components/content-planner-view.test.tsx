@@ -69,6 +69,8 @@ function createProps(
   return {
     board,
     cards: { [card.id]: card },
+    onDecreaseFontScale: vi.fn(),
+    onIncreaseFontScale: vi.fn(),
     onAddColumn: vi.fn(),
     onRenameColumn: vi.fn(),
     onUpdateColumnSubtitle: vi.fn(),
@@ -297,6 +299,32 @@ describe("ContentPlannerView", () => {
     expect(screen.getByRole("region", { name: "Content workflow board" })).toBeInTheDocument();
   });
 
+  test("keeps the Board move action inside the card menu when dragging is enabled", async () => {
+    setTouchFirstInput(false);
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    const toolbar = screen.getByTestId("content-card-toolbar-card-1");
+    expect(
+      within(toolbar).queryByRole("button", {
+        name: "Move card Draft launch story",
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(toolbar).getByRole("button", {
+        name: "More actions for card Draft launch story",
+      }),
+    );
+    const menu = await screen.findByRole("menu", {
+      name: "Card actions for Draft launch story",
+    });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Move card…" }),
+    ).toBeInTheDocument();
+  });
+
   test("applies the shared font scale to board and Markdown typography", () => {
     const props = createProps({ fontScale: 1.25 });
     render(<ContentPlannerView {...props} />);
@@ -315,6 +343,32 @@ describe("ContentPlannerView", () => {
     expect(screen.getByText("Draft launch story")).toHaveClass(
       "text-[length:var(--content-planner-font-base,1rem)]",
     );
+  });
+
+  test("exposes mobile font controls and respects the scale bounds", async () => {
+    const user = userEvent.setup();
+    const minProps = createProps({ fontScale: 0.85 });
+    const { rerender } = render(<ContentPlannerView {...minProps} />);
+
+    const decrease = screen.getByRole("button", {
+      name: "Decrease content planner font size",
+    });
+    const increase = screen.getByRole("button", {
+      name: "Increase content planner font size",
+    });
+
+    expect(decrease).toBeDisabled();
+    await user.click(increase);
+    expect(minProps.onIncreaseFontScale).toHaveBeenCalledOnce();
+
+    const maxProps = createProps({ fontScale: 1.25 });
+    rerender(<ContentPlannerView {...maxProps} />);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Increase content planner font size",
+      }),
+    ).toBeDisabled();
   });
 
   test("uses touch-first scrolling and an explicit move action on coarse pointers", async () => {
