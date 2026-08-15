@@ -136,6 +136,7 @@ export function Workspace({ forcedView }: Props) {
             <ContentPlannerView
               board={state.contentBoard}
               cards={state.contentCards}
+              fontScale={contentFontScale}
               onAddColumn={(title, subtitle) =>
                 dispatch({ type: "add-content-column", title, subtitle })
               }

@@ -46,6 +46,7 @@ describe("Workspace", () => {
   test("passes the board model and board actions to the content planner", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.lastView = "content-planner";
+    state.uiState.contentFontScale = 1.15;
     state.uiState.selectedNoteId = Object.keys(state.notesDocs)[0] ?? null;
     const dispatch = vi.fn();
 
@@ -78,6 +79,7 @@ describe("Workspace", () => {
 
     expect(props.board).toBe(state.contentBoard);
     expect(props.cards).toBe(state.contentCards);
+    expect(props.fontScale).toBe(1.15);
     expect(typeof props.onAddColumn).toBe("function");
     expect(typeof props.onMoveCard).toBe("function");
   });
