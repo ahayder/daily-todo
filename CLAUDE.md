@@ -102,6 +102,7 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 - **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
+- **Todos on smaller screens**: The desktop note/task split becomes a single-pane `Todos` / `Daily note` switcher. Todos open by default, the resize rail is desktop-only, task text wraps, and touch-first devices keep row actions visible while vertical scrolling takes precedence over drag gestures.
 - **Navigation**: Top navbar with Todos/Notes/Daily Planner/Content Planner pills, sync status, desktop updater, theme toggle.
 - **Sync model**: PocketBase stores top-level entities (`daily_pages`, `notes`, `note_folders`, `planner_presets`, `content_boards`, `content_cards`, `workspace_state`).
 - **Desktop builds**: The Tauri shell supports in-app update checks and installation on supported desktop platforms.

@@ -232,25 +232,37 @@ describe("TodosView", () => {
     fireEvent.pointerDown(resizer, { clientX: 800 });
     fireEvent.pointerMove(window, { clientX: 740 });
 
-    expect(layout).toHaveStyle({
-      gridTemplateColumns: "minmax(0, 1fr) 6px minmax(320px, clamp(320px, 560px, calc(100% - 480px - 6px)))",
-    });
+    expect(layout.style.getPropertyValue("--daily-task-pane-width")).toBe("560px");
 
     fireEvent.pointerUp(window);
     expect(resizer).not.toHaveClass("daily-resize-rail--dragging");
   });
 
-  test("reveals the add-subtask action on hover and opens the composer on click", async () => {
+  test("keeps the add-subtask action available without requiring hover", async () => {
     render(<Harness />);
 
     expect(screen.queryByPlaceholderText("Add a subtask")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add subtask" })).not.toBeInTheDocument();
-
-    fireEvent.mouseEnter(screen.getByText("Task one"));
-
-    const addSubtaskButton = await screen.findByRole("button", { name: "Add subtask" });
+    const addSubtaskButton = screen.getByRole("button", { name: "Add subtask" });
     await userEvent.click(addSubtaskButton);
     expect(screen.getByPlaceholderText("Add a subtask")).toBeInTheDocument();
+  });
+
+  test("defaults mobile navigation to Todos and can switch to the daily note", async () => {
+    render(<Harness />);
+
+    const layout = screen.getByRole("tablist", { name: "Todos page sections" }).closest(".daily-layout");
+    const todosTab = screen.getByRole("tab", { name: "Todos" });
+    const noteTab = screen.getByRole("tab", { name: "Daily note" });
+
+    expect(layout).toHaveAttribute("data-mobile-pane", "todos");
+    expect(todosTab).toHaveAttribute("aria-selected", "true");
+    expect(noteTab).toHaveAttribute("aria-selected", "false");
+
+    await userEvent.click(noteTab);
+
+    expect(layout).toHaveAttribute("data-mobile-pane", "note");
+    expect(todosTab).toHaveAttribute("aria-selected", "false");
+    expect(noteTab).toHaveAttribute("aria-selected", "true");
   });
 
   test("uses the task body as the drag surface while keeping action buttons separate", () => {

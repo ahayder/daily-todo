@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type Dispatch,
   type HTMLAttributes,
 } from "react";
@@ -325,7 +326,6 @@ function EditableTaskItem({
   isSubtaskDropTarget?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [isTaskActive, setIsTaskActive] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [isEstimateEditorOpen, setIsEstimateEditorOpen] = useState(false);
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = useState(false);
@@ -420,7 +420,7 @@ function EditableTaskItem({
   const showSubtaskComposer =
     !todo.parentId && (isSubtaskComposerVisible || isSubtaskFocused);
   const isSubtask = Boolean(todo.parentId);
-  const showSubtaskAction = !isSubtask && !isEditing && (isTaskActive || showSubtaskComposer);
+  const showSubtaskAction = !isSubtask && !isEditing;
   const completedSubtasksCount = useMemo(
     () => subtasks.filter((st) => st.status === "finished").length,
     [subtasks],
@@ -470,20 +470,6 @@ function EditableTaskItem({
         dropIndicatorPosition === "after" && "task-entry--drop-after",
         isSubtaskDropTarget && "task-entry--subtask-target",
       )}
-      onMouseEnter={() => {
-        setIsTaskActive(true);
-      }}
-      onMouseLeave={() => {
-        setIsTaskActive(false);
-      }}
-      onFocusCapture={() => {
-        setIsTaskActive(true);
-      }}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setIsTaskActive(false);
-        }
-      }}
     >
       <Popover open={isEstimateEditorOpen} onOpenChange={setIsEstimateEditorOpen}>
         <li className="task-item group">
@@ -945,7 +931,7 @@ export function TodosView({ state, dispatch }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -962,6 +948,7 @@ export function TodosView({ state, dispatch }: Props) {
   const [subtaskDropTargetId, setSubtaskDropTargetId] = useState<string | null>(null);
   const [isResizeHandleHovered, setIsResizeHandleHovered] = useState(false);
   const [isResizingTaskPane, setIsResizingTaskPane] = useState(false);
+  const [mobilePane, setMobilePane] = useState<"todos" | "note">("todos");
   const [renderDate, setRenderDate] = useState(date);
   const [isLoadingDate, setIsLoadingDate] = useState(false);
 
@@ -1255,9 +1242,9 @@ export function TodosView({ state, dispatch }: Props) {
       state.uiState.focusedTodoId === focusedTodo.id && state.uiState.focusTimerStatus === "paused";
 
     return (
-      <section className="flex h-full w-full flex-col items-center justify-start overflow-y-auto bg-[var(--paper)]">
-        <div className="flex w-full max-w-4xl flex-col gap-6 px-6 py-10">
-          <div className="rounded-[28px] border border-[var(--line)] bg-[var(--paper-strong)] p-8 text-center shadow-[0_1px_3px_rgba(31,36,48,0.06),0_1px_2px_rgba(31,36,48,0.04)]">
+      <section className="todos-focus-view flex h-full w-full flex-col items-center justify-start overflow-y-auto bg-[var(--paper)]">
+        <div className="todos-focus-shell flex w-full max-w-4xl flex-col gap-6 px-6 py-10">
+          <div className="todos-focus-card rounded-[28px] border border-[var(--line)] bg-[var(--paper-strong)] p-8 text-center shadow-[0_1px_3px_rgba(31,36,48,0.06),0_1px_2px_rgba(31,36,48,0.04)]">
             <Badge
               className="mb-4 text-[13px] px-3 py-1"
               style={{
@@ -1268,7 +1255,7 @@ export function TodosView({ state, dispatch }: Props) {
             >
               {meta.label}
             </Badge>
-            <h1 className="mb-4 text-4xl font-semibold leading-tight tracking-tight text-[var(--ink-900)]">
+            <h1 className="todos-focus-title mb-4 text-4xl font-semibold leading-tight tracking-tight text-[var(--ink-900)]">
               {focusedTodo.text}
             </h1>
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-sm text-[var(--ink-700)]">
@@ -1284,7 +1271,7 @@ export function TodosView({ state, dispatch }: Props) {
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink-700)]">
                 Remaining Time
               </span>
-              <span className="font-mono text-5xl font-semibold tracking-tight text-[var(--ink-900)]">
+              <span className="todos-focus-timer font-mono text-5xl font-semibold tracking-tight text-[var(--ink-900)]">
                 {formatTimer(timerRemainingSeconds)}
               </span>
               <span className="mt-2 text-sm text-[var(--ink-700)]">
@@ -1325,7 +1312,7 @@ export function TodosView({ state, dispatch }: Props) {
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="todos-focus-actions flex flex-wrap items-center justify-center gap-3">
               {!isTimerRunning ? (
                 <Button
                   type="button"
@@ -1421,7 +1408,7 @@ export function TodosView({ state, dispatch }: Props) {
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-6 shadow-[0_1px_3px_rgba(31,36,48,0.06),0_1px_2px_rgba(31,36,48,0.04)]">
+          <div className="todos-focus-subtasks rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-6 shadow-[0_1px_3px_rgba(31,36,48,0.06),0_1px_2px_rgba(31,36,48,0.04)]">
             <h3 className="mb-4 text-[15px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-900)]">
               Sub-tasks
             </h3>
@@ -1465,10 +1452,38 @@ export function TodosView({ state, dispatch }: Props) {
     <section
       ref={layoutRef}
       className="daily-layout"
+      data-mobile-pane={mobilePane}
       style={{
-        gridTemplateColumns: `minmax(0, 1fr) ${DAILY_RESIZER_WIDTH}px minmax(${DAILY_TASK_PANE_MIN_WIDTH}px, clamp(${DAILY_TASK_PANE_MIN_WIDTH}px, ${taskPaneWidth}px, calc(100% - ${DAILY_NOTE_PANE_MIN_WIDTH}px - ${DAILY_RESIZER_WIDTH}px)))`,
-      }}
+        "--daily-task-pane-width": `${taskPaneWidth}px`,
+      } as CSSProperties}
     >
+      <div className="daily-mobile-switcher" role="tablist" aria-label="Todos page sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "todos"}
+          className={cn(
+            "daily-mobile-switcher__button",
+            mobilePane === "todos" && "daily-mobile-switcher__button--active",
+          )}
+          onClick={() => setMobilePane("todos")}
+        >
+          Todos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "note"}
+          className={cn(
+            "daily-mobile-switcher__button",
+            mobilePane === "note" && "daily-mobile-switcher__button--active",
+          )}
+          onClick={() => setMobilePane("note")}
+        >
+          Daily note
+        </button>
+      </div>
+
       {/* Note Pane */}
       <div className="note-pane">
         <div className="note-header">
