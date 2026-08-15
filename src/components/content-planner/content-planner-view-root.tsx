@@ -463,6 +463,7 @@ function ContentCardItem({
               didDragRef.current = false;
               return;
             }
+            if (isTouchFirstInput) return;
             if (!(event.target as Element).closest("a")) {
               onView();
             }
@@ -472,7 +473,10 @@ function ContentCardItem({
           className={cn(
             isDragEnabled
               ? "cursor-grab overflow-y-auto active:cursor-grabbing"
-              : "cursor-pointer overflow-visible",
+              : cn(
+                  isTouchFirstInput ? "cursor-default" : "cursor-pointer",
+                  "overflow-visible",
+                ),
             !isCollapsed &&
               (isDragEnabled
                 ? "min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)]"

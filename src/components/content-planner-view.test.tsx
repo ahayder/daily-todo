@@ -328,13 +328,15 @@ describe("ContentPlannerView", () => {
       "true",
     );
     expect(screen.getByTestId("content-card-body-card-1")).toHaveClass(
-      "cursor-pointer",
+      "cursor-default",
       "overflow-visible",
     );
     expect(screen.getByTestId("content-card-body-card-1")).not.toHaveClass(
       "cursor-grab",
       "max-h-[var(--content-planner-card-max-height,10.5rem)]",
     );
+    await user.click(screen.getByTestId("content-card-body-card-1"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rename column Ideas" })).toHaveClass(
       "cursor-pointer",
     );
@@ -372,6 +374,11 @@ describe("ContentPlannerView", () => {
       props.board.columns[0].id,
       0,
     );
+
+    await user.click(
+      screen.getByRole("button", { name: "View card Draft launch story" }),
+    );
+    expect(screen.getByRole("heading", { name: "Card preview" })).toBeInTheDocument();
   });
 
   test("opens the complete Markdown card and edits it from the preview dialog", async () => {
