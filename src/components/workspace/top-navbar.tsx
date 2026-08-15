@@ -10,7 +10,7 @@ import {
   RefreshCw,
   MonitorDown,
 } from "lucide-react";
-import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
 import type { AppAction } from "@/components/app/app-context";
 import { useDesktopUpdate } from "@/components/workspace/desktop-update-provider";
 import {
@@ -90,6 +90,7 @@ function formatRelativeLastSaved(lastSyncedAt: string | null) {
 export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   const desktopUpdate = useDesktopUpdate();
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -105,6 +106,69 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
   const showDesktopUpdater = mounted && desktopUpdate.isSupported;
   const isDecreaseFontDisabled = state.uiState.contentFontScale <= CONTENT_FONT_SCALE_MIN;
   const isIncreaseFontDisabled = state.uiState.contentFontScale >= CONTENT_FONT_SCALE_MAX;
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+
+    const mobileViewport = window.matchMedia("(max-width: 639px)");
+    const scrollPositions = new WeakMap<EventTarget, number>();
+
+    const handleScroll = (event: Event) => {
+      const scrollTarget = event.target;
+      if (!scrollTarget) return;
+
+      const scrollTop =
+        scrollTarget === document
+          ? window.scrollY
+          : scrollTarget instanceof Element
+            ? scrollTarget.scrollTop
+            : null;
+
+      if (scrollTop === null) return;
+
+      const previousScrollTop = scrollPositions.get(scrollTarget) ?? 0;
+      scrollPositions.set(scrollTarget, scrollTop);
+      const isAtBottom =
+        scrollTarget instanceof Element &&
+        scrollTop >= scrollTarget.scrollHeight - scrollTarget.clientHeight - 2;
+
+      if (!mobileViewport.matches) {
+        setIsMobileHeaderHidden(false);
+        return;
+      }
+
+      if (scrollTop <= 8) {
+        if (previousScrollTop > 8) {
+          setIsMobileHeaderHidden(false);
+        }
+        return;
+      }
+
+      if (scrollTop > previousScrollTop + 4) {
+        setIsMobileHeaderHidden(true);
+      } else if (scrollTop < previousScrollTop - 4 && !isAtBottom) {
+        setIsMobileHeaderHidden(false);
+      }
+    };
+
+    const handleViewportChange = () => {
+      if (!mobileViewport.matches) {
+        setIsMobileHeaderHidden(false);
+      }
+    };
+
+    document.addEventListener("scroll", handleScroll, true);
+    mobileViewport.addEventListener("change", handleViewportChange);
+
+    return () => {
+      document.removeEventListener("scroll", handleScroll, true);
+      mobileViewport.removeEventListener("change", handleViewportChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsMobileHeaderHidden(false);
+  }, [lastView]);
 
   const desktopUpdateLabel =
     desktopUpdate.phase === "downloading"
@@ -174,16 +238,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
     <header
       className={cn(
         "top-navbar",
-        isContentPlanner &&
-          "top-navbar--content-planner max-sm:!grid max-sm:!h-auto max-sm:!min-h-[52px] max-sm:!grid-cols-[minmax(0,1fr)_auto] max-sm:!gap-x-2 max-sm:!gap-y-1.5 max-sm:!px-3 max-sm:!py-2",
+        isContentPlanner && "top-navbar--content-planner",
+        isMobileHeaderHidden && "top-navbar--mobile-hidden",
       )}
     >
-      <div
-        className={cn(
-          "top-navbar__brand flex items-center gap-2.5",
-          isContentPlanner && "max-sm:min-w-0",
-        )}
-      >
+      <div className="top-navbar__brand flex items-center gap-2.5">
         {!isContentPlanner ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -207,15 +266,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         </span>
       </div>
 
-      <nav
-        className={cn(
-          "nav-pills",
-          isContentPlanner &&
-            "max-sm:col-span-2 max-sm:row-start-2 max-sm:w-full max-sm:overflow-x-auto max-sm:overscroll-x-contain max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&_.nav-pill]:!flex-1 max-sm:[&_.nav-pill]:!px-2 max-sm:[&_.nav-pill]:!text-xs max-sm:[&_.nav-pill]:text-center max-sm:[&_.nav-pill]:whitespace-nowrap",
-        )}
-        role="tablist"
-        aria-label="Main navigation"
-      >
+      <nav className="nav-pills" role="tablist" aria-label="Main navigation">
         <Link
           href="/todos"
           role="tab"
@@ -254,17 +305,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         </Link>
       </nav>
 
-      <div
-        className={cn(
-          "top-navbar__actions flex items-center gap-1",
-          isContentPlanner && "max-sm:col-start-2 max-sm:row-start-1 max-sm:gap-0",
-        )}
-      >
+      <div className="top-navbar__actions flex items-center gap-1">
         <div
           aria-live="polite"
           className={cn(
             "top-navbar__sync inline-flex min-h-8 items-center px-1 text-xs font-medium",
-            isContentPlanner && "max-sm:hidden",
             syncPresentation.tone,
           )}
         >
