@@ -165,6 +165,44 @@ describe("Workspace", () => {
     ).not.toBeNull();
   });
 
+  test("collapses the sidebar when entering the daily planner", () => {
+    const state = createInitialState("2026-03-11");
+    state.uiState.lastView = "todos";
+    state.uiState.isSidebarCollapsed = false;
+    const dispatch = vi.fn();
+
+    mockUseAppState.mockReturnValue({
+      state,
+      dispatch,
+      notes: {
+        selectedBodyStatus: "ready",
+        selectedBodyNotice: null,
+        selectedBodyError: null,
+      },
+      sync: {
+        status: "idle",
+        indicator: "saved",
+        lastSavedAt: null,
+        lastSyncedAt: null,
+        notice: null,
+        errorMessage: null,
+        hasPendingChanges: false,
+        hasUnsyncedChanges: false,
+        isSaving: false,
+        persistenceAvailable: true,
+      },
+      retrySync: vi.fn(),
+    });
+
+    render(<Workspace forcedView="planner" />);
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "set-view", view: "planner" });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-sidebar-collapsed",
+      isCollapsed: true,
+    });
+  });
+
   test("sets shared content font CSS variables on the shell", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.contentFontScale = 1.15;

@@ -55,11 +55,13 @@ describe("Sidebar", () => {
   });
 
   test("renders planner preset list in planner view", async () => {
+    const user = userEvent.setup();
     function PlannerHarness() {
       const initial = createInitialState("2026-03-10");
       initial.uiState.lastView = "planner";
       const presetId = initial.uiState.selectedPlannerPresetId!;
       initial.plannerPresets[presetId].name = "Balanced Week";
+      initial.plannerPresets[presetId].updatedAt = "2026-03-10T08:00:00.000Z";
 
       const [state, dispatch] = useReducer(appReducer, initial);
       const auth = createMockAuthRepository({
@@ -86,9 +88,15 @@ describe("Sidebar", () => {
     expect(screen.getByRole("complementary")).toHaveClass("sidebar--planner");
     expect(screen.getByText("Daily Plans")).toBeInTheDocument();
     expect(screen.getByText("Balanced Week")).toBeInTheDocument();
+    expect(screen.queryByText("Mar 10")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New plan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Duplicate plan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Balanced Week" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete Balanced Week" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByText("Delete Balanced Week?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
   });
 
   test("renders note folders without a note delete action in the sidebar", async () => {

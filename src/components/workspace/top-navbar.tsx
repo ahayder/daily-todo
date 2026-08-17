@@ -250,6 +250,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                 type="button"
                 onClick={() => dispatch({ type: "toggle-sidebar-collapsed" })}
                 aria-label={state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
+                data-planner-tour={isPlanner ? "sidebar-toggle" : undefined}
                 className="theme-cycle-btn"
               >
                 <SidebarIcon className="h-4 w-4" />

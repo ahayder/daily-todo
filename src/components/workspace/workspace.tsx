@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { X } from "lucide-react";
 
 import { useAppState } from "@/components/app/app-context";
@@ -24,6 +24,7 @@ export function Workspace({ forcedView }: Props) {
   const isFocusMode = state.uiState.isFocusMode;
   const isContentPlanner = activeView === "content-planner";
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
+  const previousViewRef = useRef<ViewMode | null>(null);
   const shellStyle = {
     "--content-font-scale": String(contentFontScale),
     "--content-font-size-editor": "calc(18px * var(--content-font-scale))",
@@ -40,6 +41,13 @@ export function Workspace({ forcedView }: Props) {
       dispatch({ type: "set-view", view: forcedView });
     }
   }, [dispatch, forcedView, state.uiState.lastView]);
+
+  useEffect(() => {
+    if (activeView === "planner" && previousViewRef.current !== "planner") {
+      dispatch({ type: "set-sidebar-collapsed", isCollapsed: true });
+    }
+    previousViewRef.current = activeView;
+  }, [activeView, dispatch]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

@@ -11,7 +11,12 @@ import {
 } from "react";
 import { triggerCompletionConfettiFromElement } from "@/lib/confetti";
 import { getDayLabel } from "@/lib/date";
-import { groupTodosByPriority } from "@/lib/store";
+import {
+  DEFAULT_TODO_WORKSPACE_ID,
+  getActiveTodoWorkspaceId,
+  getDailyPageForWorkspace,
+  groupTodosByPriority,
+} from "@/lib/store";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import {
   AlertDialog,
@@ -37,7 +42,9 @@ import type { AppState, CategoryTheme, Priority, TaskStatus } from "@/lib/types"
 import type { AppAction } from "@/components/app/app-context";
 import {
   Brain,
+  BriefcaseBusiness,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -50,6 +57,8 @@ import {
   X,
   Pause,
   GripVertical,
+  Settings2,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, differenceInDays } from "date-fns";
@@ -86,6 +95,8 @@ type DropIndicator = {
 };
 
 const SUBTASK_INDENT_THRESHOLD = 48;
+
+type WorkspaceEditorMode = "list" | "create" | "rename";
 
 type PriorityLabels = {
   label: string;
@@ -920,9 +931,248 @@ function SortableTaskItem({
   );
 }
 
+function TodoWorkspaceControl({
+  state,
+  dispatch,
+  date,
+}: {
+  state: AppState;
+  dispatch: Dispatch<AppAction>;
+  date: string;
+}) {
+  const activeWorkspaceId = getActiveTodoWorkspaceId(state);
+  const activeWorkspace = state.todoWorkspaces[activeWorkspaceId];
+  const workspaces = Object.values(state.todoWorkspaces).sort((left, right) => {
+    if (left.id === DEFAULT_TODO_WORKSPACE_ID) return -1;
+    if (right.id === DEFAULT_TODO_WORKSPACE_ID) return 1;
+    return left.createdAt.localeCompare(right.createdAt);
+  });
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<WorkspaceEditorMode>("list");
+  const [draftName, setDraftName] = useState("");
+  const [workspacePendingDelete, setWorkspacePendingDelete] = useState<string | null>(null);
+  const pendingDeleteWorkspace = workspacePendingDelete
+    ? state.todoWorkspaces[workspacePendingDelete]
+    : null;
+
+  const resetEditor = () => {
+    setMode("list");
+    setDraftName("");
+  };
+
+  const submitWorkspaceName = () => {
+    const name = draftName.trim();
+    if (!name) return;
+
+    if (mode === "create") {
+      dispatch({ type: "create-todo-workspace", name, date });
+    } else if (mode === "rename") {
+      dispatch({ type: "rename-todo-workspace", workspaceId: activeWorkspaceId, name });
+    }
+
+    resetEditor();
+    setIsOpen(false);
+  };
+
+  return (
+    <>
+      <Popover
+        open={isOpen}
+        onOpenChange={(open) => {
+          setIsOpen(open);
+          if (!open) resetEditor();
+        }}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-[color-mix(in_srgb,var(--brand)_24%,var(--line))] bg-[color-mix(in_srgb,var(--paper-strong)_70%,var(--brand-soft))] px-3 py-2 text-left text-sm text-[var(--ink-900)] transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            aria-label={`Todo workspace: ${activeWorkspace?.name ?? "Main"}`}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <BriefcaseBusiness className="h-4 w-4 shrink-0 text-[var(--brand)]" />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-700)]">
+                  Workspace
+                </span>
+                <span className="block truncate font-semibold">
+                  {activeWorkspace?.name ?? "Main"}
+                </span>
+              </span>
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-[var(--ink-700)]" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={8}
+          className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-2 shadow-[0_12px_30px_rgba(31,36,48,0.14)]"
+        >
+          {mode === "list" ? (
+            <div className="flex flex-col gap-1">
+              <div className="px-2 pb-2 pt-1">
+                <p className="text-sm font-semibold text-[var(--ink-900)]">Todo workspaces</p>
+                <p className="mt-0.5 text-xs leading-5 text-[var(--ink-700)]">
+                  Each workspace keeps its own daily todos and Daily Note.
+                </p>
+              </div>
+
+              <div className="flex max-h-56 flex-col gap-1 overflow-y-auto px-1">
+                {workspaces.map((workspace) => {
+                  const isActive = workspace.id === activeWorkspaceId;
+                  return (
+                    <button
+                      key={workspace.id}
+                      type="button"
+                      className={cn(
+                        "flex min-h-10 items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-[var(--brand-soft)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--brand)]",
+                        isActive
+                          ? "bg-[var(--brand-soft)] font-semibold text-[var(--brand)]"
+                          : "text-[var(--ink-900)]",
+                      )}
+                      onClick={() => {
+                        dispatch({
+                          type: "select-todo-workspace",
+                          workspaceId: workspace.id,
+                          date,
+                        });
+                        setIsOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{workspace.name}</span>
+                      {isActive ? <Check className="h-4 w-4 shrink-0" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="my-1 h-px bg-[var(--line)]" />
+
+              <button
+                type="button"
+                className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-[var(--ink-900)] transition-colors hover:bg-[var(--brand-soft)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
+                onClick={() => {
+                  setDraftName("");
+                  setMode("create");
+                }}
+              >
+                <Plus className="h-4 w-4 text-[var(--brand)]" />
+                New workspace
+              </button>
+              <button
+                type="button"
+                className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-[var(--ink-900)] transition-colors hover:bg-[var(--brand-soft)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
+                onClick={() => {
+                  setDraftName(activeWorkspace?.name ?? "");
+                  setMode("rename");
+                }}
+              >
+                <Settings2 className="h-4 w-4 text-[var(--ink-700)]" />
+                Rename current workspace
+              </button>
+              {activeWorkspaceId !== DEFAULT_TODO_WORKSPACE_ID ? (
+                <button
+                  type="button"
+                  className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-[var(--warn)] transition-colors hover:bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--warn)]"
+                  onClick={() => {
+                    setWorkspacePendingDelete(activeWorkspaceId);
+                    setIsOpen(false);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete current workspace
+                </button>
+              ) : (
+                <p className="px-2.5 py-1 text-xs leading-5 text-[var(--ink-700)]">
+                  Main protects your original Todo history and cannot be deleted.
+                </p>
+              )}
+            </div>
+          ) : (
+            <form
+              className="flex flex-col gap-3 p-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitWorkspaceName();
+              }}
+            >
+              <div>
+                <p className="text-sm font-semibold text-[var(--ink-900)]">
+                  {mode === "create" ? "New Todo workspace" : "Rename workspace"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--ink-700)]">
+                  {mode === "create"
+                    ? "Start with an empty day and an independent daily history."
+                    : "Only the workspace name will change."}
+                </p>
+              </div>
+              <Input
+                autoFocus
+                value={draftName}
+                maxLength={80}
+                onChange={(event) => setDraftName(event.target.value)}
+                placeholder="e.g. Work"
+                aria-label="Workspace name"
+              />
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={resetEditor}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!draftName.trim()}>
+                  {mode === "create" ? "Create workspace" : "Save name"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      <AlertDialog
+        open={Boolean(pendingDeleteWorkspace)}
+        onOpenChange={(open) => {
+          if (!open) setWorkspacePendingDelete(null);
+        }}
+      >
+        <AlertDialogContent className="alert-dialog-content">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
+              Delete {pendingDeleteWorkspace?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--ink-700)]">
+              This permanently removes every Todo list and Daily Note saved in this workspace.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[var(--line)] bg-transparent text-[var(--ink-700)] hover:bg-[var(--paper)]">
+              Keep workspace
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[var(--warn)] text-white hover:bg-[color-mix(in_srgb,var(--warn)_88%,black)]"
+              onClick={() => {
+                if (pendingDeleteWorkspace) {
+                  dispatch({
+                    type: "delete-todo-workspace",
+                    workspaceId: pendingDeleteWorkspace.id,
+                    date,
+                  });
+                }
+                setWorkspacePendingDelete(null);
+              }}
+            >
+              Delete workspace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 export function TodosView({ state, dispatch }: Props) {
   const date = state.uiState.selectedDailyDate;
-  const page = date ? state.dailyPages[date] : null;
+  const activeWorkspaceId = getActiveTodoWorkspaceId(state);
+  const page = date ? getDailyPageForWorkspace(state, date, activeWorkspaceId) : null;
   const isFocusMode = state.uiState.isFocusMode;
   const focusedTodoId = state.uiState.focusedTodoId;
   const layoutRef = useRef<HTMLElement | null>(null);
@@ -949,11 +1199,12 @@ export function TodosView({ state, dispatch }: Props) {
   const [isResizeHandleHovered, setIsResizeHandleHovered] = useState(false);
   const [isResizingTaskPane, setIsResizingTaskPane] = useState(false);
   const [mobilePane, setMobilePane] = useState<"todos" | "note">("todos");
-  const [renderDate, setRenderDate] = useState(date);
+  const workspaceDateKey = `${activeWorkspaceId}:${date ?? ""}`;
+  const [renderDate, setRenderDate] = useState(workspaceDateKey);
   const [isLoadingDate, setIsLoadingDate] = useState(false);
 
-  if (date !== renderDate) {
-    setRenderDate(date);
+  if (workspaceDateKey !== renderDate) {
+    setRenderDate(workspaceDateKey);
     setIsLoadingDate(true);
   }
 
@@ -1487,11 +1738,16 @@ export function TodosView({ state, dispatch }: Props) {
       {/* Note Pane */}
       <div className="note-pane">
         <div className="note-header">
-          <div className="flex items-center gap-2.5">
-            <CalendarDays className="h-4 w-4 text-[var(--brand)]" />
-            <h2 className="text-2xl font-semibold text-[var(--ink-900)] tracking-tight">
-              {getDayLabel(date)}
-            </h2>
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            <span className="flex items-center gap-2.5">
+              <CalendarDays className="h-4 w-4 text-[var(--brand)]" />
+              <h2 className="text-2xl font-semibold text-[var(--ink-900)] tracking-tight">
+                {getDayLabel(date)}
+              </h2>
+            </span>
+            <span className="max-w-48 truncate rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 text-xs font-semibold text-[var(--ink-700)]">
+              {state.todoWorkspaces[activeWorkspaceId]?.name ?? "Main"}
+            </span>
           </div>
         </div>
         <div className="editor-layer">
@@ -1501,7 +1757,7 @@ export function TodosView({ state, dispatch }: Props) {
             </div>
           ) : (
             <MarkdownEditor
-              key={date}
+              key={workspaceDateKey}
               value={page.markdown}
               onChange={(markdown) =>
                 dispatch({ type: "update-daily-markdown", date, markdown })
@@ -1538,13 +1794,14 @@ export function TodosView({ state, dispatch }: Props) {
 
       {/* Todo Pane */}
       <div className="todo-pane">
-        <div className="todo-pane-header">
-          <div className="flex min-w-0 flex-col">
-            <h2 className="text-xl font-semibold text-[var(--ink-900)] leading-[1.35]">Todos</h2>
-            <p className="text-xs text-[var(--ink-700)]">Plan the day from here.</p>
-          </div>
+        <div className="todo-pane-header !flex-col !items-stretch">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-col">
+              <h2 className="text-xl font-semibold text-[var(--ink-900)] leading-[1.35]">Todos</h2>
+              <p className="text-xs text-[var(--ink-700)]">Plan the day from here.</p>
+            </div>
 
-          <div className="todo-pane-actions">
+            <div className="todo-pane-actions">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -1583,7 +1840,10 @@ export function TodosView({ state, dispatch }: Props) {
                 {CATEGORY_TOOLTIP[categoryTheme]}
               </TooltipContent>
             </Tooltip>
+            </div>
           </div>
+
+          <TodoWorkspaceControl state={state} dispatch={dispatch} date={date} />
         </div>
 
         <ScrollArea className="todo-pane-scroll" data-testid="task-pane-scroll">

@@ -198,6 +198,25 @@ describe("TodosView", () => {
     expect(screen.getByRole("heading", { name: "Must Do (Non-negotiable)" })).toBeInTheDocument();
   });
 
+  test("creates and switches between independent Todo workspaces", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Todo workspace: Main" }));
+    await user.click(screen.getByRole("button", { name: "New workspace" }));
+    await user.type(screen.getByRole("textbox", { name: "Workspace name" }), "Work");
+    await user.click(screen.getByRole("button", { name: "Create workspace" }));
+
+    expect(screen.getByRole("button", { name: "Todo workspace: Work" })).toBeInTheDocument();
+    expect(screen.queryByText("Task one")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Todo workspace: Work" }));
+    await user.click(screen.getByRole("button", { name: "Main" }));
+
+    expect(screen.getByRole("button", { name: "Todo workspace: Main" })).toBeInTheDocument();
+    expect(screen.getByText("Task one")).toBeInTheDocument();
+  });
+
   test("shows the resize indicator on hover", () => {
     render(<Harness />);
 

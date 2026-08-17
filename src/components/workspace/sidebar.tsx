@@ -24,6 +24,17 @@ import { CSS } from "@dnd-kit/utilities";
 import { toISODate } from "@/lib/date";
 import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
 import type { AppAction } from "@/components/app/app-context";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth/auth-context";
@@ -600,28 +611,42 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
             {isPlannerView ? (
               <>
                 {state.uiState.selectedPlannerPresetId && (
-                  <button
-                    type="button"
-                    className="sidebar-add-btn"
-                    onClick={() =>
-                      dispatch({
-                        type: "duplicate-planner-preset",
-                        presetId: state.uiState.selectedPlannerPresetId!,
-                      })
-                    }
-                    aria-label="Duplicate plan"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="sidebar-add-btn"
+                        onClick={() =>
+                          dispatch({
+                            type: "duplicate-planner-preset",
+                            presetId: state.uiState.selectedPlannerPresetId!,
+                          })
+                        }
+                        aria-label="Duplicate plan"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      Duplicate plan
+                    </TooltipContent>
+                  </Tooltip>
                 )}
-                <button
-                  type="button"
-                  className="sidebar-add-btn"
-                  onClick={() => dispatch({ type: "create-planner-preset" })}
-                  aria-label="New plan"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="sidebar-add-btn"
+                      onClick={() => dispatch({ type: "create-planner-preset" })}
+                      aria-label="New plan"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    New plan
+                  </TooltipContent>
+                </Tooltip>
               </>
             ) : (
               <>
@@ -744,21 +769,43 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                     onClick={() => dispatch({ type: "select-planner-preset", presetId: preset.id })}
                   >
                     <span className="note-item-title">{preset.name}</span>
-                    <span className="note-item-date">
-                      {new Date(preset.updatedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
                   </button>
-                  <button
-                    type="button"
-                    className="sidebar-row-action sidebar-row-action--danger"
-                    onClick={() => dispatch({ type: "delete-planner-preset", presetId: preset.id })}
-                    aria-label={`Delete ${preset.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <AlertDialog>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger
+                          className="sidebar-row-action sidebar-row-action--danger"
+                          aria-label={`Delete ${preset.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs">
+                        Delete plan
+                      </TooltipContent>
+                    </Tooltip>
+                    <AlertDialogContent className="alert-dialog-content">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
+                          Delete {preset.name}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-[var(--ink-700)]">
+                          This permanently removes the planner and all of its weekday rhythms.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="alert-dialog-destructive"
+                          onClick={() =>
+                            dispatch({ type: "delete-planner-preset", presetId: preset.id })
+                          }
+                        >
+                          Delete planner
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               ))}
             </div>
