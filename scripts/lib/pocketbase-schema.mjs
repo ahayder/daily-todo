@@ -57,6 +57,10 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           cascadeDelete: true,
         },
         {
+          name: "workspace_id",
+          type: "text",
+        },
+        {
           name: "date",
           type: "text",
           required: true,
@@ -77,8 +81,9 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         },
       ],
       indexes: [
-        "CREATE UNIQUE INDEX idx_daily_pages_owner_date ON daily_pages (owner, date)",
+        "CREATE UNIQUE INDEX idx_daily_pages_owner_workspace_date ON daily_pages (owner, workspace_id, date)",
       ],
+      replacesIndexes: ["idx_daily_pages_owner_date"],
     },
     {
       name: "notes",
@@ -320,6 +325,14 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           type: "text",
         },
         {
+          name: "selected_todo_workspace_id",
+          type: "text",
+        },
+        {
+          name: "todo_workspaces_json",
+          type: "json",
+        },
+        {
           name: "selected_note_id",
           type: "text",
         },
@@ -401,6 +414,20 @@ export function mergeCollectionDefinition(existingCollection, desiredCollection)
   const desiredFieldsByName = new Map(desiredCollection.fields.map((field) => [field.name, field]));
   const mergedFields = [];
   const preservedManagedNames = new Set();
+  const replacedIndexNames = new Set(
+    Array.isArray(desiredCollection.replacesIndexes)
+      ? desiredCollection.replacesIndexes
+      : [],
+  );
+  const existingIndexes = Array.isArray(existingCollection.indexes)
+    ? existingCollection.indexes
+    : [];
+  const preservedExistingIndexes = existingIndexes.filter(
+    (index) =>
+      !Array.from(replacedIndexNames).some((indexName) =>
+        index.includes(indexName),
+      ),
+  );
 
   for (const field of existingFields) {
     const desiredField = desiredFieldsByName.get(field.name);
@@ -434,7 +461,7 @@ export function mergeCollectionDefinition(existingCollection, desiredCollection)
     updateRule: desiredCollection.updateRule,
     deleteRule: desiredCollection.deleteRule,
     indexes: uniqueStrings([
-      ...(Array.isArray(existingCollection.indexes) ? existingCollection.indexes : []),
+      ...preservedExistingIndexes,
       ...desiredCollection.indexes,
     ]),
     fields: mergedFields,

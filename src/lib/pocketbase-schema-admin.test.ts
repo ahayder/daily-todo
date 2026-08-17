@@ -107,6 +107,30 @@ describe("mergeCollectionDefinition", () => {
     expect(merged.payload.indexes).toContain(desired.indexes[0]);
   });
 
+  test("replaces the legacy owner-date index for workspace-scoped daily pages", () => {
+    const desired = buildSchemaDefinitions({ usersCollectionId: "users_1" })[0];
+    const existing = createBaseCollection({
+      id: "daily_pages_1",
+      name: desired.name,
+      indexes: [
+        "CREATE UNIQUE INDEX idx_daily_pages_owner_date ON daily_pages (owner, date)",
+      ],
+      fields: desired.fields
+        .filter((field) => field.name !== "workspace_id")
+        .map((field, index) => ({ id: `field_${index}`, ...field })),
+    });
+
+    const merged = mergeCollectionDefinition(existing, desired);
+
+    expect(merged.changed).toBe(true);
+    expect(merged.payload.indexes).not.toContain(
+      "CREATE UNIQUE INDEX idx_daily_pages_owner_date ON daily_pages (owner, date)",
+    );
+    expect(merged.payload.indexes).toContain(
+      "CREATE UNIQUE INDEX idx_daily_pages_owner_workspace_date ON daily_pages (owner, workspace_id, date)",
+    );
+  });
+
   test("preserves extra unknown fields while applying managed fields", () => {
     const desired = buildSchemaDefinitions({ usersCollectionId: "users_1" })[3];
     const existing = createBaseCollection({

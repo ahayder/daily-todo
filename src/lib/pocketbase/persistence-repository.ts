@@ -28,7 +28,12 @@ import {
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
-import { createCarryoverDailyPage } from "@/lib/store";
+import {
+  createCarryoverDailyPage,
+  DEFAULT_TODO_WORKSPACE_ID,
+  getDailyPageKey,
+  getTodoWorkspaceIdFromDailyPageKey,
+} from "@/lib/store";
 import type {
   AppState,
   ContentBoard,
@@ -37,7 +42,9 @@ import type {
   NoteDoc,
   NoteFolder,
   NoteSummary,
+  PlannerDayKey,
   PlannerPreset,
+  TodoWorkspace,
 } from "@/lib/types";
 
 const WORKSPACE_RECORD_KEY = "workspace_state:self";
@@ -54,6 +61,7 @@ type PocketBaseDailyPageRecord = {
   id: string;
   owner: string;
   date?: string;
+  workspace_id?: string;
   markdown?: string;
   todos_json?: unknown;
   created?: string;
@@ -89,6 +97,7 @@ type PocketBasePlannerPresetRecord = {
   name?: string;
   day_order_json?: unknown;
   days_json?: unknown;
+  created?: string;
   updated?: string;
   updated_at_client?: string;
 };
@@ -117,6 +126,8 @@ type PocketBaseWorkspaceStateRecord = {
   id: string;
   owner: string;
   selected_daily_date?: string | null;
+  selected_todo_workspace_id?: string | null;
+  todo_workspaces_json?: unknown;
   selected_note_id?: string | null;
   selected_note_folder_id?: string | null;
   selected_planner_preset_id?: string | null;
@@ -136,9 +147,20 @@ type SyncRecordValue =
   | { key: string; kind: "content_card"; value: ContentCard }
   | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
 
+type SplitWorkspaceRawRecords = {
+  dailyPages: Map<string, PocketBaseDailyPageRecord>;
+  notes: Map<string, PocketBaseNoteRecord>;
+  noteFolders: Map<string, PocketBaseNoteFolderRecord>;
+  plannerPresets: Map<string, PocketBasePlannerPresetRecord>;
+  contentBoard: PocketBaseContentBoardRecord | null;
+  contentCards: Map<string, PocketBaseContentCardRecord>;
+  workspaceState: PocketBaseWorkspaceStateRecord | null;
+};
+
 type SplitWorkspacePayload = {
   state: AppState;
   records: Record<string, PersistenceRecordMetadata>;
+  rawRecords: SplitWorkspaceRawRecords;
   hasData: boolean;
   hasRepairedDailyPage: boolean;
 };
@@ -147,7 +169,16 @@ export function hasUnsavedDailyPage(
   state: AppState,
   records: Record<string, PersistenceRecordMetadata>,
 ): boolean {
-  return Object.keys(state.dailyPages).some((date) => !records[`daily_page:${date}`]);
+  return Object.keys(state.dailyPages).some((pageKey) => {
+    const workspaceId = getTodoWorkspaceIdFromDailyPageKey(pageKey);
+    const page = state.dailyPages[pageKey];
+    const workspaceRecord = records[`daily_page:${workspaceId}:${page.date}`];
+    const legacyMainRecord =
+      workspaceId === DEFAULT_TODO_WORKSPACE_ID
+        ? records[`daily_page:${page.date}`]
+        : null;
+    return !workspaceRecord && !legacyMainRecord;
+  });
 }
 
 export function isUntouchedEmptyDailyPage(
@@ -185,6 +216,23 @@ function safeRecord<T>(value: unknown): Record<string, T> {
   return value && typeof value === "object" ? (value as Record<string, T>) : {};
 }
 
+function readPlannerDaysPayload(value: unknown) {
+  const record = safeRecord<unknown>(value);
+  if ("days" in record) {
+    return {
+      days: safeRecord<PlannerPreset["days"][PlannerDayKey]>(record.days),
+      subtitle: typeof record.subtitle === "string" ? record.subtitle : null,
+      createdAt: typeof record.createdAt === "string" ? record.createdAt : null,
+    };
+  }
+
+  return {
+    days: record as PlannerPreset["days"],
+    subtitle: null,
+    createdAt: null,
+  };
+}
+
 function stableFingerprint(value: unknown): string {
   return JSON.stringify(value);
 }
@@ -219,9 +267,11 @@ export function getSyncRecordValuesFromState(
 ): Record<string, SyncRecordValue> {
   const values: Record<string, SyncRecordValue> = {};
 
-  for (const [date, page] of Object.entries(state.dailyPages)) {
-    values[`daily_page:${date}`] = {
-      key: `daily_page:${date}`,
+  for (const [pageKey, page] of Object.entries(state.dailyPages)) {
+    const workspaceId = getTodoWorkspaceIdFromDailyPageKey(pageKey);
+    const key = `daily_page:${workspaceId}:${page.date}`;
+    values[key] = {
+      key,
       kind: "daily_page",
       value: page,
     };
@@ -281,6 +331,7 @@ function assembleStateFromValues(
 ): AppState {
   const fallbackState = localState ?? seedAppState(now);
   const dailyPages: Record<string, DailyPage> = {};
+  let todoWorkspaces: Record<string, TodoWorkspace> = fallbackState.todoWorkspaces;
   const notesDocs: Record<string, NoteDoc> = {};
   const noteFolders: Record<string, NoteFolder> = {};
   const plannerPresets: Record<string, PlannerPreset> = {};
@@ -290,7 +341,8 @@ function assembleStateFromValues(
 
   for (const record of Object.values(values)) {
     if (record.kind === "daily_page") {
-      dailyPages[record.value.date] = record.value;
+      const workspaceId = record.key.split(":").slice(1, -1).join(":");
+      dailyPages[getDailyPageKey(workspaceId, record.value.date)] = record.value;
       continue;
     }
 
@@ -322,12 +374,14 @@ function assembleStateFromValues(
       continue;
     }
 
+    todoWorkspaces = record.value.todoWorkspaces;
     syncableUiState = record.value.uiState;
   }
 
   return normalizeAppState(
     {
       dailyPages,
+      todoWorkspaces,
       notesDocs,
       noteFolders,
       plannerPresets,
@@ -401,7 +455,7 @@ function toLoadResult(
 
 async function getFirstByFilter<T>(collection: string, filter: string): Promise<T | null> {
   const client = getPocketBaseClient();
-  const list = await client.collection(collection).getList<T>(1, 1, { filter });
+  const list = await client.collection(collection).getList<T>(1, 1, { filter, requestKey: null });
   return list.items[0] ?? null;
 }
 
@@ -412,7 +466,7 @@ class PocketBaseSnapshotStore implements RemoteAppStateStore {
     try {
       const record = await client
         .collection("app_state_snapshots")
-        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`);
+        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`, { requestKey: null });
 
       return toSnapshot(record);
     } catch (error) {
@@ -433,7 +487,7 @@ class PocketBaseSnapshotStore implements RemoteAppStateStore {
     userId: string;
     state: AppState;
     updatedAtClient: string;
-    knownRemoteUpdatedAt: string | null;
+    knownRemoteUpdatedAt?: string | null;
   }): Promise<RemoteSnapshot> {
     const client = getPocketBaseClient();
     const payload = {
@@ -446,7 +500,7 @@ class PocketBaseSnapshotStore implements RemoteAppStateStore {
     try {
       const existing = await client
         .collection("app_state_snapshots")
-        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`);
+        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`, { requestKey: null });
 
       if (knownRemoteUpdatedAt && existing.updated && existing.updated !== knownRemoteUpdatedAt) {
         return toSnapshot(existing);
@@ -454,7 +508,7 @@ class PocketBaseSnapshotStore implements RemoteAppStateStore {
 
       const updated = await client
         .collection("app_state_snapshots")
-        .update<PocketBaseSnapshotRecord>(existing.id, payload);
+        .update<PocketBaseSnapshotRecord>(existing.id, payload, { requestKey: null });
 
       return toSnapshot(updated);
     } catch (error) {
@@ -464,7 +518,7 @@ class PocketBaseSnapshotStore implements RemoteAppStateStore {
 
       const created = await client
         .collection("app_state_snapshots")
-        .create<PocketBaseSnapshotRecord>(payload);
+        .create<PocketBaseSnapshotRecord>(payload, { requestKey: null });
 
       return toSnapshot(created);
     }
@@ -662,6 +716,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
                   userId,
                   localRecord,
                   metadata.lastLocalMutationAt ?? now.toISOString(),
+                  remote.rawRecords,
                 ),
               );
             }
@@ -692,13 +747,20 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         }
 
         if (!localRecord && remoteRecord) {
-          operations.push(this.deleteRecord(userId, remoteRecord));
+          operations.push(this.deleteRecord(userId, remoteRecord, remote.rawRecords));
           delete resolvedValues[key];
           continue;
         }
 
         if (localRecord) {
-          operations.push(this.upsertRecord(userId, localRecord, metadata.lastLocalMutationAt ?? now.toISOString()));
+          operations.push(
+            this.upsertRecord(
+              userId,
+              localRecord,
+              metadata.lastLocalMutationAt ?? now.toISOString(),
+              remote.rawRecords,
+            ),
+          );
           resolvedValues[key] = localRecord;
         }
       }
@@ -711,7 +773,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         userId,
         state: resolvedState,
         updatedAtClient: dualWriteTimestamp,
-        knownRemoteUpdatedAt: metadata.lastRemoteUpdatedAt,
       });
       const finalRemote = await this.loadSplitWorkspaceState(userId, resolvedState, now);
       const resolvedMetadata = createPersistenceMetadata({
@@ -762,7 +823,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       const client = getPocketBaseClient();
       const record = await client
         .collection("notes")
-        .getFirstListItem<PocketBaseNoteRecord>(`owner="${userId}" && note_id="${noteId}"`);
+        .getFirstListItem<PocketBaseNoteRecord>(`owner="${userId}" && note_id="${noteId}"`, {
+          requestKey: null,
+        });
 
       return {
         markdown: record.markdown ?? "",
@@ -814,23 +877,30 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
 
       if (existing) {
-        await client.collection("notes").update(existing.id, {
-          owner: userId,
-          note_id: noteId,
-          title: existing.title ?? "",
-          folder_id: existing.folder_id ?? null,
-          markdown,
-          updated_at_client: updatedAtClient,
-        });
+        await client.collection("notes").update(
+          existing.id,
+          {
+            owner: userId,
+            note_id: noteId,
+            title: existing.title ?? "",
+            folder_id: existing.folder_id ?? null,
+            markdown,
+            updated_at_client: updatedAtClient,
+          },
+          { requestKey: null },
+        );
       } else {
-        await client.collection("notes").create({
-          owner: userId,
-          note_id: noteId,
-          title: "Untitled Note",
-          folder_id: null,
-          markdown,
-          updated_at_client: updatedAtClient,
-        });
+        await client.collection("notes").create(
+          {
+            owner: userId,
+            note_id: noteId,
+            title: "Untitled Note",
+            folder_id: null,
+            markdown,
+            updated_at_client: updatedAtClient,
+          },
+          { requestKey: null },
+        );
       }
 
       return {
@@ -889,6 +959,10 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         }
       }
 
+      const localWasMutated =
+        !knownRemoteMeta ||
+        (localRecord && knownRemoteMeta.fingerprint !== stableFingerprint(localRecord.value));
+
       const comparisonTimestamp =
         remoteMeta?.lastRemoteUpdatedAtClient ??
         remoteMeta?.lastRemoteUpdatedAt ??
@@ -896,7 +970,11 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         knownRemoteMeta?.lastRemoteUpdatedAt ??
         null;
 
-      if (localRecord && compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, comparisonTimestamp) > 0) {
+      if (
+        localRecord &&
+        localWasMutated &&
+        compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, comparisonTimestamp) > 0
+      ) {
         mergedValues[key] = localRecord;
         hasLocalNewer = true;
         continue;
@@ -905,8 +983,11 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       if (remoteRecord) {
         mergedValues[key] = remoteRecord;
         hasRemoteNewer = true;
-      } else {
+      } else if (localRecord && !localWasMutated) {
         hasRemoteNewer = true;
+      } else if (localRecord) {
+        mergedValues[key] = localRecord;
+        hasLocalNewer = true;
       }
     }
 
@@ -956,37 +1037,50 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       await Promise.all([
       client
         .collection("daily_pages")
-        .getFullList<PocketBaseDailyPageRecord>({ filter: `owner="${userId}"` }),
-      client.collection("notes").getFullList<PocketBaseNoteRecord>({ filter: `owner="${userId}"` }),
+        .getFullList<PocketBaseDailyPageRecord>({ filter: `owner="${userId}"`, requestKey: null }),
+      client.collection("notes").getFullList<PocketBaseNoteRecord>({ filter: `owner="${userId}"`, requestKey: null }),
       client
         .collection("note_folders")
-        .getFullList<PocketBaseNoteFolderRecord>({ filter: `owner="${userId}"` }),
+        .getFullList<PocketBaseNoteFolderRecord>({ filter: `owner="${userId}"`, requestKey: null }),
       client
         .collection("planner_presets")
-        .getFullList<PocketBasePlannerPresetRecord>({ filter: `owner="${userId}"` }),
+        .getFullList<PocketBasePlannerPresetRecord>({ filter: `owner="${userId}"`, requestKey: null }),
       getFirstByFilter<PocketBaseContentBoardRecord>("content_boards", `owner="${userId}"`),
       client
         .collection("content_cards")
-        .getFullList<PocketBaseContentCardRecord>({ filter: `owner="${userId}"` }),
+        .getFullList<PocketBaseContentCardRecord>({ filter: `owner="${userId}"`, requestKey: null }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
     ]);
 
     const values: Record<string, SyncRecordValue> = {};
     const records: Record<string, PersistenceRecordMetadata> = {};
-    const loadedDailyPages: Record<string, DailyPage> = {};
+    const loadedDailyPagesByWorkspace = new Map<string, Record<string, DailyPage>>();
     const dailyPageRecords = new Map<string, PocketBaseDailyPageRecord>();
+    const rawRecords: SplitWorkspaceRawRecords = {
+      dailyPages: new Map(),
+      notes: new Map(),
+      noteFolders: new Map(),
+      plannerPresets: new Map(),
+      contentBoard,
+      contentCards: new Map(),
+      workspaceState,
+    };
     let hasRepairedDailyPage = false;
 
     for (const record of dailyPages) {
       if (!record.date) continue;
+      const workspaceId = record.workspace_id || DEFAULT_TODO_WORKSPACE_ID;
       const value: DailyPage = {
         date: record.date,
         markdown: record.markdown ?? "",
         todos: safeArray(record.todos_json),
       };
-      const key = `daily_page:${record.date}`;
-      loadedDailyPages[record.date] = value;
-      dailyPageRecords.set(record.date, record);
+      const key = `daily_page:${workspaceId}:${record.date}`;
+      const workspacePages = loadedDailyPagesByWorkspace.get(workspaceId) ?? {};
+      workspacePages[record.date] = value;
+      loadedDailyPagesByWorkspace.set(workspaceId, workspacePages);
+      dailyPageRecords.set(`${workspaceId}:${record.date}`, record);
+      rawRecords.dailyPages.set(`${workspaceId}:${record.date}`, record);
       values[key] = { key, kind: "daily_page", value };
       records[key] = createRecordMetadata(
         key,
@@ -998,29 +1092,33 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     }
 
     const todayISO = toISODate(now);
-    const todayPage = loadedDailyPages[todayISO];
-    const todayRecord = dailyPageRecords.get(todayISO);
-    if (
-      todayPage &&
-      todayRecord &&
-      isUntouchedEmptyDailyPage(todayPage, todayRecord.created, todayRecord.updated)
-    ) {
-      const history = { ...loadedDailyPages };
-      delete history[todayISO];
-      const repairedPage = createCarryoverDailyPage(history, todayISO);
+    for (const [workspaceId, loadedDailyPages] of loadedDailyPagesByWorkspace) {
+      const todayPage = loadedDailyPages[todayISO];
+      const todayRecord = dailyPageRecords.get(`${workspaceId}:${todayISO}`);
+      if (
+        todayPage &&
+        todayRecord &&
+        isUntouchedEmptyDailyPage(todayPage, todayRecord.created, todayRecord.updated)
+      ) {
+        const history = { ...loadedDailyPages };
+        delete history[todayISO];
+        const repairedPage = createCarryoverDailyPage(history, todayISO);
 
-      if (repairedPage.markdown.trim() !== "" || repairedPage.todos.length > 0) {
-        values[`daily_page:${todayISO}`] = {
-          key: `daily_page:${todayISO}`,
-          kind: "daily_page",
-          value: repairedPage,
-        };
-        hasRepairedDailyPage = true;
+        if (repairedPage.markdown.trim() !== "" || repairedPage.todos.length > 0) {
+          const key = `daily_page:${workspaceId}:${todayISO}`;
+          values[key] = {
+            key,
+            kind: "daily_page",
+            value: repairedPage,
+          };
+          hasRepairedDailyPage = true;
+        }
       }
     }
 
     for (const record of notes) {
       if (!record.note_id) continue;
+      rawRecords.notes.set(record.note_id, record);
       const value: NoteSummary = {
         id: record.note_id,
         title: record.title ?? "",
@@ -1040,6 +1138,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of noteFolders) {
       if (!record.folder_id) continue;
+      rawRecords.noteFolders.set(record.folder_id, record);
       const value: NoteFolder = {
         id: record.folder_id,
         name: record.name ?? "New Folder",
@@ -1059,12 +1158,19 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of plannerPresets) {
       if (!record.preset_id) continue;
+      rawRecords.plannerPresets.set(record.preset_id, record);
+      const updatedAt = record.updated_at_client ?? record.updated ?? new Date(0).toISOString();
+      const plannerPayload = readPlannerDaysPayload(record.days_json);
       const value: PlannerPreset = {
         id: record.preset_id,
         name: record.name ?? "Balanced Week",
+        subtitle:
+          plannerPayload.subtitle ??
+          "Shape a reusable weekly rhythm around the things that matter most.",
         dayOrder: safeArray(record.day_order_json),
-        days: safeRecord(record.days_json),
-        updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
+        days: plannerPayload.days,
+        createdAt: plannerPayload.createdAt ?? record.created ?? updatedAt,
+        updatedAt,
       };
       const key = `planner_preset:${record.preset_id}`;
       values[key] = { key, kind: "planner_preset", value };
@@ -1096,6 +1202,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of contentCards) {
       if (!record.card_id || !record.column_id || !record.title) continue;
+      rawRecords.contentCards.set(record.card_id, record);
       const value: ContentCard = {
         id: record.card_id,
         columnId: record.column_id,
@@ -1117,8 +1224,11 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     if (workspaceState) {
       const value: SyncableWorkspaceState = {
+        todoWorkspaces: safeRecord<TodoWorkspace>(workspaceState.todo_workspaces_json),
         uiState: {
           selectedDailyDate: workspaceState.selected_daily_date ?? null,
+          selectedTodoWorkspaceId:
+            workspaceState.selected_todo_workspace_id ?? DEFAULT_TODO_WORKSPACE_ID,
           selectedNoteId: workspaceState.selected_note_id ?? null,
           selectedNoteFolderId: workspaceState.selected_note_folder_id ?? null,
           selectedPlannerPresetId: workspaceState.selected_planner_preset_id ?? null,
@@ -1142,6 +1252,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     return {
       state,
       records,
+      rawRecords,
       hasRepairedDailyPage,
       hasData:
         dailyPages.length > 0 ||
@@ -1154,34 +1265,35 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     };
   }
 
-  private async upsertRecord(userId: string, record: SyncRecordValue, updatedAtClient: string) {
+  private async upsertRecord(
+    userId: string,
+    record: SyncRecordValue,
+    updatedAtClient: string,
+    rawRecords: SplitWorkspaceRawRecords,
+  ) {
     const client = getPocketBaseClient();
 
     if (record.kind === "daily_page") {
-      const existing = await getFirstByFilter<PocketBaseDailyPageRecord>(
-        "daily_pages",
-        `owner="${userId}" && date="${record.value.date}"`,
-      );
+      const workspaceId = record.key.split(":").slice(1, -1).join(":");
+      const existing = rawRecords.dailyPages.get(`${workspaceId}:${record.value.date}`);
       const payload = {
         owner: userId,
+        workspace_id: workspaceId,
         date: record.value.date,
         markdown: record.value.markdown,
         todos_json: record.value.todos,
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("daily_pages").update(existing.id, payload);
+        await client.collection("daily_pages").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("daily_pages").create(payload);
+        await client.collection("daily_pages").create(payload, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "note") {
-      const existing = await getFirstByFilter<PocketBaseNoteRecord>(
-        "notes",
-        `owner="${userId}" && note_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.notes.get(record.value.id);
       const payload = {
         owner: userId,
         note_id: record.value.id,
@@ -1191,18 +1303,15 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("notes").update(existing.id, payload);
+        await client.collection("notes").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("notes").create(payload);
+        await client.collection("notes").create(payload, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "note_folder") {
-      const existing = await getFirstByFilter<PocketBaseNoteFolderRecord>(
-        "note_folders",
-        `owner="${userId}" && folder_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.noteFolders.get(record.value.id);
       const payload = {
         owner: userId,
         folder_id: record.value.id,
@@ -1211,57 +1320,52 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("note_folders").update(existing.id, payload);
+        await client.collection("note_folders").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("note_folders").create(payload);
+        await client.collection("note_folders").create(payload, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "planner_preset") {
-      const existing = await getFirstByFilter<PocketBasePlannerPresetRecord>(
-        "planner_presets",
-        `owner="${userId}" && preset_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.plannerPresets.get(record.value.id);
       const payload = {
         owner: userId,
         preset_id: record.value.id,
         name: record.value.name,
         day_order_json: record.value.dayOrder,
-        days_json: record.value.days,
+        days_json: {
+          days: record.value.days,
+          subtitle: record.value.subtitle,
+          createdAt: record.value.createdAt,
+        },
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("planner_presets").update(existing.id, payload);
+        await client.collection("planner_presets").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("planner_presets").create(payload);
+        await client.collection("planner_presets").create(payload, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "content_board") {
-      const existing = await getFirstByFilter<PocketBaseContentBoardRecord>(
-        "content_boards",
-        `owner="${userId}"`,
-      );
+      const existing = rawRecords.contentBoard;
       const payload = {
         owner: userId,
         columns_json: record.value.columns,
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("content_boards").update(existing.id, payload);
+        await client.collection("content_boards").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("content_boards").create(payload);
+        await client.collection("content_boards").create(payload, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "content_card") {
-      const existing = await getFirstByFilter<PocketBaseContentCardRecord>(
-        "content_cards",
-        `owner="${userId}" && card_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.contentCards.get(record.value.id);
       const payload = {
         owner: userId,
         card_id: record.value.id,
@@ -1272,20 +1376,19 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("content_cards").update(existing.id, payload);
+        await client.collection("content_cards").update(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("content_cards").create(payload);
+        await client.collection("content_cards").create(payload, { requestKey: null });
       }
       return;
     }
 
-    const existing = await getFirstByFilter<PocketBaseWorkspaceStateRecord>(
-      "workspace_state",
-      `owner="${userId}"`,
-    );
+    const existing = rawRecords.workspaceState;
     const payload = {
       owner: userId,
       selected_daily_date: record.value.uiState.selectedDailyDate,
+      selected_todo_workspace_id: record.value.uiState.selectedTodoWorkspaceId,
+      todo_workspaces_json: record.value.todoWorkspaces,
       selected_note_id: record.value.uiState.selectedNoteId,
       selected_note_folder_id: record.value.uiState.selectedNoteFolderId,
       selected_planner_preset_id: record.value.uiState.selectedPlannerPresetId,
@@ -1295,87 +1398,71 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       updated_at_client: updatedAtClient,
     };
     if (existing) {
-      await client.collection("workspace_state").update(existing.id, payload);
+      await client.collection("workspace_state").update(existing.id, payload, { requestKey: null });
     } else {
-      await client.collection("workspace_state").create(payload);
+      await client.collection("workspace_state").create(payload, { requestKey: null });
     }
   }
 
-  private async deleteRecord(userId: string, record: SyncRecordValue) {
+  private async deleteRecord(
+    userId: string,
+    record: SyncRecordValue,
+    rawRecords: SplitWorkspaceRawRecords,
+  ) {
     const client = getPocketBaseClient();
 
     if (record.kind === "daily_page") {
-      const existing = await getFirstByFilter<PocketBaseDailyPageRecord>(
-        "daily_pages",
-        `owner="${userId}" && date="${record.value.date}"`,
-      );
+      const workspaceId = record.key.split(":").slice(1, -1).join(":");
+      const existing = rawRecords.dailyPages.get(`${workspaceId}:${record.value.date}`);
       if (existing) {
-        await client.collection("daily_pages").delete(existing.id);
+        await client.collection("daily_pages").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "note") {
-      const existing = await getFirstByFilter<PocketBaseNoteRecord>(
-        "notes",
-        `owner="${userId}" && note_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.notes.get(record.value.id);
       if (existing) {
-        await client.collection("notes").delete(existing.id);
+        await client.collection("notes").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "note_folder") {
-      const existing = await getFirstByFilter<PocketBaseNoteFolderRecord>(
-        "note_folders",
-        `owner="${userId}" && folder_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.noteFolders.get(record.value.id);
       if (existing) {
-        await client.collection("note_folders").delete(existing.id);
+        await client.collection("note_folders").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "planner_preset") {
-      const existing = await getFirstByFilter<PocketBasePlannerPresetRecord>(
-        "planner_presets",
-        `owner="${userId}" && preset_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.plannerPresets.get(record.value.id);
       if (existing) {
-        await client.collection("planner_presets").delete(existing.id);
+        await client.collection("planner_presets").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "content_board") {
-      const existing = await getFirstByFilter<PocketBaseContentBoardRecord>(
-        "content_boards",
-        `owner="${userId}"`,
-      );
+      const existing = rawRecords.contentBoard;
       if (existing) {
-        await client.collection("content_boards").delete(existing.id);
+        await client.collection("content_boards").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
     if (record.kind === "content_card") {
-      const existing = await getFirstByFilter<PocketBaseContentCardRecord>(
-        "content_cards",
-        `owner="${userId}" && card_id="${record.value.id}"`,
-      );
+      const existing = rawRecords.contentCards.get(record.value.id);
       if (existing) {
-        await client.collection("content_cards").delete(existing.id);
+        await client.collection("content_cards").delete(existing.id, { requestKey: null });
       }
       return;
     }
 
-    const existing = await getFirstByFilter<PocketBaseWorkspaceStateRecord>(
-      "workspace_state",
-      `owner="${userId}"`,
-    );
+    const existing = rawRecords.workspaceState;
     if (existing) {
-      await client.collection("workspace_state").delete(existing.id);
+      await client.collection("workspace_state").delete(existing.id, { requestKey: null });
     }
   }
 }

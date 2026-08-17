@@ -161,6 +161,14 @@ describe("appReducer theme mode", () => {
     expect(reopened.uiState.isSidebarCollapsed).toBe(false);
   });
 
+  test("marks the planner tour as seen locally", () => {
+    const initial = createInitialState("2026-03-11");
+    expect(initial.uiState.hasSeenPlannerTour).toBe(false);
+
+    const completed = appReducer(initial, { type: "complete-planner-tour" });
+    expect(completed.uiState.hasSeenPlannerTour).toBe(true);
+  });
+
   test("increases, decreases, resets, and clamps the shared content font scale", () => {
     const initial = createInitialState("2026-03-11");
 
@@ -392,6 +400,27 @@ describe("appReducer theme mode", () => {
     expect(Object.keys(recreated.plannerPresets)).toHaveLength(1);
     expect(recreated.uiState.selectedPlannerPresetId).toBeTruthy();
     expect(recreated.uiState.lastView).toBe("planner");
+  });
+
+  test("updates planner title and subtitle", () => {
+    const initial = createInitialState("2026-03-11");
+    const presetId = initial.uiState.selectedPlannerPresetId!;
+
+    const renamed = appReducer(initial, {
+      type: "rename-planner-preset",
+      presetId,
+      name: "My Daily Plan",
+    });
+    const updated = appReducer(renamed, {
+      type: "update-planner-preset-subtitle",
+      presetId,
+      subtitle: "A static rhythm I can reuse",
+    });
+
+    expect(updated.plannerPresets[presetId]).toMatchObject({
+      name: "My Daily Plan",
+      subtitle: "A static rhythm I can reuse",
+    });
   });
 
   test("allows clearing a note title while editing", () => {

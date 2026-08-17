@@ -28,6 +28,13 @@ const dailyPageSchema = z.object({
   todos: z.array(todoSchema).catch([]),
 });
 
+const todoWorkspaceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 const noteDocSchema = z.object({
   id: z.string(),
   title: z.string().catch("Untitled"),
@@ -86,23 +93,32 @@ const plannerDaySchema = z.object({
   events: z.array(plannerEventSchema),
 });
 
-const plannerPresetSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  dayOrder: z.array(
-    z.enum([
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-      "sunday",
-    ]),
-  ),
-  days: z.record(z.string(), plannerDaySchema),
-  updatedAt: z.string(),
-});
+const plannerPresetSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    subtitle: z.string().optional(),
+    dayOrder: z.array(
+      z.enum([
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ]),
+    ),
+    days: z.record(z.string(), plannerDaySchema),
+    createdAt: z.string().optional(),
+    updatedAt: z.string(),
+  })
+  .transform(({ subtitle, createdAt, ...preset }) => ({
+    ...preset,
+    subtitle:
+      subtitle ?? "Shape a reusable weekly rhythm around the things that matter most.",
+    createdAt: createdAt ?? preset.updatedAt,
+  }));
 
 const contentColumnSchema = z.object({
   id: z.string().min(1),
@@ -126,6 +142,7 @@ const contentCardSchema = z.object({
 
 export const appStateSchema = z.object({
   dailyPages: z.record(z.string(), dailyPageSchema),
+  todoWorkspaces: z.record(z.string(), todoWorkspaceSchema),
   notesDocs: z.record(z.string(), noteDocSchema),
   noteFolders: z.record(z.string(), noteFolderSchema),
   plannerPresets: z.record(z.string(), plannerPresetSchema),
@@ -133,10 +150,12 @@ export const appStateSchema = z.object({
   contentCards: z.record(z.string(), contentCardSchema).catch({}),
   uiState: z.object({
     selectedDailyDate: z.string().nullable(),
+    selectedTodoWorkspaceId: z.string(),
     selectedNoteId: z.string().nullable(),
     selectedNoteFolderId: z.string().nullable().optional(),
     selectedPlannerPresetId: z.string().nullable(),
     isSidebarCollapsed: z.boolean().optional(),
+    hasSeenPlannerTour: z.boolean().optional(),
     dailyTaskPaneWidth: z.number().optional(),
     contentFontScale: z.number().optional(),
     expandedYears: z.array(z.string()),

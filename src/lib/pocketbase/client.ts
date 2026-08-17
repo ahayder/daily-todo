@@ -17,6 +17,7 @@ export function getPocketBaseClient(): PocketBase {
 
   if (!pocketBaseClient || pocketBaseUrl !== baseUrl) {
     pocketBaseClient = new PocketBase(baseUrl);
+    pocketBaseClient.autoCancellation(false);
     pocketBaseUrl = baseUrl;
   }
 

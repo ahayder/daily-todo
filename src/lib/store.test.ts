@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   DEFAULT_CONTENT_COLUMNS,
   DEFAULT_NOTES_FOLDER_ID,
+  DEFAULT_TODO_WORKSPACE_ID,
   addPlannerPurposeToDays,
   addContentColumn,
   applyPlannerPurposeToDays,
@@ -12,6 +13,8 @@ import {
   createPlannerEvent,
   createPlannerPurpose,
   createPlannerPreset,
+  createTodoWorkspaceInState,
+  deleteTodoWorkspaceFromState,
   deleteContentColumn,
   duplicatePlannerPreset,
   ensureDailyPageForDate,
@@ -19,11 +22,14 @@ import {
   ensureNoteState,
   ensurePlannerState,
   groupTodosByPriority,
+  getDailyPageForWorkspace,
+  getDailyPageKey,
   makeTodoSubtask,
   mergeHydratedAppState,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
+  selectTodoWorkspaceInState,
   updateContentColumnSubtitle,
   updatePlannerPurposeInDay,
 } from "@/lib/store";
@@ -250,6 +256,79 @@ describe("ensureDailyPageForDate", () => {
   });
 });
 
+describe("Todo workspaces", () => {
+  test("creates an empty independent workspace without changing Main history", () => {
+    const state = createInitialState("2026-03-11");
+    state.dailyPages["2026-03-11"].markdown = "Main note";
+    state.dailyPages["2026-03-11"].todos = [
+      {
+        id: "main-task",
+        text: "Main task",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-11T08:00:00.000Z",
+      },
+    ];
+
+    const created = createTodoWorkspaceInState(state, "Work", "2026-03-11");
+    const workspaceId = created.uiState.selectedTodoWorkspaceId;
+
+    expect(workspaceId).not.toBe(DEFAULT_TODO_WORKSPACE_ID);
+    expect(created.todoWorkspaces[workspaceId].name).toBe("Work");
+    expect(getDailyPageForWorkspace(created, "2026-03-11", workspaceId)).toEqual({
+      date: "2026-03-11",
+      markdown: "",
+      todos: [],
+    });
+    expect(getDailyPageForWorkspace(created, "2026-03-11", DEFAULT_TODO_WORKSPACE_ID)?.markdown)
+      .toBe("Main note");
+  });
+
+  test("carries unfinished work only within the selected workspace", () => {
+    const initial = createInitialState("2026-03-10");
+    initial.dailyPages["2026-03-10"].markdown = "Main history";
+    const created = createTodoWorkspaceInState(initial, "Work", "2026-03-10");
+    const workspaceId = created.uiState.selectedTodoWorkspaceId;
+    const workKey = getDailyPageKey(workspaceId, "2026-03-10");
+    created.dailyPages[workKey].markdown = "Work history";
+    created.dailyPages[workKey].todos = [
+      {
+        id: "work-task",
+        text: "Work task",
+        priority: 2,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T08:00:00.000Z",
+      },
+    ];
+
+    const rolled = ensureDailyPageForDate(created, "2026-03-11", workspaceId);
+    const workToday = getDailyPageForWorkspace(rolled, "2026-03-11", workspaceId);
+
+    expect(workToday?.markdown).toBe("Work history");
+    expect(workToday?.todos.map((todo) => todo.text)).toEqual(["Work task"]);
+    expect(getDailyPageForWorkspace(rolled, "2026-03-11", DEFAULT_TODO_WORKSPACE_ID)).toBeNull();
+  });
+
+  test("switches on the same date and removes only a confirmed non-Main workspace", () => {
+    const initial = createInitialState("2026-03-11");
+    const created = createTodoWorkspaceInState(initial, "Work", "2026-03-11");
+    const workspaceId = created.uiState.selectedTodoWorkspaceId;
+    const switched = selectTodoWorkspaceInState(
+      created,
+      DEFAULT_TODO_WORKSPACE_ID,
+      "2026-03-11",
+    );
+    const deleted = deleteTodoWorkspaceFromState(switched, workspaceId, "2026-03-11");
+
+    expect(switched.uiState.selectedTodoWorkspaceId).toBe(DEFAULT_TODO_WORKSPACE_ID);
+    expect(deleted.todoWorkspaces[workspaceId]).toBeUndefined();
+    expect(deleted.dailyPages[getDailyPageKey(workspaceId, "2026-03-11")]).toBeUndefined();
+    expect(deleted.dailyPages["2026-03-11"]).toBeDefined();
+  });
+});
+
 describe("groupTodosByPriority", () => {
   test("groups by priority and places unchecked items first", () => {
     const todos: Todo[] = [
@@ -309,6 +388,9 @@ describe("planner state", () => {
     expect(presetIds).toHaveLength(1);
     expect(state.uiState.selectedPlannerPresetId).toBe(presetIds[0]);
     expect(preset.name).toBe("Ideal Daily Rhythm");
+    expect(preset.subtitle).toMatch(/calm, balanced sample/i);
+    expect(preset.createdAt).toBeTruthy();
+    expect(state.uiState.hasSeenPlannerTour).toBe(false);
     expect(preset.dayOrder).toHaveLength(7);
     expect(monday.events).toHaveLength(10);
     expect(
@@ -347,7 +429,7 @@ describe("planner state", () => {
 
   test("upgrades only the untouched blank default plan to the ideal starter", () => {
     const state = createInitialState("2026-03-11");
-    const blankDefault = createPlannerPreset();
+    const blankDefault = createPlannerPreset("Balanced Week");
     const upgraded = ensurePlannerState({
       ...state,
       plannerPresets: { [blankDefault.id]: blankDefault },
@@ -543,7 +625,7 @@ describe("planner state", () => {
     expect(repaired.uiState.selectedNoteFolderId).toBe(DEFAULT_NOTES_FOLDER_ID);
   });
 
-  test("duplicates a preset with separate day titles", () => {
+  test("duplicates a preset with independent content and creation metadata", () => {
     const preset = createPlannerPreset("Focus Week");
     preset.days.monday.title = "Deep Work Monday";
     const copy = duplicatePlannerPreset(preset);
@@ -551,6 +633,9 @@ describe("planner state", () => {
     copy.days.monday.title = "Recovery Monday";
 
     expect(copy.id).not.toBe(preset.id);
+    expect(copy.name).toBe("Focus Week Copy");
+    expect(copy.subtitle).toBe(preset.subtitle);
+    expect(copy.createdAt).toBeTruthy();
     expect(copy.days.monday.title).toBe("Recovery Monday");
     expect(preset.days.monday.title).toBe("Deep Work Monday");
   });

@@ -45,6 +45,24 @@ function setDesktopLayout() {
   });
 }
 
+function setCompactMobileLayout() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches:
+        query === "(max-width: 639px)" ||
+        query === "(hover: none), (pointer: coarse)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 afterEach(() => {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -369,6 +387,49 @@ describe("ContentPlannerView", () => {
         name: "Increase content planner font size",
       }),
     ).toBeDisabled();
+  });
+
+  test("uses compact phone chrome, collapsed cards, and a header Add Card trigger", async () => {
+    setCompactMobileLayout();
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    expect(
+      screen.getByText("Shape ideas into published work, one calm step at a time."),
+    ).toHaveClass("hidden", "sm:block");
+    expect(screen.getByText("Draft launch story")).toBeInTheDocument();
+    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Expand card Draft launch story" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Add card" })).not.toBeInTheDocument();
+
+    const addCardToIdeas = screen.getByRole("button", {
+      name: "Add card to Ideas",
+    });
+    expect(addCardToIdeas).toHaveClass("size-9");
+    await user.click(addCardToIdeas);
+
+    expect(
+      screen.queryByRole("button", { name: "Add card to Ideas" }),
+    ).not.toBeInTheDocument();
+    const textBox = screen.getByRole("textbox", { name: "New card in Ideas" });
+    await user.type(
+      textBox,
+      "Record product walkthrough{Enter}{Enter}Outline the main steps.",
+    );
+    await user.click(screen.getByRole("button", { name: "Add card" }));
+    expect(props.onAddCard).toHaveBeenCalledWith(
+      props.board.columns[0].id,
+      "Record product walkthrough",
+      "Outline the main steps.",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Expand card Draft launch story" }),
+    );
+    expect(screen.getByText("what changed")).toBeInTheDocument();
   });
 
   test("uses touch-first scrolling and an explicit move action on coarse pointers", async () => {

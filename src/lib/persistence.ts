@@ -11,10 +11,13 @@ import {
   ensureDailyPageForDate,
   ensureNoteState,
   ensurePlannerState,
+  ensureTodoWorkspaceState,
+  createDefaultTodoWorkspace,
+  DEFAULT_TODO_WORKSPACE_ID,
 } from "@/lib/store";
-import type { AppState, CachedNoteBody, NoteSummary, UIState } from "@/lib/types";
+import type { AppState, CachedNoteBody, NoteSummary, TodoWorkspace, UIState } from "@/lib/types";
 
-export const APP_STATE_VERSION = 4;
+export const APP_STATE_VERSION = 5;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
 export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
@@ -112,6 +115,7 @@ export type RemoteSnapshot = {
 export type SyncableUIState = Pick<
   UIState,
   | "selectedDailyDate"
+  | "selectedTodoWorkspaceId"
   | "selectedNoteId"
   | "selectedNoteFolderId"
   | "selectedPlannerPresetId"
@@ -121,12 +125,14 @@ export type SyncableUIState = Pick<
 >;
 
 export type SyncableWorkspaceState = {
+  todoWorkspaces: Record<string, TodoWorkspace>;
   uiState: SyncableUIState;
 };
 
 export type LocalOnlyUIState = Pick<
   UIState,
   | "isSidebarCollapsed"
+  | "hasSeenPlannerTour"
   | "dailyTaskPaneWidth"
   | "contentFontScale"
   | "themeMode"
@@ -242,16 +248,18 @@ export function compareTimestamps(left: string | null, right: string | null): nu
   return leftTime > rightTime ? 1 : -1;
 }
 
-function normalizeLegacyState(parsed: unknown): unknown {
+function normalizeLegacyState(parsed: unknown, now: Date): unknown {
   if (!parsed || typeof parsed !== "object") return parsed;
 
   const candidate = parsed as {
     uiState?: {
       themeMode?: unknown;
       lastView?: unknown;
+      selectedTodoWorkspaceId?: unknown;
       selectedPlannerPresetId?: unknown;
       selectedNoteFolderId?: unknown;
       isSidebarCollapsed?: unknown;
+      hasSeenPlannerTour?: unknown;
       dailyTaskPaneWidth?: unknown;
       contentFontScale?: unknown;
       categoryTheme?: unknown;
@@ -264,6 +272,7 @@ function normalizeLegacyState(parsed: unknown): unknown {
       isFocusTimerCompletionPromptOpen?: unknown;
       expandedNoteFolders?: unknown;
     };
+    todoWorkspaces?: unknown;
     plannerPresets?: unknown;
     noteFolders?: unknown;
     contentBoard?: unknown;
@@ -289,9 +298,25 @@ function normalizeLegacyState(parsed: unknown): unknown {
       : candidate.uiState.lastView === "daily"
         ? "todos"
         : "todos";
+  const todoWorkspaces =
+    candidate.todoWorkspaces &&
+    typeof candidate.todoWorkspaces === "object" &&
+    Object.keys(candidate.todoWorkspaces).length > 0
+      ? candidate.todoWorkspaces
+      : {
+          [DEFAULT_TODO_WORKSPACE_ID]: createDefaultTodoWorkspace(now.toISOString()),
+        };
+  const selectedTodoWorkspaceId =
+    typeof candidate.uiState.selectedTodoWorkspaceId === "string" &&
+    candidate.uiState.selectedTodoWorkspaceId in todoWorkspaces
+      ? candidate.uiState.selectedTodoWorkspaceId
+      : DEFAULT_TODO_WORKSPACE_ID in todoWorkspaces
+        ? DEFAULT_TODO_WORKSPACE_ID
+        : Object.keys(todoWorkspaces)[0];
 
   return {
     ...candidate,
+    todoWorkspaces,
     plannerPresets:
       candidate.plannerPresets && typeof candidate.plannerPresets === "object"
         ? candidate.plannerPresets
@@ -310,6 +335,7 @@ function normalizeLegacyState(parsed: unknown): unknown {
       ...candidate.uiState,
       themeMode: normalizedThemeMode,
       lastView: normalizedLastView,
+      selectedTodoWorkspaceId,
       selectedPlannerPresetId:
         typeof candidate.uiState.selectedPlannerPresetId === "string" ||
         candidate.uiState.selectedPlannerPresetId === null
@@ -323,6 +349,10 @@ function normalizeLegacyState(parsed: unknown): unknown {
       isSidebarCollapsed:
         typeof candidate.uiState.isSidebarCollapsed === "boolean"
           ? candidate.uiState.isSidebarCollapsed
+          : false,
+      hasSeenPlannerTour:
+        typeof candidate.uiState.hasSeenPlannerTour === "boolean"
+          ? candidate.uiState.hasSeenPlannerTour
           : false,
       dailyTaskPaneWidth:
         typeof candidate.uiState.dailyTaskPaneWidth === "number"
@@ -382,7 +412,7 @@ export function seedAppState(now = new Date()): AppState {
 }
 
 export function tryParseAppState(input: unknown, now = new Date()): AppState | null {
-  const parsed = normalizeLegacyState(input);
+  const parsed = normalizeLegacyState(input, now);
   const validated = appStateSchema.safeParse(parsed);
 
   if (!validated.success) {
@@ -399,12 +429,15 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
   }
 
   return ensureDailyPageForDate(
-    ensureNoteState(
-      ensureContentPlannerState(
-        ensurePlannerState({
+    ensureTodoWorkspaceState(
+      ensureNoteState(
+        ensureContentPlannerState(
+          ensurePlannerState({
           ...validated.data,
           uiState: {
             ...validated.data.uiState,
+            selectedTodoWorkspaceId:
+              validated.data.uiState.selectedTodoWorkspaceId ?? DEFAULT_TODO_WORKSPACE_ID,
             themeMode: validated.data.uiState.themeMode ?? "dark",
             categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
             isFocusMode: validated.data.uiState.isFocusMode ?? false,
@@ -420,12 +453,14 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
             selectedNoteFolderId: validated.data.uiState.selectedNoteFolderId ?? null,
             selectedPlannerPresetId: validated.data.uiState.selectedPlannerPresetId ?? null,
             isSidebarCollapsed: validated.data.uiState.isSidebarCollapsed ?? false,
+            hasSeenPlannerTour: validated.data.uiState.hasSeenPlannerTour ?? false,
             dailyTaskPaneWidth: validated.data.uiState.dailyTaskPaneWidth ?? 500,
             contentFontScale: clampContentFontScale(
               validated.data.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT,
             ),
           },
-        }),
+          }),
+        ),
       ),
     ),
     toISODate(now),
@@ -439,6 +474,7 @@ export function normalizeAppState(input: unknown, now = new Date()): AppState {
 export function extractSyncableUIState(uiState: UIState): SyncableUIState {
   return {
     selectedDailyDate: uiState.selectedDailyDate,
+    selectedTodoWorkspaceId: uiState.selectedTodoWorkspaceId,
     selectedNoteId: uiState.selectedNoteId,
     selectedNoteFolderId: uiState.selectedNoteFolderId,
     selectedPlannerPresetId: uiState.selectedPlannerPresetId,
@@ -450,6 +486,7 @@ export function extractSyncableUIState(uiState: UIState): SyncableUIState {
 
 export function extractSyncableWorkspaceState(state: AppState): SyncableWorkspaceState {
   return {
+    todoWorkspaces: state.todoWorkspaces,
     uiState: extractSyncableUIState(state.uiState),
   };
 }
@@ -457,6 +494,7 @@ export function extractSyncableWorkspaceState(state: AppState): SyncableWorkspac
 export function extractLocalOnlyUIState(uiState: UIState): LocalOnlyUIState {
   return {
     isSidebarCollapsed: uiState.isSidebarCollapsed,
+    hasSeenPlannerTour: uiState.hasSeenPlannerTour,
     dailyTaskPaneWidth: uiState.dailyTaskPaneWidth,
     contentFontScale: uiState.contentFontScale,
     themeMode: uiState.themeMode,

@@ -114,6 +114,7 @@ type MovePlacement = "top" | "bottom";
 type ContentPlannerLayout = "board" | "gallery";
 const touchFirstInputQuery = "(hover: none), (pointer: coarse)";
 const desktopLayoutQuery = "(min-width: 768px)";
+const compactMobileLayoutQuery = "(max-width: 639px)";
 
 function subscribeToTouchFirstInput(onChange: () => void) {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -163,6 +164,32 @@ function useDesktopLayout() {
   return useSyncExternalStore(
     subscribeToDesktopLayout,
     getDesktopLayoutSnapshot,
+    () => false,
+  );
+}
+
+function subscribeToCompactMobileLayout(onChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return () => {};
+  }
+
+  const mediaQuery = window.matchMedia(compactMobileLayoutQuery);
+  mediaQuery.addEventListener("change", onChange);
+  return () => mediaQuery.removeEventListener("change", onChange);
+}
+
+function getCompactMobileLayoutSnapshot() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(compactMobileLayoutQuery).matches
+  );
+}
+
+function useCompactMobileLayout() {
+  return useSyncExternalStore(
+    subscribeToCompactMobileLayout,
+    getCompactMobileLayoutSnapshot,
     () => false,
   );
 }
@@ -324,6 +351,7 @@ function ContentCardItem({
   isDropTarget,
   dropEdge,
   isTouchFirstInput,
+  collapseByDefault = false,
   layout,
   typographyStyle,
   onView,
@@ -335,6 +363,7 @@ function ContentCardItem({
   isDropTarget: boolean;
   dropEdge: "before" | "after" | null;
   isTouchFirstInput: boolean;
+  collapseByDefault?: boolean;
   layout: ContentPlannerLayout;
   typographyStyle: CSSProperties;
   onView: () => void;
@@ -343,11 +372,12 @@ function ContentCardItem({
   onRequestDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [text, setText] = useState(() => getContentCardText(card));
   const didDragRef = useRef(false);
+  const isCollapsed = collapsedOverride ?? collapseByDefault;
   const isDragEnabled = !isTouchFirstInput && layout === "board";
   const {
     attributes,
@@ -367,7 +397,7 @@ function ContentCardItem({
   });
 
   const startEditing = () => {
-    setIsCollapsed(false);
+    setCollapsedOverride(false);
     setText(getContentCardText(card));
     setIsEditing(true);
   };
@@ -612,7 +642,7 @@ function ContentCardItem({
               <TooltipTrigger
                 aria-label={`${isCollapsed ? "Expand" : "Collapse"} card ${card.title}`}
                 aria-expanded={!isCollapsed}
-                onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+                onClick={() => setCollapsedOverride(!isCollapsed)}
                 className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7"
               >
                 {isCollapsed ? (
@@ -722,6 +752,7 @@ function ContentColumnView({
   column,
   cards,
   isTouchFirstInput,
+  isCompactMobileLayout,
   typographyStyle,
   isCardDropTarget,
   dropTargetCardId,
@@ -747,6 +778,7 @@ function ContentColumnView({
   column: ContentColumn;
   cards: ContentCard[];
   isTouchFirstInput: boolean;
+  isCompactMobileLayout: boolean;
   typographyStyle: CSSProperties;
   isCardDropTarget: boolean;
   dropTargetCardId: string | null;
@@ -918,6 +950,24 @@ function ContentColumnView({
           {cards.length}
         </span>
 
+        {isCompactMobileLayout && !isComposerOpen ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Add card to ${column.title}`}
+                onClick={onOpenComposer}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none"
+              >
+                <Plus className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Add card
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+
         <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1010,6 +1060,7 @@ function ContentColumnView({
                 key={card.id}
                 card={card}
                 isTouchFirstInput={isTouchFirstInput}
+                collapseByDefault={isCompactMobileLayout}
                 layout="board"
                 typographyStyle={typographyStyle}
                 isDropTarget={dropTargetCardId === card.id}
@@ -1031,15 +1082,17 @@ function ContentColumnView({
         </SortableContext>
       </div>
 
-      <div className="mt-2 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] pt-2">
-        <InlineCardComposer
-          column={column}
-          isOpen={isComposerOpen}
-          onOpen={onOpenComposer}
-          onClose={onCloseComposer}
-          onSubmit={onAddCard}
-        />
-      </div>
+      {!isCompactMobileLayout || isComposerOpen ? (
+        <div className="mt-2 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] pt-2">
+          <InlineCardComposer
+            column={column}
+            isOpen={isComposerOpen}
+            onOpen={onOpenComposer}
+            onClose={onCloseComposer}
+            onSubmit={onAddCard}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1164,6 +1217,7 @@ export function ContentPlannerView({
   const [cardDropHighlight, setCardDropHighlight] = useState<CardDropHighlight | null>(null);
   const isTouchFirstInput = useTouchFirstInput();
   const isDesktopLayout = useDesktopLayout();
+  const isCompactMobileLayout = useCompactMobileLayout();
   const activeLayout: ContentPlannerLayout = isDesktopLayout
     ? preferredLayout
     : "board";
@@ -1321,17 +1375,17 @@ export function ContentPlannerView({
       className="flex h-full min-h-0 flex-col bg-[var(--paper)]"
       style={plannerTypographyStyle}
     >
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-3 py-3 sm:px-4 sm:py-4 md:px-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[length:var(--content-planner-font-lg,1.125rem)] font-semibold text-[var(--ink-900)] sm:text-[length:var(--content-planner-font-xl,1.25rem)]">Content Planner</h1>
-            <span className="rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-3 py-2 sm:flex-wrap sm:items-end sm:gap-3 sm:px-4 sm:py-4 md:px-6">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
+            <h1 className="min-w-0 truncate text-[length:var(--content-planner-font-lg,1.125rem)] font-semibold text-[var(--ink-900)] sm:text-[length:var(--content-planner-font-xl,1.25rem)]">Content Planner</h1>
+            <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--paper)] px-2.5 py-1 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
               {totalCards} {totalCards === 1 ? "card" : "cards"}
             </span>
             {showMobileFontControls ? (
               <div
                 aria-label="Content planner font size"
-                className="flex items-center gap-1 sm:hidden"
+                className="flex shrink-0 items-center gap-1 sm:hidden"
                 role="group"
               >
                 <Tooltip>
@@ -1370,7 +1424,7 @@ export function ContentPlannerView({
               </div>
             ) : null}
           </div>
-          <p className="mt-1 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-700)]">
+          <p className="mt-1 hidden text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-700)] sm:block">
             Shape ideas into published work, one calm step at a time.
           </p>
         </div>
@@ -1439,6 +1493,7 @@ export function ContentPlannerView({
                     column={column}
                     cards={columnCards}
                     isTouchFirstInput={isTouchFirstInput}
+                    isCompactMobileLayout={isCompactMobileLayout}
                     typographyStyle={plannerTypographyStyle}
                     isCardDropTarget={cardDropHighlight?.columnId === column.id}
                     dropTargetCardId={

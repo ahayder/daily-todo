@@ -70,8 +70,10 @@ export type PlannerDay = {
 export type PlannerPreset = {
   id: string;
   name: string;
+  subtitle: string;
   dayOrder: PlannerDayKey[];
   days: Record<PlannerDayKey, PlannerDay>;
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -89,6 +91,13 @@ export type DailyPage = {
   date: string;
   markdown: string;
   todos: Todo[];
+};
+
+export type TodoWorkspace = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type NoteDoc = {
@@ -120,10 +129,12 @@ export type NoteFolder = {
 
 export type UIState = {
   selectedDailyDate: string | null;
+  selectedTodoWorkspaceId: string;
   selectedNoteId: string | null;
   selectedNoteFolderId: string | null;
   selectedPlannerPresetId: string | null;
   isSidebarCollapsed: boolean;
+  hasSeenPlannerTour: boolean;
   dailyTaskPaneWidth: number;
   contentFontScale: number;
   expandedYears: string[];
@@ -143,6 +154,7 @@ export type UIState = {
 
 export type AppState = {
   dailyPages: Record<string, DailyPage>;
+  todoWorkspaces: Record<string, TodoWorkspace>;
   notesDocs: Record<string, NoteDoc>;
   noteFolders: Record<string, NoteFolder>;
   plannerPresets: Record<string, PlannerPreset>;

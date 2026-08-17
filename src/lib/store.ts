@@ -18,6 +18,7 @@ import type {
   Priority,
   TaskStatus,
   Todo,
+  TodoWorkspace,
 } from "@/lib/types";
 
 export const PLANNER_DAY_ORDER: PlannerDayKey[] = [
@@ -36,6 +37,8 @@ export const PLANNER_EVENT_COLORS: PlannerEventColor[] = [
   "sage",
   "lavender",
 ];
+export const DEFAULT_PLANNER_SUBTITLE =
+  "Shape a reusable weekly rhythm around the things that matter most.";
 export const DEFAULT_CONTENT_COLUMNS: ContentColumn[] = [
   {
     id: "content-column-ideas",
@@ -75,6 +78,8 @@ const DEFAULT_DAY_TITLES: Record<PlannerDayKey, string> = {
 };
 
 export const DEFAULT_NOTES_FOLDER_ID = "note-folder-default";
+export const DEFAULT_TODO_WORKSPACE_ID = "todo-workspace-main";
+const TODO_WORKSPACE_KEY_SEPARATOR = "::";
 const TASK_STATUS_ORDER: Record<TaskStatus, number> = {
   ongoing: 0,
   pending: 1,
@@ -91,6 +96,58 @@ export function createEmptyDailyPage(date: string): DailyPage {
     markdown: "",
     todos: [],
   };
+}
+
+export function createDefaultTodoWorkspace(timestamp = new Date().toISOString()): TodoWorkspace {
+  return {
+    id: DEFAULT_TODO_WORKSPACE_ID,
+    name: "Main",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function getDailyPageKey(workspaceId: string, date: string): string {
+  return workspaceId === DEFAULT_TODO_WORKSPACE_ID
+    ? date
+    : `${workspaceId}${TODO_WORKSPACE_KEY_SEPARATOR}${date}`;
+}
+
+export function getTodoWorkspaceIdFromDailyPageKey(key: string): string {
+  const separatorIndex = key.indexOf(TODO_WORKSPACE_KEY_SEPARATOR);
+  return separatorIndex === -1
+    ? DEFAULT_TODO_WORKSPACE_ID
+    : key.slice(0, separatorIndex);
+}
+
+export function getActiveTodoWorkspaceId(state: AppState): string {
+  const selected = state.uiState.selectedTodoWorkspaceId;
+  if (selected && state.todoWorkspaces[selected]) {
+    return selected;
+  }
+  if (state.todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID]) {
+    return DEFAULT_TODO_WORKSPACE_ID;
+  }
+  return Object.keys(state.todoWorkspaces)[0] ?? DEFAULT_TODO_WORKSPACE_ID;
+}
+
+export function getDailyPageForWorkspace(
+  state: AppState,
+  date: string,
+  workspaceId = getActiveTodoWorkspaceId(state),
+): DailyPage | null {
+  return state.dailyPages[getDailyPageKey(workspaceId, date)] ?? null;
+}
+
+export function getDailyPagesForWorkspace(
+  state: AppState,
+  workspaceId = getActiveTodoWorkspaceId(state),
+): Record<string, DailyPage> {
+  return Object.fromEntries(
+    Object.entries(state.dailyPages)
+      .filter(([key]) => getTodoWorkspaceIdFromDailyPageKey(key) === workspaceId)
+      .map(([, page]) => [page.date, page]),
+  );
 }
 
 export function createTodo(text: string, priority: Priority, parentId?: string): Todo {
@@ -188,8 +245,9 @@ function createPlannerDay(key: PlannerDayKey): PlannerDay {
   };
 }
 
-export function createPlannerPreset(name = "Balanced Week"): PlannerPreset {
+export function createPlannerPreset(name = "Untitled Planner"): PlannerPreset {
   const dayOrder = [...PLANNER_DAY_ORDER];
+  const now = new Date().toISOString();
   const days = Object.fromEntries(
     dayOrder.map((dayKey) => [dayKey, createPlannerDay(dayKey)]),
   ) as Record<PlannerDayKey, PlannerDay>;
@@ -197,9 +255,11 @@ export function createPlannerPreset(name = "Balanced Week"): PlannerPreset {
   return {
     id: makeId("planner"),
     name,
+    subtitle: DEFAULT_PLANNER_SUBTITLE,
     dayOrder,
     days,
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -293,6 +353,7 @@ export function createIdealPlannerPreset(): PlannerPreset {
 
   return {
     ...preset,
+    subtitle: "A calm, balanced sample you can reshape into your own daily rhythm.",
     days: Object.fromEntries(
       preset.dayOrder.map((dayKey) => [
         dayKey,
@@ -327,6 +388,8 @@ export function duplicatePlannerPreset(source: PlannerPreset): PlannerPreset {
     return nextId;
   };
 
+  const now = new Date().toISOString();
+
   return {
     ...source,
     id: makeId("planner"),
@@ -349,7 +412,8 @@ export function duplicatePlannerPreset(source: PlannerPreset): PlannerPreset {
         },
       ]),
     ) as Record<PlannerDayKey, PlannerDay>,
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -799,6 +863,11 @@ export function mergeHydratedAppState(
       local.dailyPages,
       remote.dailyPages,
     ),
+    todoWorkspaces: mergeHydratedRecord(
+      base.todoWorkspaces,
+      local.todoWorkspaces,
+      remote.todoWorkspaces,
+    ),
     notesDocs: mergeHydratedRecord(
       base.notesDocs,
       local.notesDocs,
@@ -871,9 +940,13 @@ export function createInitialState(todayISO: string): AppState {
   const starterNote = createNoteDoc("Quick Notes");
   const defaultNotesFolder = createDefaultNotesFolder();
   const starterPlanner = createIdealPlannerPreset();
+  const defaultTodoWorkspace = createDefaultTodoWorkspace(`${todayISO}T00:00:00.000Z`);
   return {
     dailyPages: {
       [todayISO]: createEmptyDailyPage(todayISO),
+    },
+    todoWorkspaces: {
+      [defaultTodoWorkspace.id]: defaultTodoWorkspace,
     },
     notesDocs: {
       [starterNote.id]: starterNote,
@@ -888,10 +961,12 @@ export function createInitialState(todayISO: string): AppState {
     contentCards: {},
     uiState: {
       selectedDailyDate: todayISO,
+      selectedTodoWorkspaceId: defaultTodoWorkspace.id,
       selectedNoteId: starterNote.id,
       selectedNoteFolderId: defaultNotesFolder.id,
       selectedPlannerPresetId: starterPlanner.id,
       isSidebarCollapsed: false,
+      hasSeenPlannerTour: false,
       dailyTaskPaneWidth: 500,
       contentFontScale: CONTENT_FONT_SCALE_DEFAULT,
       expandedYears: [todayISO.slice(0, 4)],
@@ -1221,6 +1296,180 @@ function monthKey(dateISO: string): string {
   return getYearMonth(dateISO);
 }
 
+export function ensureTodoWorkspaceState(state: AppState): AppState {
+  const existing = state.todoWorkspaces ?? {};
+  const hasWorkspaces = Object.keys(existing).length > 0;
+  const fallbackTimestamp = `${state.uiState.selectedDailyDate ?? "1970-01-01"}T00:00:00.000Z`;
+  const todoWorkspaces = hasWorkspaces
+    ? existing
+    : {
+        [DEFAULT_TODO_WORKSPACE_ID]: createDefaultTodoWorkspace(fallbackTimestamp),
+      };
+  const selectedTodoWorkspaceId = todoWorkspaces[state.uiState.selectedTodoWorkspaceId]
+    ? state.uiState.selectedTodoWorkspaceId
+    : todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID]
+      ? DEFAULT_TODO_WORKSPACE_ID
+      : Object.keys(todoWorkspaces)[0];
+
+  if (
+    todoWorkspaces === state.todoWorkspaces &&
+    selectedTodoWorkspaceId === state.uiState.selectedTodoWorkspaceId
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    todoWorkspaces,
+    uiState: {
+      ...state.uiState,
+      selectedTodoWorkspaceId,
+    },
+  };
+}
+
+export function createTodoWorkspaceInState(
+  state: AppState,
+  name: string,
+  dateISO: string,
+): AppState {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return state;
+  }
+
+  const now = new Date().toISOString();
+  const workspace: TodoWorkspace = {
+    id: makeId("todo-workspace"),
+    name: trimmedName,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const pageKey = getDailyPageKey(workspace.id, dateISO);
+
+  return {
+    ...state,
+    todoWorkspaces: {
+      ...state.todoWorkspaces,
+      [workspace.id]: workspace,
+    },
+    dailyPages: {
+      ...state.dailyPages,
+      [pageKey]: createEmptyDailyPage(dateISO),
+    },
+    uiState: {
+      ...state.uiState,
+      selectedTodoWorkspaceId: workspace.id,
+      selectedDailyDate: dateISO,
+      isFocusMode: false,
+      focusedTodoId: null,
+      focusTimerStatus: "idle",
+      focusTimerRemainingSeconds: null,
+      focusTimerStartedAt: null,
+      focusTimerBaseEstimateMinutes: null,
+      isFocusTimerCompletionPromptOpen: false,
+    },
+  };
+}
+
+export function renameTodoWorkspaceInState(
+  state: AppState,
+  workspaceId: string,
+  name: string,
+): AppState {
+  const workspace = state.todoWorkspaces[workspaceId];
+  const trimmedName = name.trim();
+  if (!workspace || !trimmedName || workspace.name === trimmedName) {
+    return state;
+  }
+
+  return {
+    ...state,
+    todoWorkspaces: {
+      ...state.todoWorkspaces,
+      [workspaceId]: {
+        ...workspace,
+        name: trimmedName,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+}
+
+export function selectTodoWorkspaceInState(
+  state: AppState,
+  workspaceId: string,
+  dateISO: string,
+): AppState {
+  if (!state.todoWorkspaces[workspaceId]) {
+    return state;
+  }
+
+  const selectedState: AppState = {
+    ...state,
+    uiState: {
+      ...state.uiState,
+      selectedTodoWorkspaceId: workspaceId,
+      selectedDailyDate: dateISO,
+      isFocusMode: false,
+      focusedTodoId: null,
+      focusTimerStatus: "idle",
+      focusTimerRemainingSeconds: null,
+      focusTimerStartedAt: null,
+      focusTimerBaseEstimateMinutes: null,
+      isFocusTimerCompletionPromptOpen: false,
+    },
+  };
+
+  return ensureDailyPageForDate(selectedState, dateISO, workspaceId);
+}
+
+export function deleteTodoWorkspaceFromState(
+  state: AppState,
+  workspaceId: string,
+  dateISO: string,
+): AppState {
+  if (
+    workspaceId === DEFAULT_TODO_WORKSPACE_ID ||
+    !state.todoWorkspaces[workspaceId]
+  ) {
+    return state;
+  }
+
+  const todoWorkspaces = { ...state.todoWorkspaces };
+  delete todoWorkspaces[workspaceId];
+  const dailyPages = Object.fromEntries(
+    Object.entries(state.dailyPages).filter(
+      ([key]) => getTodoWorkspaceIdFromDailyPageKey(key) !== workspaceId,
+    ),
+  );
+  const nextWorkspaceId = todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID]
+    ? DEFAULT_TODO_WORKSPACE_ID
+    : Object.keys(todoWorkspaces)[0];
+
+  return ensureDailyPageForDate(
+    {
+      ...state,
+      todoWorkspaces,
+      dailyPages,
+      uiState: {
+        ...state.uiState,
+        selectedTodoWorkspaceId: nextWorkspaceId,
+        selectedDailyDate: dateISO,
+        isFocusMode: false,
+        focusedTodoId: null,
+        focusTimerStatus: "idle",
+        focusTimerRemainingSeconds: null,
+        focusTimerStartedAt: null,
+        focusTimerBaseEstimateMinutes: null,
+        isFocusTimerCompletionPromptOpen: false,
+      },
+    },
+    dateISO,
+    nextWorkspaceId,
+  );
+}
+
 export function createCarryoverDailyPage(
   dailyPages: Record<string, DailyPage>,
   targetDateISO: string,
@@ -1238,8 +1487,13 @@ export function createCarryoverDailyPage(
   };
 }
 
-export function ensureDailyPageForDate(state: AppState, todayISO: string): AppState {
-  if (state.dailyPages[todayISO]) {
+export function ensureDailyPageForDate(
+  state: AppState,
+  todayISO: string,
+  workspaceId = getActiveTodoWorkspaceId(state),
+): AppState {
+  const pageKey = getDailyPageKey(workspaceId, todayISO);
+  if (state.dailyPages[pageKey]) {
     return {
       ...state,
       uiState: {
@@ -1249,13 +1503,16 @@ export function ensureDailyPageForDate(state: AppState, todayISO: string): AppSt
     };
   }
 
-  const nextPage = createCarryoverDailyPage(state.dailyPages, todayISO);
+  const nextPage = createCarryoverDailyPage(
+    getDailyPagesForWorkspace(state, workspaceId),
+    todayISO,
+  );
 
   return {
     ...state,
     dailyPages: {
       ...state.dailyPages,
-      [todayISO]: nextPage,
+      [pageKey]: nextPage,
     },
     uiState: {
       ...state.uiState,
@@ -1285,5 +1542,5 @@ export function groupTodosByPriority(todos: Todo[]): Record<Priority, Todo[]> {
 }
 
 export function getSortedDailyDates(state: AppState): string[] {
-  return Object.keys(state.dailyPages).sort((a, b) => b.localeCompare(a));
+  return Object.keys(getDailyPagesForWorkspace(state)).sort((a, b) => b.localeCompare(a));
 }

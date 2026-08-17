@@ -21,12 +21,17 @@ export type AppAction =
   | { type: "set-view"; view: ViewMode }
   | { type: "toggle-sidebar-collapsed" }
   | { type: "set-sidebar-collapsed"; isCollapsed: boolean }
+  | { type: "complete-planner-tour" }
   | { type: "set-daily-task-pane-width"; width: number }
   | { type: "increase-content-font-scale" }
   | { type: "decrease-content-font-scale" }
   | { type: "reset-content-font-scale" }
   | { type: "set-theme-mode"; themeMode: ThemeMode }
   | { type: "set-category-theme"; theme: CategoryTheme }
+  | { type: "create-todo-workspace"; name: string; date: string }
+  | { type: "select-todo-workspace"; workspaceId: string; date: string }
+  | { type: "rename-todo-workspace"; workspaceId: string; name: string }
+  | { type: "delete-todo-workspace"; workspaceId: string; date: string }
   | { type: "select-daily"; date: string }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
@@ -60,6 +65,7 @@ export type AppAction =
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }
   | { type: "rename-planner-preset"; presetId: string; name: string }
+  | { type: "update-planner-preset-subtitle"; presetId: string; subtitle: string }
   | { type: "rename-planner-day"; presetId: string; dayKey: PlannerDayKey; title: string }
   | {
       type: "create-planner-purpose";

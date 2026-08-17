@@ -19,8 +19,10 @@ import {
 import { appStateSchema } from "@/lib/schema";
 import {
   DEFAULT_NOTES_FOLDER_ID,
+  DEFAULT_TODO_WORKSPACE_ID,
   createContentCard,
   createInitialState,
+  createTodoWorkspaceInState,
 } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
@@ -39,6 +41,8 @@ describe("normalizeAppState", () => {
       "Published",
     ]);
     expect(state.contentCards).toEqual({});
+    expect(state.todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID].name).toBe("Main");
+    expect(state.uiState.selectedTodoWorkspaceId).toBe(DEFAULT_TODO_WORKSPACE_ID);
   });
 
   test("normalizes missing shared UI defaults", () => {
@@ -73,11 +77,30 @@ describe("normalizeAppState", () => {
 
     expect(state.uiState.themeMode).toBe("dark");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
+    expect(state.uiState.hasSeenPlannerTour).toBe(false);
     expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
     expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
     expect(state.contentBoard.columns).toHaveLength(5);
+    expect(state.todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID].name).toBe("Main");
+  });
+
+  test("backfills planner subtitle and creation date from legacy metadata", () => {
+    const initial = createInitialState("2026-03-11");
+    const presetId = initial.uiState.selectedPlannerPresetId!;
+    const legacyPreset: Record<string, unknown> = {
+      ...initial.plannerPresets[presetId],
+    };
+    delete legacyPreset.subtitle;
+    delete legacyPreset.createdAt;
+    const state = normalizeAppState({
+      ...initial,
+      plannerPresets: { [presetId]: legacyPreset },
+    });
+
+    expect(state.plannerPresets[presetId].subtitle).toMatch(/reusable weekly rhythm/i);
+    expect(state.plannerPresets[presetId].createdAt).toBe(legacyPreset.updatedAt);
   });
 
   test("migrates legacy planner blocks into reusable purposes", () => {
@@ -408,6 +431,32 @@ describe("content planner persistence records", () => {
   });
 });
 
+describe("Todo workspace persistence records", () => {
+  test("serializes workspace-scoped daily pages and the workspace registry", () => {
+    const initial = createInitialState("2026-03-11");
+    const state = createTodoWorkspaceInState(initial, "Work", "2026-03-11");
+    const workspaceId = state.uiState.selectedTodoWorkspaceId;
+
+    const records = getSyncRecordValuesFromState(state);
+
+    expect(records[`daily_page:${DEFAULT_TODO_WORKSPACE_ID}:2026-03-11`]).toMatchObject({
+      kind: "daily_page",
+    });
+    expect(records[`daily_page:${workspaceId}:2026-03-11`]).toMatchObject({
+      kind: "daily_page",
+    });
+    expect(records["workspace_state:self"]).toMatchObject({
+      kind: "workspace_state",
+      value: {
+        todoWorkspaces: state.todoWorkspaces,
+        uiState: {
+          selectedTodoWorkspaceId: workspaceId,
+        },
+      },
+    });
+  });
+});
+
 describe("SnapshotPersistenceRepository", () => {
   test("returns the remote snapshot when available and updates cache", async () => {
     const state = createInitialState("2026-03-11");
@@ -622,5 +671,105 @@ describe("SplitPersistenceRepository", () => {
 
     expect(saved.resolvedState).toEqual(resolvedState);
     expect(cacheWrites).toEqual(["2026-03-11", "2026-03-12"]);
+  });
+
+  test("preserves remote content card moves when local state was not mutated for that card", async () => {
+    const base = createInitialState("2026-03-11");
+    const ideasCol = base.contentBoard.columns[0].id;
+    const publishedCol = base.contentBoard.columns[4].id;
+
+    const card = createContentCard({
+      columnId: ideasCol,
+      title: "Launch Post",
+      order: 0,
+    })!;
+    base.contentCards[card.id] = card;
+
+    // Device A moved card to Published remotely
+    const remoteCard = { ...card, columnId: publishedCol, order: 0, updatedAt: "2026-03-11T09:00:00.000Z" };
+    const remoteState: AppState = {
+      ...base,
+      contentCards: {
+        [card.id]: remoteCard,
+      },
+    };
+
+    // Device B has cached state with card in Ideas, but has an unrelated local mutation timestamp (e.g. checked a todo)
+    const localCachedState: AppState = {
+      ...base,
+    };
+    const cachedMetadata = createPersistenceMetadata({
+      lastLocalMutationAt: "2026-03-11T09:05:00.000Z", // Local timestamp newer than remote card
+      hasMigratedToSplitStore: true,
+      records: {
+        [`content_card:${card.id}`]: {
+          key: `content_card:${card.id}`,
+          kind: "content_card",
+          fingerprint: JSON.stringify(card),
+          lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
+          lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
+        },
+      },
+    });
+
+    const cache = {
+      loadCached: vi.fn(() => ({
+        envelope: {
+          state: localCachedState,
+          metadata: cachedMetadata,
+        },
+        available: true,
+      })),
+      saveCached: vi.fn(() => ({ available: true })),
+      clearCached: vi.fn(() => ({ available: true })),
+    };
+
+    const remoteStore = {
+      loadRemoteState: vi.fn(async () => ({
+        state: remoteState,
+        source: "remote" as const,
+        status: "synced" as const,
+        metadata: createPersistenceMetadata({
+          hasMigratedToSplitStore: true,
+          records: {
+            [`content_card:${card.id}`]: {
+              key: `content_card:${card.id}`,
+              kind: "content_card",
+              fingerprint: JSON.stringify(remoteCard),
+              lastRemoteUpdatedAt: "2026-03-11T09:00:00.000Z",
+              lastRemoteUpdatedAtClient: "2026-03-11T09:00:00.000Z",
+            },
+          },
+        }),
+        conflictResolution: "remote-overwrote-local" as const,
+        notice: "Newer changes from another device were loaded.",
+        errorMessage: null,
+        persistenceAvailable: true,
+      })),
+      saveRemoteState: vi.fn(),
+    };
+
+    const onRemoteSync = vi.fn();
+    const repository = new SplitPersistenceRepository(remoteStore, cache);
+    await repository.load({
+      userId: "user_1",
+      now: new Date("2026-03-11T09:10:00Z"),
+      onRemoteSync,
+    });
+
+    await vi.waitFor(() => {
+      expect(onRemoteSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "remote",
+          state: expect.objectContaining({
+            contentCards: {
+              [card.id]: expect.objectContaining({
+                columnId: publishedCol,
+              }),
+            },
+          }),
+        }),
+      );
+    });
   });
 });

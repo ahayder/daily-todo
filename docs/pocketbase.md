@@ -41,7 +41,7 @@ What it does:
 - authenticates as a PocketBase superuser
 - creates or updates the app collections
 - reconciles collection fields, indexes, and API rules
-- preserves extra unknown fields and indexes instead of deleting them
+- preserves extra unknown fields and indexes instead of deleting them, except for explicitly replaced managed indexes
 - keeps `app_state_snapshots` available for the migration window
 
 What it does not do in v1:
@@ -84,6 +84,7 @@ The app reads from the split collections first, then falls back to `app_state_sn
 Fields:
 
 - `owner`: relation to `users`, required, max select `1`
+- `workspace_id`: text; empty legacy values are treated as the protected Main workspace
 - `date`: text, required
 - `markdown`: text
 - `todos_json`: JSON, required
@@ -91,7 +92,7 @@ Fields:
 
 Indexes:
 
-- unique composite index on `owner` + `date`
+- unique composite index on `owner` + `workspace_id` + `date`
 
 ### `notes`
 
@@ -159,7 +160,10 @@ Fields:
 
 - `owner`: relation to `users`, required, max select `1`
 - `selected_daily_date`: text
+- `selected_todo_workspace_id`: text
+- `todo_workspaces_json`: JSON containing workspace id/name/timestamps
 - `selected_note_id`: text
+- `selected_note_folder_id`: text
 - `selected_planner_preset_id`: text
 - `expanded_years_json`: JSON, required
 - `expanded_months_json`: JSON, required

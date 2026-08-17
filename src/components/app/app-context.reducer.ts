@@ -22,21 +22,28 @@ import {
   createPlannerPreset,
   createNoteDoc,
   createNoteFolder,
+  createTodoWorkspaceInState,
   createTodo,
+  deleteTodoWorkspaceFromState,
   deletePlannerPurposeFromDay,
   deleteContentCard,
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
   duplicatePlannerPreset,
   getContentCardsForColumn,
+  getActiveTodoWorkspaceId,
+  getDailyPageKey,
+  getDailyPageForWorkspace,
   getSortedDailyDates,
   makeTodoSubtask,
   moveContentCard,
   renameContentColumn,
+  renameTodoWorkspaceInState,
   reorderContentColumns,
   updateContentColumnSubtitle,
   updateContentCard,
   updatePlannerPurposeInDay,
+  selectTodoWorkspaceInState,
 } from "@/lib/store";
 import type {
   AppState,
@@ -79,7 +86,7 @@ function stopFocusTimerForTodo(state: AppState, todoId: string | null) {
 
 export function ensureSelectedDailyDate(state: AppState): string {
   const existing = state.uiState.selectedDailyDate;
-  if (existing && state.dailyPages[existing]) {
+  if (existing && getDailyPageForWorkspace(state, existing)) {
     return existing;
   }
   const sorted = getSortedDailyDates(state);
@@ -232,6 +239,14 @@ function handleUiActions(state: AppState, action: AppAction): AppState | null {
           isSidebarCollapsed: action.isCollapsed,
         },
       };
+    case "complete-planner-tour":
+      return {
+        ...state,
+        uiState: {
+          ...state.uiState,
+          hasSeenPlannerTour: true,
+        },
+      };
     case "set-daily-task-pane-width":
       return {
         ...state,
@@ -283,6 +298,14 @@ function handleUiActions(state: AppState, action: AppAction): AppState | null {
           categoryTheme: action.theme,
         },
       };
+    case "create-todo-workspace":
+      return createTodoWorkspaceInState(state, action.name, action.date);
+    case "select-todo-workspace":
+      return selectTodoWorkspaceInState(state, action.workspaceId, action.date);
+    case "rename-todo-workspace":
+      return renameTodoWorkspaceInState(state, action.workspaceId, action.name);
+    case "delete-todo-workspace":
+      return deleteTodoWorkspaceFromState(state, action.workspaceId, action.date);
     case "set-focus-mode":
       return {
         ...state,
@@ -423,10 +446,15 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
   }
 }
 
+function getActiveDailyPageEntry(state: AppState, date: string) {
+  const key = getDailyPageKey(getActiveTodoWorkspaceId(state), date);
+  return { key, page: state.dailyPages[key] };
+}
+
 function handleTodoActions(state: AppState, action: AppAction): AppState | null {
   switch (action.type) {
     case "update-daily-markdown": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -434,7 +462,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             markdown: action.markdown,
           },
@@ -442,7 +470,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "add-todo": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page || !action.text.trim()) {
         return state;
       }
@@ -450,7 +478,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: [...page.todos, createTodo(action.text.trim(), action.priority, action.parentId)],
           },
@@ -458,7 +486,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "set-todo-status": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -471,7 +499,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: page.todos.map((todo) =>
               todo.id === action.todoId
@@ -487,7 +515,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "set-todo-estimated-minutes": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -513,7 +541,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: updatedTodos,
           },
@@ -522,7 +550,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "edit-todo": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page || !action.text.trim()) {
         return state;
       }
@@ -530,7 +558,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: page.todos.map((todo) =>
               todo.id === action.todoId ? { ...todo, text: action.text.trim() } : todo,
@@ -540,7 +568,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "make-todo-subtask": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -554,7 +582,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos,
           },
@@ -563,7 +591,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "move-todo-priority": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -593,7 +621,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: newTodos,
           },
@@ -601,7 +629,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "start-focus-timer": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -629,7 +657,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: page.todos.map((item) =>
               item.id === action.todoId && item.status === "pending"
@@ -757,17 +785,22 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         };
       }
 
+      const activeWorkspaceId = getActiveTodoWorkspaceId(state);
       return {
         ...state,
         dailyPages: Object.fromEntries(
           Object.entries(state.dailyPages).map(([dateKey, page]) => [
             dateKey,
-            {
-              ...page,
-              todos: page.todos.map((todo) =>
-                todo.id === state.uiState.focusedTodoId ? { ...todo, status: "finished" } : todo,
-              ),
-            },
+            dateKey === getDailyPageKey(activeWorkspaceId, page.date)
+              ? {
+                  ...page,
+                  todos: page.todos.map((todo) =>
+                    todo.id === state.uiState.focusedTodoId
+                      ? { ...todo, status: "finished" }
+                      : todo,
+                  ),
+                }
+              : page,
           ]),
         ),
         uiState: clearFocusTimerState(state.uiState, {
@@ -777,7 +810,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
       };
     }
     case "delete-todo": {
-      const page = state.dailyPages[action.date];
+      const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {
         return state;
       }
@@ -792,7 +825,7 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         ...state,
         dailyPages: {
           ...state.dailyPages,
-          [action.date]: {
+          [key]: {
             ...page,
             todos: page.todos.filter((todo) => todo.id !== action.todoId),
           },
@@ -1060,7 +1093,26 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
           ...state.plannerPresets,
           [action.presetId]: {
             ...preset,
-            name: action.name.trim() || "Untitled Week",
+            name: action.name.trim() || "Untitled Planner",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    }
+    case "update-planner-preset-subtitle": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) {
+        return state;
+      }
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: {
+            ...preset,
+            subtitle:
+              action.subtitle.trim() ||
+              "Shape a reusable weekly rhythm around the things that matter most.",
             updatedAt: new Date().toISOString(),
           },
         },
