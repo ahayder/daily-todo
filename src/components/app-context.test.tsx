@@ -224,6 +224,7 @@ describe("appReducer theme mode", () => {
     const created = appReducer(initial, {
       type: "create-planner-event",
       presetId,
+      eventId: "event-new-deep-work",
       dayKey: "monday",
       title: "Deep Work",
       startMinutes: 480,
@@ -232,7 +233,9 @@ describe("appReducer theme mode", () => {
       notes: "Phone off",
     });
 
-    const event = created.plannerPresets[presetId].days.monday.events[0];
+    const event = created.plannerPresets[presetId].days.monday.events.find(
+      (candidate) => candidate.id === "event-new-deep-work",
+    )!;
     expect(event.title).toBe("Deep Work");
 
     const updated = appReducer(created, {
@@ -246,8 +249,11 @@ describe("appReducer theme mode", () => {
       },
     });
 
-    expect(updated.plannerPresets[presetId].days.monday.events[0].title).toBe("Deep Work Sprint");
-    expect(updated.plannerPresets[presetId].days.monday.events[0].color).toBe("gold");
+    const updatedEvent = updated.plannerPresets[presetId].days.monday.events.find(
+      (candidate) => candidate.id === event.id,
+    )!;
+    expect(updatedEvent.title).toBe("Deep Work Sprint");
+    expect(updatedEvent.color).toBe("gold");
   });
 
   test("manages content board columns", () => {

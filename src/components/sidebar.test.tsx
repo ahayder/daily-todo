@@ -83,9 +83,11 @@ describe("Sidebar", () => {
 
     render(<PlannerHarness />);
 
-    expect(screen.getByText("Daily Planner Presets")).toBeInTheDocument();
+    expect(screen.getByRole("complementary")).toHaveClass("sidebar--planner");
+    expect(screen.getByText("Daily Plans")).toBeInTheDocument();
     expect(screen.getByText("Balanced Week")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New preset" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate plan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Balanced Week" })).toBeInTheDocument();
   });
 

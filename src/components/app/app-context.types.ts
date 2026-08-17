@@ -5,6 +5,8 @@ import type {
   NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
+  PlannerPurpose,
+  PlannerPurposeRole,
   Priority,
   TaskStatus,
   ThemeMode,
@@ -60,9 +62,43 @@ export type AppAction =
   | { type: "rename-planner-preset"; presetId: string; name: string }
   | { type: "rename-planner-day"; presetId: string; dayKey: PlannerDayKey; title: string }
   | {
-      type: "create-planner-event";
+      type: "create-planner-purpose";
+      presetId: string;
+      purpose: PlannerPurpose;
+      dayKeys: PlannerDayKey[];
+    }
+  | {
+      type: "update-planner-purpose";
       presetId: string;
       dayKey: PlannerDayKey;
+      purposeId: string;
+      updates: Partial<{
+        title: string;
+        color: PlannerEventColor;
+        targetMinutes: number;
+        role: PlannerPurposeRole;
+        notes: string;
+      }>;
+    }
+  | {
+      type: "apply-planner-purpose-to-days";
+      presetId: string;
+      sourceDayKey: PlannerDayKey;
+      purposeId: string;
+      targetDayKeys: PlannerDayKey[];
+    }
+  | {
+      type: "delete-planner-purpose";
+      presetId: string;
+      dayKey: PlannerDayKey;
+      purposeId: string;
+    }
+  | {
+      type: "create-planner-event";
+      presetId: string;
+      eventId?: string;
+      dayKey: PlannerDayKey;
+      purposeId?: string | null;
       title?: string;
       startMinutes: number;
       endMinutes: number;

@@ -14,13 +14,16 @@ import {
   stripNoteBodies,
 } from "@/lib/persistence";
 import {
+  addPlannerPurposeToDays,
   addContentColumn,
+  applyPlannerPurposeToDays,
   createContentCard,
   createPlannerEvent,
   createPlannerPreset,
   createNoteDoc,
   createNoteFolder,
   createTodo,
+  deletePlannerPurposeFromDay,
   deleteContentCard,
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
@@ -33,6 +36,7 @@ import {
   reorderContentColumns,
   updateContentColumnSubtitle,
   updateContentCard,
+  updatePlannerPurposeInDay,
 } from "@/lib/store";
 import type {
   AppState,
@@ -164,12 +168,12 @@ function clampPlannerMinutes(value: number): number {
 }
 
 function normalizePlannerRange(startMinutes: number, endMinutes: number) {
-  const start = clampPlannerMinutes(Math.min(startMinutes, endMinutes));
+  const start = Math.min(24 * 60 - 30, clampPlannerMinutes(Math.min(startMinutes, endMinutes)));
   const end = clampPlannerMinutes(Math.max(startMinutes, endMinutes));
 
   return {
     startMinutes: start,
-    endMinutes: Math.max(start + 30, end),
+    endMinutes: Math.min(24 * 60, Math.max(start + 30, end)),
   };
 }
 
@@ -1085,6 +1089,72 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
         },
       };
     }
+    case "create-planner-purpose": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const nextPreset = addPlannerPurposeToDays(preset, action.purpose, action.dayKeys);
+      if (nextPreset === preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: nextPreset,
+        },
+      };
+    }
+    case "update-planner-purpose": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const nextPreset = updatePlannerPurposeInDay(
+        preset,
+        action.dayKey,
+        action.purposeId,
+        action.updates,
+      );
+      if (nextPreset === preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: nextPreset,
+        },
+      };
+    }
+    case "apply-planner-purpose-to-days": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const nextPreset = applyPlannerPurposeToDays(
+        preset,
+        action.sourceDayKey,
+        action.purposeId,
+        action.targetDayKeys,
+      );
+      if (nextPreset === preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: nextPreset,
+        },
+      };
+    }
+    case "delete-planner-purpose": {
+      const preset = state.plannerPresets[action.presetId];
+      if (!preset) return state;
+      const nextPreset = deletePlannerPurposeFromDay(
+        preset,
+        action.dayKey,
+        action.purposeId,
+      );
+      if (nextPreset === preset) return state;
+      return {
+        ...state,
+        plannerPresets: {
+          ...state.plannerPresets,
+          [action.presetId]: nextPreset,
+        },
+      };
+    }
     case "create-planner-event": {
       const preset = state.plannerPresets[action.presetId];
       if (!preset) {
@@ -1094,13 +1164,18 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
         action.startMinutes,
         action.endMinutes,
       );
+      const purpose = action.purposeId
+        ? preset.days[action.dayKey].purposes.find((item) => item.id === action.purposeId)
+        : null;
       const nextEvent = createPlannerEvent({
+        id: action.eventId,
         dayKey: action.dayKey,
-        title: action.title,
+        purposeId: purpose?.id ?? action.purposeId,
+        title: action.title ?? purpose?.title,
         startMinutes,
         endMinutes,
-        color: action.color,
-        notes: action.notes,
+        color: action.color ?? purpose?.color,
+        notes: action.notes ?? purpose?.notes,
       });
       return {
         ...state,

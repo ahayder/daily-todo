@@ -567,7 +567,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={cn("sidebar", isPlannerView && "sidebar--planner")}>
       {isTodosView && mounted && (
         <button
           type="button"
@@ -587,7 +587,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
             {isPlannerView ? (
               <>
                 <PanelsTopLeft className="h-3.5 w-3.5" />
-                Daily Planner Presets
+                Daily Plans
               </>
             ) : (
               <>
@@ -609,7 +609,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                         presetId: state.uiState.selectedPlannerPresetId!,
                       })
                     }
-                    aria-label="Duplicate preset"
+                    aria-label="Duplicate plan"
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </button>
@@ -618,7 +618,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                   type="button"
                   className="sidebar-add-btn"
                   onClick={() => dispatch({ type: "create-planner-preset" })}
-                  aria-label="New preset"
+                  aria-label="New plan"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -654,7 +654,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDraggedNoteId(null)}
       >
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className={cn("flex-1 min-h-0", isPlannerView && "sidebar-plan-scroll")}>
           {!mounted ? null : isTodosView ? (
             <div className="sidebar-tree">
               {Array.from(groupedYears.keys())

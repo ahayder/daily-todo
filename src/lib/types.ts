@@ -19,6 +19,7 @@ export type PlannerEventColor =
   | "rose"
   | "sage"
   | "lavender";
+export type PlannerPurposeRole = "primary" | "secondary";
 export type ContentColumn = {
   id: string;
   title: string;
@@ -42,6 +43,7 @@ export type ContentCard = {
 export type PlannerEvent = {
   id: string;
   dayKey: PlannerDayKey;
+  purposeId: string | null;
   title: string;
   startMinutes: number;
   endMinutes: number;
@@ -49,9 +51,19 @@ export type PlannerEvent = {
   notes: string;
 };
 
+export type PlannerPurpose = {
+  id: string;
+  title: string;
+  color: PlannerEventColor;
+  targetMinutes: number;
+  role: PlannerPurposeRole;
+  notes: string;
+};
+
 export type PlannerDay = {
   key: PlannerDayKey;
   title: string;
+  purposes: PlannerPurpose[];
   events: PlannerEvent[];
 };
 

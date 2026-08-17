@@ -13,6 +13,8 @@ import type {
   PlannerEvent,
   PlannerEventColor,
   PlannerPreset,
+  PlannerPurpose,
+  PlannerPurposeRole,
   Priority,
   TaskStatus,
   Todo,
@@ -181,6 +183,7 @@ function createPlannerDay(key: PlannerDayKey): PlannerDay {
   return {
     key,
     title: DEFAULT_DAY_TITLES[key],
+    purposes: [],
     events: [],
   };
 }
@@ -200,7 +203,130 @@ export function createPlannerPreset(name = "Balanced Week"): PlannerPreset {
   };
 }
 
+export function createIdealPlannerPreset(): PlannerPreset {
+  const preset = createPlannerPreset("Ideal Daily Rhythm");
+  const focuses = [
+    createPlannerPurpose({
+      title: "Work & responsibility",
+      color: "teal",
+      targetMinutes: 330,
+      notes: "Protect the most important work, then contain the smaller obligations.",
+    }),
+    createPlannerPurpose({
+      title: "Health & wellbeing",
+      color: "sage",
+      targetMinutes: 120,
+      notes: "Use simple routines that support energy across the whole day.",
+    }),
+    createPlannerPurpose({
+      title: "Family & life",
+      color: "rose",
+      targetMinutes: 270,
+      notes: "Leave unhurried space for meals, connection, and home life.",
+    }),
+    createPlannerPurpose({
+      title: "Learning & growth",
+      color: "gold",
+      targetMinutes: 120,
+      notes: "Keep a protected block for deliberate learning or a personal project.",
+    }),
+    createPlannerPurpose({
+      title: "Rest & sleep",
+      color: "lavender",
+      targetMinutes: 600,
+      notes: "Treat sleep as the foundation of the plan and close the day gently.",
+    }),
+  ];
+  const focusByTitle = new Map(focuses.map((focus) => [focus.title, focus]));
+  const schedule = [
+    { focus: "Rest & sleep", title: "Sleep", startMinutes: 0, endMinutes: 420 },
+    {
+      focus: "Health & wellbeing",
+      title: "Morning routine",
+      startMinutes: 420,
+      endMinutes: 480,
+    },
+    {
+      focus: "Work & responsibility",
+      title: "Deep work",
+      startMinutes: 480,
+      endMinutes: 720,
+    },
+    {
+      focus: "Family & life",
+      title: "Lunch & walk",
+      startMinutes: 720,
+      endMinutes: 810,
+    },
+    {
+      focus: "Work & responsibility",
+      title: "Admin window",
+      startMinutes: 810,
+      endMinutes: 900,
+    },
+    {
+      focus: "Learning & growth",
+      title: "Learning block",
+      startMinutes: 900,
+      endMinutes: 1020,
+    },
+    {
+      focus: "Health & wellbeing",
+      title: "Movement reset",
+      startMinutes: 1020,
+      endMinutes: 1080,
+    },
+    {
+      focus: "Family & life",
+      title: "Dinner & family",
+      startMinutes: 1080,
+      endMinutes: 1260,
+    },
+    {
+      focus: "Rest & sleep",
+      title: "Wind down",
+      startMinutes: 1260,
+      endMinutes: 1350,
+    },
+    { focus: "Rest & sleep", title: "Sleep", startMinutes: 1350, endMinutes: 1440 },
+  ];
+
+  return {
+    ...preset,
+    days: Object.fromEntries(
+      preset.dayOrder.map((dayKey) => [
+        dayKey,
+        {
+          ...preset.days[dayKey],
+          title: "Focused, balanced day",
+          purposes: focuses.map((focus) => ({ ...focus })),
+          events: schedule.map((block) => {
+            const focus = focusByTitle.get(block.focus)!;
+            return createPlannerEvent({
+              dayKey,
+              purposeId: focus.id,
+              title: block.title,
+              startMinutes: block.startMinutes,
+              endMinutes: block.endMinutes,
+              color: focus.color,
+            });
+          }),
+        },
+      ]),
+    ) as Record<PlannerDayKey, PlannerDay>,
+  };
+}
+
 export function duplicatePlannerPreset(source: PlannerPreset): PlannerPreset {
+  const purposeIdMap = new Map<string, string>();
+  const duplicatePurposeId = (purposeId: string) => {
+    const existing = purposeIdMap.get(purposeId);
+    if (existing) return existing;
+    const nextId = makeId("planner-purpose");
+    purposeIdMap.set(purposeId, nextId);
+    return nextId;
+  };
+
   return {
     ...source,
     id: makeId("planner"),
@@ -211,9 +337,14 @@ export function duplicatePlannerPreset(source: PlannerPreset): PlannerPreset {
         dayKey,
         {
           ...source.days[dayKey],
+          purposes: source.days[dayKey].purposes.map((purpose) => ({
+            ...purpose,
+            id: duplicatePurposeId(purpose.id),
+          })),
           events: source.days[dayKey].events.map((event) => ({
             ...event,
             id: makeId("planner-event"),
+            purposeId: event.purposeId ? duplicatePurposeId(event.purposeId) : null,
           })),
         },
       ]),
@@ -223,7 +354,9 @@ export function duplicatePlannerPreset(source: PlannerPreset): PlannerPreset {
 }
 
 export function createPlannerEvent(input: {
+  id?: string;
   dayKey: PlannerDayKey;
+  purposeId?: string | null;
   title?: string;
   startMinutes: number;
   endMinutes: number;
@@ -231,13 +364,170 @@ export function createPlannerEvent(input: {
   notes?: string;
 }): PlannerEvent {
   return {
-    id: makeId("planner-event"),
+    id: input.id ?? makeId("planner-event"),
     dayKey: input.dayKey,
+    purposeId: input.purposeId ?? null,
     title: input.title?.trim() || "New block",
     startMinutes: input.startMinutes,
     endMinutes: input.endMinutes,
     color: input.color ?? "teal",
     notes: input.notes ?? "",
+  };
+}
+
+export function createPlannerPurpose(input: {
+  title?: string;
+  color?: PlannerEventColor;
+  targetMinutes?: number;
+  role?: PlannerPurposeRole;
+  notes?: string;
+} = {}): PlannerPurpose {
+  return {
+    id: makeId("planner-purpose"),
+    title: input.title?.trim() || "New purpose",
+    color: input.color ?? "teal",
+    targetMinutes: Math.min(24 * 60, Math.max(0, Math.round(input.targetMinutes ?? 60))),
+    role: input.role ?? "primary",
+    notes: input.notes?.trim() ?? "",
+  };
+}
+
+function sortPlannerEvents(events: PlannerEvent[]): PlannerEvent[] {
+  return [...events].sort(
+    (left, right) =>
+      left.startMinutes - right.startMinutes ||
+      left.endMinutes - right.endMinutes ||
+      left.id.localeCompare(right.id),
+  );
+}
+
+export function addPlannerPurposeToDays(
+  preset: PlannerPreset,
+  purpose: PlannerPurpose,
+  dayKeys: PlannerDayKey[],
+  now = new Date(),
+): PlannerPreset {
+  const targets = new Set(dayKeys.filter((dayKey) => Boolean(preset.days[dayKey])));
+  if (!targets.size) return preset;
+
+  return {
+    ...preset,
+    updatedAt: now.toISOString(),
+    days: Object.fromEntries(
+      preset.dayOrder.map((dayKey) => {
+        const day = preset.days[dayKey];
+        if (!targets.has(dayKey)) return [dayKey, day];
+        const withoutDuplicate = day.purposes.filter((item) => item.id !== purpose.id);
+        return [dayKey, { ...day, purposes: [...withoutDuplicate, { ...purpose }] }];
+      }),
+    ) as Record<PlannerDayKey, PlannerDay>,
+  };
+}
+
+export function updatePlannerPurposeInDay(
+  preset: PlannerPreset,
+  dayKey: PlannerDayKey,
+  purposeId: string,
+  updates: Partial<Omit<PlannerPurpose, "id">>,
+  now = new Date(),
+): PlannerPreset {
+  const day = preset.days[dayKey];
+  const purpose = day?.purposes.find((item) => item.id === purposeId);
+  if (!day || !purpose) return preset;
+
+  const nextPurpose: PlannerPurpose = {
+    ...purpose,
+    ...updates,
+    title: updates.title?.trim() || purpose.title,
+    notes: updates.notes?.trim() ?? purpose.notes,
+    targetMinutes:
+      updates.targetMinutes === undefined
+        ? purpose.targetMinutes
+        : Math.min(24 * 60, Math.max(0, Math.round(updates.targetMinutes))),
+  };
+
+  return {
+    ...preset,
+    updatedAt: now.toISOString(),
+    days: {
+      ...preset.days,
+      [dayKey]: {
+        ...day,
+        purposes: day.purposes.map((item) => (item.id === purposeId ? nextPurpose : item)),
+        events: day.events.map((event) =>
+          event.purposeId === purposeId
+            ? {
+                ...event,
+                title: event.title === purpose.title ? nextPurpose.title : event.title,
+                color: nextPurpose.color,
+              }
+            : event,
+        ),
+      },
+    },
+  };
+}
+
+export function applyPlannerPurposeToDays(
+  preset: PlannerPreset,
+  sourceDayKey: PlannerDayKey,
+  purposeId: string,
+  targetDayKeys: PlannerDayKey[],
+  now = new Date(),
+): PlannerPreset {
+  const sourceDay = preset.days[sourceDayKey];
+  const sourcePurpose = sourceDay?.purposes.find((purpose) => purpose.id === purposeId);
+  if (!sourceDay || !sourcePurpose) return preset;
+
+  const sourceEvents = sourceDay.events.filter((event) => event.purposeId === purposeId);
+  const targets = new Set(targetDayKeys.filter((dayKey) => Boolean(preset.days[dayKey])));
+  if (!targets.size) return preset;
+
+  return {
+    ...preset,
+    updatedAt: now.toISOString(),
+    days: Object.fromEntries(
+      preset.dayOrder.map((dayKey) => {
+        const day = preset.days[dayKey];
+        if (!targets.has(dayKey) || dayKey === sourceDayKey) return [dayKey, day];
+        const purposes = [
+          ...day.purposes.filter((purpose) => purpose.id !== purposeId),
+          { ...sourcePurpose },
+        ];
+        const events = sortPlannerEvents([
+          ...day.events.filter((event) => event.purposeId !== purposeId),
+          ...sourceEvents.map((event) => ({
+            ...event,
+            id: makeId("planner-event"),
+            dayKey,
+          })),
+        ]);
+        return [dayKey, { ...day, purposes, events }];
+      }),
+    ) as Record<PlannerDayKey, PlannerDay>,
+  };
+}
+
+export function deletePlannerPurposeFromDay(
+  preset: PlannerPreset,
+  dayKey: PlannerDayKey,
+  purposeId: string,
+  now = new Date(),
+): PlannerPreset {
+  const day = preset.days[dayKey];
+  if (!day?.purposes.some((purpose) => purpose.id === purposeId)) return preset;
+
+  return {
+    ...preset,
+    updatedAt: now.toISOString(),
+    days: {
+      ...preset.days,
+      [dayKey]: {
+        ...day,
+        purposes: day.purposes.filter((purpose) => purpose.id !== purposeId),
+        events: day.events.filter((event) => event.purposeId !== purposeId),
+      },
+    },
   };
 }
 
@@ -580,7 +870,7 @@ export function deleteContentCard(
 export function createInitialState(todayISO: string): AppState {
   const starterNote = createNoteDoc("Quick Notes");
   const defaultNotesFolder = createDefaultNotesFolder();
-  const starterPlanner = createPlannerPreset();
+  const starterPlanner = createIdealPlannerPreset();
   return {
     dailyPages: {
       [todayISO]: createEmptyDailyPage(todayISO),
@@ -700,22 +990,130 @@ export function ensureNoteState(state: AppState): AppState {
   };
 }
 
+function getLegacyPlannerPurposeId(title: string, color: PlannerEventColor): string {
+  const input = `${color}:${title.trim().toLocaleLowerCase()}`;
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `planner-purpose-legacy-${(hash >>> 0).toString(36)}`;
+}
+
+function repairPlannerDayPurposes(day: PlannerDay): PlannerDay {
+  const purposes = [...(day.purposes ?? [])];
+  const purposeById = new Map(purposes.map((purpose) => [purpose.id, purpose]));
+  const purposeBySignature = new Map(
+    purposes.map((purpose) => [
+      `${purpose.color}:${purpose.title.trim().toLocaleLowerCase()}`,
+      purpose,
+    ]),
+  );
+  const createdPurposeIds = new Set<string>();
+  let changed = !Array.isArray(day.purposes);
+
+  const events = day.events.map((event) => {
+    let purpose = event.purposeId ? purposeById.get(event.purposeId) : undefined;
+    const signature = `${event.color}:${event.title.trim().toLocaleLowerCase()}`;
+    purpose ??= purposeBySignature.get(signature);
+
+    if (!purpose) {
+      purpose = {
+        id: event.purposeId || getLegacyPlannerPurposeId(event.title, event.color),
+        title: event.title.trim() || "Untitled purpose",
+        color: event.color,
+        targetMinutes: 0,
+        role: "primary",
+        notes: event.notes,
+      };
+      purposes.push(purpose);
+      purposeById.set(purpose.id, purpose);
+      purposeBySignature.set(signature, purpose);
+      createdPurposeIds.add(purpose.id);
+      changed = true;
+    }
+
+    if (event.purposeId === purpose.id) return event;
+    changed = true;
+    return { ...event, purposeId: purpose.id };
+  });
+
+  const nextPurposes = purposes.map((purpose) => {
+    if (!createdPurposeIds.has(purpose.id)) return purpose;
+    const targetMinutes = Math.min(
+      24 * 60,
+      events
+        .filter((event) => event.purposeId === purpose.id)
+        .reduce((total, event) => total + Math.max(0, event.endMinutes - event.startMinutes), 0),
+    );
+    return { ...purpose, targetMinutes };
+  });
+
+  return changed ? { ...day, purposes: nextPurposes, events } : day;
+}
+
+function repairPlannerPresetPurposes(preset: PlannerPreset): PlannerPreset {
+  let changed = false;
+  const days = Object.fromEntries(
+    preset.dayOrder.map((dayKey) => {
+      const day = preset.days[dayKey];
+      const repairedDay = repairPlannerDayPurposes(day);
+      changed ||= repairedDay !== day;
+      return [dayKey, repairedDay];
+    }),
+  ) as Record<PlannerDayKey, PlannerDay>;
+
+  return changed ? { ...preset, days } : preset;
+}
+
+function upgradeUntouchedDefaultPlannerPreset(preset: PlannerPreset): PlannerPreset {
+  const isUntouchedDefault =
+    preset.name === "Balanced Week" &&
+    preset.dayOrder.length === PLANNER_DAY_ORDER.length &&
+    preset.dayOrder.every((dayKey) => {
+      const day = preset.days[dayKey];
+      return (
+        day?.title === DEFAULT_DAY_TITLES[dayKey] &&
+        (day.purposes?.length ?? 0) === 0 &&
+        (day.events?.length ?? 0) === 0
+      );
+    });
+
+  if (!isUntouchedDefault) return preset;
+
+  const ideal = createIdealPlannerPreset();
+  return {
+    ...ideal,
+    id: preset.id,
+  };
+}
+
 export function ensurePlannerState(state: AppState): AppState {
   const existingPresets = state.plannerPresets ?? {};
   const presetIds = Object.keys(existingPresets);
 
   if (presetIds.length > 0) {
+    let presetsChanged = false;
+    const plannerPresets = Object.fromEntries(
+      Object.entries(existingPresets).map(([presetId, preset]) => {
+        const upgradedPreset = upgradeUntouchedDefaultPlannerPreset(preset);
+        const repairedPreset = repairPlannerPresetPurposes(upgradedPreset);
+        presetsChanged ||= repairedPreset !== preset;
+        return [presetId, repairedPreset];
+      }),
+    );
     const selectedPlannerPresetId =
       state.uiState.selectedPlannerPresetId && existingPresets[state.uiState.selectedPlannerPresetId]
         ? state.uiState.selectedPlannerPresetId
         : presetIds[0];
 
-    if (selectedPlannerPresetId === state.uiState.selectedPlannerPresetId) {
+    if (!presetsChanged && selectedPlannerPresetId === state.uiState.selectedPlannerPresetId) {
       return state;
     }
 
     return {
       ...state,
+      plannerPresets,
       uiState: {
         ...state.uiState,
         selectedPlannerPresetId,
@@ -723,7 +1121,7 @@ export function ensurePlannerState(state: AppState): AppState {
     };
   }
 
-  const starterPlanner = createPlannerPreset();
+  const starterPlanner = createIdealPlannerPreset();
 
   return {
     ...state,

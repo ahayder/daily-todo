@@ -54,11 +54,21 @@ const plannerEventSchema = z.object({
     "saturday",
     "sunday",
   ]),
+  purposeId: z.string().nullable().default(null),
   title: z.string(),
   startMinutes: z.number(),
   endMinutes: z.number(),
   color: z.enum(["teal", "gold", "rose", "sage", "lavender"]),
   notes: z.string(),
+});
+
+const plannerPurposeSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1),
+  color: z.enum(["teal", "gold", "rose", "sage", "lavender"]),
+  targetMinutes: z.number().int().min(0).max(24 * 60),
+  role: z.enum(["primary", "secondary"]),
+  notes: z.string().catch(""),
 });
 
 const plannerDaySchema = z.object({
@@ -72,6 +82,7 @@ const plannerDaySchema = z.object({
     "sunday",
   ]),
   title: z.string(),
+  purposes: z.array(plannerPurposeSchema).default([]),
   events: z.array(plannerEventSchema),
 });
 

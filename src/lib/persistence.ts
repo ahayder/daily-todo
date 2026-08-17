@@ -14,7 +14,7 @@ import {
 } from "@/lib/store";
 import type { AppState, CachedNoteBody, NoteSummary, UIState } from "@/lib/types";
 
-export const APP_STATE_VERSION = 3;
+export const APP_STATE_VERSION = 4;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
 export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";

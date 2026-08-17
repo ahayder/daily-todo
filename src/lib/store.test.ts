@@ -2,10 +2,15 @@ import { describe, expect, test } from "vitest";
 import {
   DEFAULT_CONTENT_COLUMNS,
   DEFAULT_NOTES_FOLDER_ID,
+  addPlannerPurposeToDays,
   addContentColumn,
+  applyPlannerPurposeToDays,
   createContentCard,
   createContentColumn,
+  createIdealPlannerPreset,
   createInitialState,
+  createPlannerEvent,
+  createPlannerPurpose,
   createPlannerPreset,
   deleteContentColumn,
   duplicatePlannerPreset,
@@ -20,6 +25,7 @@ import {
   renameContentColumn,
   reorderContentColumns,
   updateContentColumnSubtitle,
+  updatePlannerPurposeInDay,
 } from "@/lib/store";
 import type { Todo } from "@/lib/types";
 
@@ -291,13 +297,74 @@ describe("planner state", () => {
     expect(state.notesDocs[noteId].folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
   });
 
-  test("seeds a default planner preset in initial state", () => {
+  test("seeds an editable ideal daily rhythm in initial state", () => {
     const state = createInitialState("2026-03-11");
     const presetIds = Object.keys(state.plannerPresets);
+    const preset = state.plannerPresets[presetIds[0]];
+    const monday = preset.days.monday;
+    const workFocus = monday.purposes.find(
+      (purpose) => purpose.title === "Work & responsibility",
+    );
 
     expect(presetIds).toHaveLength(1);
     expect(state.uiState.selectedPlannerPresetId).toBe(presetIds[0]);
-    expect(state.plannerPresets[presetIds[0]].dayOrder).toHaveLength(7);
+    expect(preset.name).toBe("Ideal Daily Rhythm");
+    expect(preset.dayOrder).toHaveLength(7);
+    expect(monday.events).toHaveLength(10);
+    expect(
+      monday.events
+        .filter((event) => event.purposeId === workFocus?.id)
+        .map((event) => event.title),
+    ).toEqual(["Deep work", "Admin window"]);
+    expect(
+      monday.events.reduce(
+        (total, event) => total + event.endMinutes - event.startMinutes,
+        0,
+      ),
+    ).toBe(24 * 60);
+  });
+
+  test("keeps custom child block labels when a main focus changes", () => {
+    const preset = createIdealPlannerPreset();
+    const workFocus = preset.days.monday.purposes.find(
+      (purpose) => purpose.title === "Work & responsibility",
+    )!;
+
+    const updated = updatePlannerPurposeInDay(
+      preset,
+      "monday",
+      workFocus.id,
+      { title: "Meaningful work", color: "gold" },
+      new Date("2026-03-11T08:00:00Z"),
+    );
+    const blocks = updated.days.monday.events.filter(
+      (event) => event.purposeId === workFocus.id,
+    );
+
+    expect(blocks.map((event) => event.title)).toEqual(["Deep work", "Admin window"]);
+    expect(blocks.every((event) => event.color === "gold")).toBe(true);
+  });
+
+  test("upgrades only the untouched blank default plan to the ideal starter", () => {
+    const state = createInitialState("2026-03-11");
+    const blankDefault = createPlannerPreset();
+    const upgraded = ensurePlannerState({
+      ...state,
+      plannerPresets: { [blankDefault.id]: blankDefault },
+      uiState: { ...state.uiState, selectedPlannerPresetId: blankDefault.id },
+    });
+
+    expect(upgraded.plannerPresets[blankDefault.id].name).toBe("Ideal Daily Rhythm");
+    expect(upgraded.plannerPresets[blankDefault.id].days.monday.purposes.length).toBeGreaterThan(0);
+
+    const customBlank = createPlannerPreset("My empty plan");
+    const preserved = ensurePlannerState({
+      ...state,
+      plannerPresets: { [customBlank.id]: customBlank },
+      uiState: { ...state.uiState, selectedPlannerPresetId: customBlank.id },
+    });
+
+    expect(preserved.plannerPresets[customBlank.id].days.monday.purposes).toEqual([]);
   });
 
   test("seeds the default content board in initial state", () => {
@@ -486,5 +553,47 @@ describe("planner state", () => {
     expect(copy.id).not.toBe(preset.id);
     expect(copy.days.monday.title).toBe("Recovery Monday");
     expect(preset.days.monday.title).toBe("Deep Work Monday");
+  });
+
+  test("copies a purpose and all of its slices only to selected days", () => {
+    const purpose = createPlannerPurpose({
+      title: "Office work",
+      targetMinutes: 480,
+      role: "primary",
+    });
+    const preset = addPlannerPurposeToDays(
+      createPlannerPreset("Weekday rhythm"),
+      purpose,
+      ["monday"],
+    );
+    preset.days.monday.events = [
+      createPlannerEvent({
+        id: "monday-office",
+        purposeId: purpose.id,
+        dayKey: "monday",
+        title: purpose.title,
+        color: purpose.color,
+        startMinutes: 540,
+        endMinutes: 720,
+      }),
+    ];
+
+    const copied = applyPlannerPurposeToDays(
+      preset,
+      "monday",
+      purpose.id,
+      ["tuesday", "thursday"],
+    );
+
+    expect(copied.days.tuesday.purposes).toContainEqual(purpose);
+    expect(copied.days.tuesday.events[0]).toMatchObject({
+      purposeId: purpose.id,
+      dayKey: "tuesday",
+      startMinutes: 540,
+      endMinutes: 720,
+    });
+    expect(copied.days.tuesday.events[0].id).not.toBe("monday-office");
+    expect(copied.days.wednesday.purposes).toEqual([]);
+    expect(copied.days.thursday.events).toHaveLength(1);
   });
 });

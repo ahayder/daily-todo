@@ -80,6 +80,54 @@ describe("normalizeAppState", () => {
     expect(state.contentBoard.columns).toHaveLength(5);
   });
 
+  test("migrates legacy planner blocks into reusable purposes", () => {
+    const initial = createInitialState("2026-03-11");
+    const presetId = initial.uiState.selectedPlannerPresetId!;
+    initial.plannerPresets[presetId].days.monday.events = [
+      {
+        id: "legacy-office",
+        purposeId: null,
+        dayKey: "monday",
+        title: "Office work",
+        startMinutes: 540,
+        endMinutes: 660,
+        color: "teal",
+        notes: "Focus",
+      },
+    ];
+    const legacyPayload = JSON.parse(JSON.stringify(initial)) as {
+      plannerPresets: Record<
+        string,
+        {
+          days: Record<
+            string,
+            {
+              purposes?: unknown;
+              events: Array<Record<string, unknown>>;
+            }
+          >;
+        }
+      >;
+    };
+    const legacyMonday = legacyPayload.plannerPresets[presetId].days.monday;
+    delete legacyMonday.purposes;
+    delete legacyMonday.events[0].purposeId;
+
+    const normalized = normalizeAppState(
+      legacyPayload,
+      new Date("2026-03-11T08:00:00Z"),
+    );
+    const monday = normalized.plannerPresets[presetId].days.monday;
+
+    expect(monday.purposes).toHaveLength(1);
+    expect(monday.purposes[0]).toMatchObject({
+      title: "Office work",
+      targetMinutes: 120,
+      role: "primary",
+    });
+    expect(monday.events[0].purposeId).toBe(monday.purposes[0].id);
+  });
+
   test("maps legacy daily lastView state to todos and discards planner branches", () => {
     const state = normalizeAppState(
       {
