@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,10 +22,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PlannerTour } from "@/components/planner/planner-tour";
 import type { AppAction } from "@/components/app/app-context";
 import {
   assignPlannerEventLanes,
-  buildPlannerAllocationSegments,
   clampPlannerMinute,
   formatPlannerDuration,
   formatPlannerTime,
@@ -53,14 +54,17 @@ import type {
   PlannerPurposeRole,
 } from "@/lib/types";
 import {
-  CalendarClock,
+  ChevronDown,
+  ChevronUp,
+  CircleHelp,
   Clock3,
   Layers2,
   Layers3,
   PanelRightClose,
   PanelRightOpen,
-  PieChart,
+  Pencil,
   Plus,
+  Settings2,
   Trash2,
 } from "lucide-react";
 
@@ -68,8 +72,6 @@ type Props = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
 };
-
-type PlannerMode = "schedule" | "allocate";
 
 type PurposeDraft = {
   title: string;
@@ -128,9 +130,13 @@ const COLOR_VARS: Record<PlannerEventColor, string> = {
 
 const CLOCK_LABELS = [
   { minutes: 0, label: "12a" },
+  { minutes: 3 * 60, label: "3a" },
   { minutes: 6 * 60, label: "6a" },
+  { minutes: 9 * 60, label: "9a" },
   { minutes: 12 * 60, label: "12p" },
+  { minutes: 15 * 60, label: "3p" },
   { minutes: 18 * 60, label: "6p" },
+  { minutes: 21 * 60, label: "9p" },
 ];
 
 const TIME_OPTIONS = Array.from(
@@ -155,6 +161,78 @@ function getPurposeStyle(color: PlannerEventColor): CSSProperties {
   return { "--planner-purpose-color": COLOR_VARS[color] } as CSSProperties;
 }
 
+function formatPlannerCreationDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Creation date unavailable";
+  return `Created ${date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}`;
+}
+
+function EditablePlannerHeading({
+  value,
+  label,
+  variant,
+  onSave,
+}: {
+  value: string;
+  label: string;
+  variant: "title" | "subtitle";
+  onSave: (value: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.select();
+  }, [isEditing]);
+
+  const finishEditing = (shouldSave: boolean) => {
+    if (shouldSave) onSave(draft);
+    else setDraft(value);
+    setIsEditing(false);
+  };
+
+  const content = isEditing ? (
+    <input
+      ref={inputRef}
+      aria-label={label}
+      className={`planner-heading-input planner-heading-input--${variant}`}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => finishEditing(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finishEditing(true);
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          finishEditing(false);
+        }
+      }}
+    />
+  ) : (
+    <button
+      type="button"
+      className={`planner-heading-edit planner-heading-edit--${variant}`}
+      aria-label={`${label}. Click to edit`}
+      onClick={() => {
+        setDraft(value);
+        setIsEditing(true);
+      }}
+    >
+      <span>{value}</span>
+      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+    </button>
+  );
+
+  return variant === "title" ? <h1>{content}</h1> : <p>{content}</p>;
+}
+
 function PurposeFields({
   draft,
   onChange,
@@ -162,6 +240,8 @@ function PurposeFields({
   draft: PurposeDraft;
   onChange: (draft: PurposeDraft) => void;
 }) {
+  const pct = ((draft.targetMinutes / MINUTES_PER_DAY) * 100).toFixed(1);
+
   return (
     <div className="planner-purpose-fields">
       <label className="planner-field">
@@ -175,9 +255,16 @@ function PurposeFields({
         />
       </label>
 
-      <div className="planner-field-grid">
-        <label className="planner-field">
+      <div className="planner-field">
+        <div className="planner-field-header-row">
           <span>Daily target</span>
+          <span className="planner-target-badge">
+            {formatPlannerDuration(draft.targetMinutes)}
+            {draft.role === "primary" ? ` · ${pct}% of 24h` : " · overlap"}
+          </span>
+        </div>
+
+        <div className="planner-field-grid">
           <div className="planner-hours-input-wrap">
             <input
               aria-label="Planner main focus target hours"
@@ -199,55 +286,603 @@ function PurposeFields({
             />
             <span>hours</span>
           </div>
-        </label>
 
+          <div className="planner-stepper-row">
+            <button
+              type="button"
+              className="planner-stepper-btn"
+              aria-label="Decrease target by 15 minutes"
+              onClick={() =>
+                onChange({
+                  ...draft,
+                  targetMinutes: clampPlannerMinute(draft.targetMinutes - 15),
+                })
+              }
+            >
+              -15m
+            </button>
+            <button
+              type="button"
+              className="planner-stepper-btn"
+              aria-label="Increase target by 15 minutes"
+              onClick={() =>
+                onChange({
+                  ...draft,
+                  targetMinutes: clampPlannerMinute(draft.targetMinutes + 15),
+                })
+              }
+            >
+              +15m
+            </button>
+            <button
+              type="button"
+              className="planner-stepper-btn"
+              aria-label="Decrease target by 1 hour"
+              onClick={() =>
+                onChange({
+                  ...draft,
+                  targetMinutes: clampPlannerMinute(draft.targetMinutes - 60),
+                })
+              }
+            >
+              -1h
+            </button>
+            <button
+              type="button"
+              className="planner-stepper-btn"
+              aria-label="Increase target by 1 hour"
+              onClick={() =>
+                onChange({
+                  ...draft,
+                  targetMinutes: clampPlannerMinute(draft.targetMinutes + 60),
+                })
+              }
+            >
+              +1h
+            </button>
+          </div>
+        </div>
+
+        <div className="planner-preset-row" aria-label="Quick target presets">
+          {[
+            { label: "30m", minutes: 30 },
+            { label: "1h", minutes: 60 },
+            { label: "2h", minutes: 120 },
+            { label: "4h", minutes: 240 },
+            { label: "6h", minutes: 360 },
+            { label: "8h", minutes: 480 },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className="planner-preset-pill"
+              aria-label={`Set target to ${preset.label}`}
+              aria-pressed={draft.targetMinutes === preset.minutes}
+              onClick={() => onChange({ ...draft, targetMinutes: preset.minutes })}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="planner-field-grid">
         <label className="planner-field">
-          <span>Allocation</span>
+          <span>Role</span>
           <select
             aria-label="Planner main focus allocation role"
             className="planner-select"
             value={draft.role}
             onChange={(event) =>
-              onChange({ ...draft, role: event.target.value as PlannerPurposeRole })
+              onChange({
+                ...draft,
+                role: event.target.value as PlannerPurposeRole,
+              })
             }
           >
             <option value="primary">Primary · counts toward 24h</option>
             <option value="secondary">Secondary · may overlap</option>
           </select>
         </label>
-      </div>
 
-      <div className="planner-field">
-        <span>Color</span>
-        <div className="planner-color-row">
-          {PLANNER_EVENT_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              aria-label={`Color ${color}`}
-              aria-pressed={draft.color === color}
-              className="planner-color-swatch"
-              style={getPurposeStyle(color)}
-              onClick={() => onChange({ ...draft, color })}
-            >
-              <span className="planner-purpose-dot" />
-              {COLOR_LABELS[color]}
-            </button>
-          ))}
+        <div className="planner-field">
+          <span>Color</span>
+          <div className="planner-color-row">
+            {PLANNER_EVENT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Color ${color}`}
+                aria-pressed={draft.color === color}
+                className="planner-color-swatch"
+                style={getPurposeStyle(color)}
+                onClick={() => onChange({ ...draft, color })}
+              >
+                <span className="planner-purpose-dot" />
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <label className="planner-field">
-        <span>Notes</span>
+        <span>Intentions & notes</span>
         <textarea
           aria-label="Planner main focus notes"
           className="planner-textarea"
-          rows={2}
           value={draft.notes}
           onChange={(event) => onChange({ ...draft, notes: event.target.value })}
-          placeholder="Optional intention or boundary for this focus."
+          placeholder="Why this focus matters and how you want to protect it..."
+          rows={2}
         />
       </label>
+    </div>
+  );
+}
+
+function UnifiedFocusCard({
+  purpose,
+  isSelected,
+  scheduledEvents,
+  effectiveEventId,
+  onSelect,
+  onSelectEvent,
+  onUpdateTitle,
+  onAdjustMinutes,
+  onToggleRole,
+  onAddBlock,
+  onUpdateEventRange,
+  onUpdateEventTitle,
+  onDeleteEvent,
+  onDeletePurpose,
+  onChangeColor,
+  onChangeNotes,
+  onApplyDaysToggle,
+  applyDays,
+  effectiveDayKey,
+}: {
+  purpose: PlannerPurpose;
+  isSelected: boolean;
+  scheduledEvents: PlannerEvent[];
+  effectiveEventId: string | null;
+  onSelect: () => void;
+  onSelectEvent: (eventId: string) => void;
+  onUpdateTitle: (title: string) => void;
+  onAdjustMinutes: (delta: number) => void;
+  onToggleRole: () => void;
+  onAddBlock: () => void;
+  onUpdateEventRange: (event: PlannerEvent, start: number, end: number) => void;
+  onUpdateEventTitle: (event: PlannerEvent, title: string) => void;
+  onDeleteEvent: (eventId: string) => void;
+  onDeletePurpose: () => void;
+  onChangeColor: (color: PlannerEventColor) => void;
+  onChangeNotes: (notes: string) => void;
+  onApplyDaysToggle: (dayKey: PlannerDayKey) => void;
+  applyDays: PlannerDayKey[];
+  effectiveDayKey: PlannerDayKey;
+}) {
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(purpose.title);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTitleDraft(purpose.title);
+  }, [purpose.title]);
+
+  useEffect(() => {
+    if (isEditingTitle) {
+      titleInputRef.current?.select();
+    }
+  }, [isEditingTitle]);
+
+  const scheduledMinutes = scheduledEvents.reduce(
+    (sum, event) => sum + (event.endMinutes - event.startMinutes),
+    0,
+  );
+
+  const pct = ((purpose.targetMinutes / MINUTES_PER_DAY) * 100).toFixed(1);
+  const progressRatio = purpose.targetMinutes > 0 ? (scheduledMinutes / purpose.targetMinutes) * 100 : 0;
+
+  const finishTitleEdit = (save: boolean) => {
+    if (save && titleDraft.trim() && titleDraft.trim() !== purpose.title) {
+      onUpdateTitle(titleDraft.trim());
+    } else {
+      setTitleDraft(purpose.title);
+    }
+    setIsEditingTitle(false);
+  };
+
+  return (
+    <div
+      className={`planner-unified-card${isSelected ? " planner-unified-card--active" : ""}`}
+      style={getPurposeStyle(purpose.color)}
+      onClick={onSelect}
+    >
+      {/* Top Header Row */}
+      <div className="planner-unified-card-top">
+        <div className="planner-unified-card-title-wrap">
+          <span className="planner-purpose-dot" />
+          {isEditingTitle ? (
+            <input
+              ref={titleInputRef}
+              aria-label={`Edit title for ${purpose.title}`}
+              className="planner-allocation-card-title-input"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => finishTitleEdit(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  finishTitleEdit(true);
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  finishTitleEdit(false);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <button
+              type="button"
+              className="planner-allocation-card-title-btn"
+              aria-label={`${purpose.title}, click to edit title`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditingTitle(true);
+              }}
+            >
+              <strong>{purpose.title}</strong>
+              <Pencil className="h-3 w-3 text-[var(--ink-700)] opacity-60" />
+            </button>
+          )}
+        </div>
+
+        <div className="planner-unified-card-top-actions">
+          <button
+            type="button"
+            aria-label={`Toggle role for ${purpose.title}, currently ${purpose.role}`}
+            className={`planner-allocation-role-badge planner-allocation-role-badge--${purpose.role}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleRole();
+            }}
+          >
+            {purpose.role === "primary" ? "Primary · 24h" : "Secondary · Overlap"}
+          </button>
+
+          <button
+            type="button"
+            aria-label={isExpanded ? `Collapse settings for ${purpose.title}` : `Expand settings for ${purpose.title}`}
+            className="planner-card-expand-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded((expanded) => !expanded);
+            }}
+          >
+            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <Settings2 className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Target & Stepper Row */}
+      <div className="planner-unified-card-target-row">
+        <div className="planner-allocation-time-controls">
+          <button
+            type="button"
+            aria-label={`Decrease ${purpose.title} target by 1 hour`}
+            className="planner-allocation-card-stepper"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustMinutes(-60);
+            }}
+          >
+            -1h
+          </button>
+          <button
+            type="button"
+            aria-label={`Decrease ${purpose.title} target by 15 minutes`}
+            className="planner-allocation-card-stepper"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustMinutes(-15);
+            }}
+          >
+            -15m
+          </button>
+          <span className="planner-allocation-duration">
+            {formatPlannerDuration(purpose.targetMinutes)}
+          </span>
+          <button
+            type="button"
+            aria-label={`Increase ${purpose.title} target by 15 minutes`}
+            className="planner-allocation-card-stepper"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustMinutes(15);
+            }}
+          >
+            +15m
+          </button>
+          <button
+            type="button"
+            aria-label={`Increase ${purpose.title} target by 1 hour`}
+            className="planner-allocation-card-stepper"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustMinutes(60);
+            }}
+          >
+            +1h
+          </button>
+        </div>
+
+        <span className="planner-allocation-pct">
+          {purpose.role === "primary" ? `${pct}% of 24h` : "overlap target"}
+        </span>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="planner-unified-card-progress-wrap">
+        <div className="planner-allocation-progress-bar">
+          <div
+            className="planner-allocation-progress-fill"
+            style={{ width: `${Math.min(100, progressRatio)}%` }}
+          />
+        </div>
+        <div className="planner-allocation-scheduled-info">
+          <span>
+            {formatPlannerDuration(scheduledMinutes)} of {formatPlannerDuration(purpose.targetMinutes)} scheduled
+          </span>
+          {scheduledMinutes < purpose.targetMinutes ? (
+            <small>({formatPlannerDuration(purpose.targetMinutes - scheduledMinutes)} remaining)</small>
+          ) : scheduledMinutes > purpose.targetMinutes ? (
+            <small>({formatPlannerDuration(scheduledMinutes - purpose.targetMinutes)} over target)</small>
+          ) : (
+            <small>(target reached)</small>
+          )}
+        </div>
+      </div>
+
+      {/* Child Time Blocks */}
+      <div className="planner-card-blocks-section">
+        <div className="planner-card-blocks-header">
+          <span>Scheduled clock blocks</span>
+          <button
+            type="button"
+            className="planner-add-slice-btn"
+            aria-label={`Add time block to ${purpose.title}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddBlock();
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add block</span>
+          </button>
+        </div>
+
+        {scheduledEvents.length > 0 ? (
+          <div className="planner-card-blocks-list">
+            {scheduledEvents.map((event) => {
+              const isEventSelected = event.id === effectiveEventId;
+              return (
+                <div
+                  key={event.id}
+                  className={`planner-card-block-item${isEventSelected ? " planner-card-block-item--active" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectEvent(event.id);
+                  }}
+                >
+                    <div className="planner-card-block-summary">
+                      <span className="planner-child-block-marker" />
+                      <strong>{event.title}</strong>
+                      <span className="planner-card-block-time">
+                        {formatPlannerTime(event.startMinutes)} – {formatPlannerTime(event.endMinutes)}
+                      </span>
+                      <span className="planner-card-block-dur">
+                        ({formatPlannerDuration(event.endMinutes - event.startMinutes)})
+                      </span>
+                    </div>
+
+                  {isEventSelected && (
+                    <div className="planner-card-block-edit" onClick={(e) => e.stopPropagation()}>
+                      <div className="planner-card-block-inputs">
+                        <label className="planner-field">
+                          <span>Label</span>
+                          <input
+                            aria-label="Planner time block title"
+                            className="planner-text-input"
+                            defaultValue={event.title}
+                            onBlur={(e) => {
+                              const newTitle = e.currentTarget.value.trim();
+                              if (newTitle && newTitle !== event.title) {
+                                onUpdateEventTitle(event, newTitle);
+                              }
+                            }}
+                          />
+                        </label>
+                        <div className="planner-field-grid">
+                          <label className="planner-field">
+                            <span>Start</span>
+                            <select
+                              aria-label="Planner time block start time"
+                              className="planner-select"
+                              value={plannerMinutesToInputValue(event.startMinutes)}
+                              onChange={(e) => {
+                                const nextStart = plannerInputValueToMinutes(e.target.value);
+                                onUpdateEventRange(
+                                  event,
+                                  Math.min(nextStart, event.endMinutes - PLANNER_SNAP_MINUTES),
+                                  event.endMinutes,
+                                );
+                              }}
+                            >
+                              {TIME_OPTIONS.slice(0, -1).map((opt) => (
+                                <option key={opt.value} value={plannerMinutesToInputValue(opt.value)}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="planner-field">
+                            <span>End</span>
+                            <select
+                              aria-label="Planner time block end time"
+                              className="planner-select"
+                              value={
+                                event.endMinutes === MINUTES_PER_DAY
+                                  ? "24:00"
+                                  : plannerMinutesToInputValue(event.endMinutes)
+                              }
+                              onChange={(e) => {
+                                const nextEnd =
+                                  e.target.value === "24:00"
+                                    ? MINUTES_PER_DAY
+                                    : plannerInputValueToMinutes(e.target.value);
+                                onUpdateEventRange(
+                                  event,
+                                  event.startMinutes,
+                                  Math.max(nextEnd, event.startMinutes + PLANNER_SNAP_MINUTES),
+                                );
+                              }}
+                            >
+                              {TIME_OPTIONS.slice(1).map((opt) => (
+                                <option
+                                  key={opt.value}
+                                  value={
+                                    opt.value === MINUTES_PER_DAY
+                                      ? "24:00"
+                                      : plannerMinutesToInputValue(opt.value)
+                                  }
+                                >
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="planner-delete-slice"
+                        aria-label={`Delete ${event.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteEvent(event.id);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Delete block</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="planner-card-blocks-empty">No time blocks scheduled on the clock yet.</p>
+        )}
+      </div>
+
+      {/* Expanded Settings & Controls */}
+      {isExpanded && (
+        <div className="planner-unified-card-expanded" onClick={(e) => e.stopPropagation()}>
+          <div className="planner-field">
+            <span>Color theme</span>
+            <div className="planner-color-row">
+              {PLANNER_EVENT_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`Color ${color}`}
+                  aria-pressed={purpose.color === color}
+                  className="planner-color-swatch"
+                  style={getPurposeStyle(color)}
+                  onClick={() => onChangeColor(color)}
+                >
+                  <span className="planner-purpose-dot" />
+                  {COLOR_LABELS[color]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="planner-field">
+            <span>Quick target presets</span>
+            <div className="planner-preset-row">
+              {[
+                { label: "30m", minutes: 30 },
+                { label: "1h", minutes: 60 },
+                { label: "2h", minutes: 120 },
+                { label: "4h", minutes: 240 },
+                { label: "6h", minutes: 360 },
+                { label: "8h", minutes: 480 },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className="planner-preset-pill"
+                  aria-label={`Set target to ${preset.label}`}
+                  aria-pressed={purpose.targetMinutes === preset.minutes}
+                  onClick={() => onAdjustMinutes(preset.minutes - purpose.targetMinutes)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="planner-field">
+            <span>Notes & Intentions</span>
+            <textarea
+              aria-label={`Notes for ${purpose.title}`}
+              className="planner-textarea"
+              defaultValue={purpose.notes}
+              placeholder="Why this focus matters..."
+              rows={2}
+              onBlur={(e) => onChangeNotes(e.target.value)}
+            />
+          </label>
+
+          <PlannerDayPicker
+            selectedDayKey={effectiveDayKey}
+            selectedDays={applyDays}
+            onToggle={onApplyDaysToggle}
+            label="Apply to other days"
+          />
+
+          <AlertDialog>
+            <AlertDialogTrigger
+              type="button"
+              className="planner-delete-purpose"
+              aria-label={`Delete ${purpose.title}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete main focus</span>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete main focus?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This removes &quot;{purpose.title}&quot; and all of its scheduled time blocks from {DAY_LABELS[effectiveDayKey]}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onDeletePurpose}>
+                  Delete main focus
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
     </div>
   );
 }
@@ -313,7 +948,6 @@ function PlannerPresetView({ state, dispatch }: Props) {
   const initialDayKey = preset.dayOrder[0] ?? "monday";
   const initialDay = preset.days[initialDayKey];
   const initialPurpose = initialDay.purposes[0] ?? null;
-  const [mode, setMode] = useState<PlannerMode>("schedule");
   const [selectedDayKey, setSelectedDayKey] = useState<PlannerDayKey>(initialDayKey);
   const [selectedPurposeId, setSelectedPurposeId] = useState<string | null>(
     initialPurpose?.id ?? null,
@@ -322,6 +956,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
     initialDay.events.find((event) => event.purposeId === initialPurpose?.id)?.id ?? null,
   );
   const [isDetailsVisible, setIsDetailsVisible] = useState(true);
+  const [isTourOpen, setIsTourOpen] = useState(() => !state.uiState.hasSeenPlannerTour);
   const [isCreatingPurpose, setIsCreatingPurpose] = useState(false);
   const [purposeDraft, setPurposeDraft] = useState<PurposeDraft>(() =>
     purposeToDraft(initialPurpose),
@@ -371,15 +1006,17 @@ function PlannerPresetView({ state, dispatch }: Props) {
   );
   const eventLayouts = useMemo(() => assignPlannerEventLanes(displayEvents), [displayEvents]);
   const laneCount = Math.max(1, ...eventLayouts.map((layout) => layout.lane + 1));
-  const allocationSegments = useMemo(
-    () => buildPlannerAllocationSegments(purposes),
-    [purposes],
-  );
+
   const primaryAllocatedMinutes = purposes.reduce(
     (total, purpose) =>
       purpose.role === "primary" ? total + purpose.targetMinutes : total,
     0,
   );
+  const totalScheduledMinutes = displayEvents.reduce(
+    (total, event) => total + (event.endMinutes - event.startMinutes),
+    0,
+  );
+
   const selectedScheduledMinutes = selectedPurpose
     ? getPlannerPurposeScheduledMinutes(displayEvents, selectedPurpose.id)
     : 0;
@@ -427,195 +1064,341 @@ function PlannerPresetView({ state, dispatch }: Props) {
     );
   };
 
-  const savePurpose = () => {
-    if (!selectedPurpose || !purposeDraft.title.trim()) return;
+  const handlePurposeDraftChange = (nextDraft: PurposeDraft) => {
+    setPurposeDraft(nextDraft);
+    if (!selectedPurpose) return;
     dispatch({
       type: "update-planner-purpose",
       presetId,
       dayKey: effectiveDayKey,
       purposeId: selectedPurpose.id,
-      updates: purposeDraft,
+      updates: {
+        title: nextDraft.title.trim() || selectedPurpose.title,
+        color: nextDraft.color,
+        targetMinutes: nextDraft.targetMinutes,
+        role: nextDraft.role,
+        notes: nextDraft.notes,
+      },
     });
   };
 
-  const saveAndApplyPurpose = () => {
-    if (!selectedPurpose || !purposeDraft.title.trim()) return;
-    savePurpose();
+  const handleDirectPurposeTitleUpdate = (purposeId: string, title: string) => {
+    if (!title.trim()) return;
     dispatch({
-      type: "apply-planner-purpose-to-days",
+      type: "update-planner-purpose",
       presetId,
-      sourceDayKey: effectiveDayKey,
-      purposeId: selectedPurpose.id,
-      targetDayKeys: applyDayKeys,
+      dayKey: effectiveDayKey,
+      purposeId,
+      updates: { title: title.trim() },
     });
+    if (selectedPurposeId === purposeId) {
+      setPurposeDraft((prev) => ({ ...prev, title: title.trim() }));
+    }
   };
 
-  const createPurpose = () => {
-    if (!purposeDraft.title.trim()) return;
-    const purpose = createPlannerPurpose(purposeDraft);
-    const dayKeys = applyDayKeys.includes(effectiveDayKey)
-      ? applyDayKeys
-      : [effectiveDayKey, ...applyDayKeys];
+  const handleDirectPurposeTargetAdjust = (purpose: PlannerPurpose, delta: number) => {
+    const nextTarget = clampPlannerMinute(purpose.targetMinutes + delta);
     dispatch({
-      type: "create-planner-purpose",
+      type: "update-planner-purpose",
       presetId,
-      purpose,
-      dayKeys,
+      dayKey: effectiveDayKey,
+      purposeId: purpose.id,
+      updates: { targetMinutes: nextTarget },
     });
-    setSelectedPurposeId(purpose.id);
-    setSelectedEventId(null);
-    setIsCreatingPurpose(false);
+    if (selectedPurposeId === purpose.id) {
+      setPurposeDraft((prev) => ({ ...prev, targetMinutes: nextTarget }));
+    }
   };
 
-  const addSlice = () => {
-    if (!selectedPurpose) return;
-    const range = getDefaultPlannerSliceRange(day.events);
-    const eventId = makeId("planner-event");
+  const handleDirectPurposeRoleToggle = (purpose: PlannerPurpose) => {
+    const nextRole: PlannerPurposeRole = purpose.role === "primary" ? "secondary" : "primary";
+    dispatch({
+      type: "update-planner-purpose",
+      presetId,
+      dayKey: effectiveDayKey,
+      purposeId: purpose.id,
+      updates: { role: nextRole },
+    });
+    if (selectedPurposeId === purpose.id) {
+      setPurposeDraft((prev) => ({ ...prev, role: nextRole }));
+    }
+  };
+
+  const handleDirectPurposeColorChange = (purposeId: string, color: PlannerEventColor) => {
+    dispatch({
+      type: "update-planner-purpose",
+      presetId,
+      dayKey: effectiveDayKey,
+      purposeId,
+      updates: { color },
+    });
+    if (selectedPurposeId === purposeId) {
+      setPurposeDraft((prev) => ({ ...prev, color }));
+    }
+  };
+
+  const handleDirectPurposeNotesChange = (purposeId: string, notes: string) => {
+    dispatch({
+      type: "update-planner-purpose",
+      presetId,
+      dayKey: effectiveDayKey,
+      purposeId,
+      updates: { notes },
+    });
+    if (selectedPurposeId === purposeId) {
+      setPurposeDraft((prev) => ({ ...prev, notes }));
+    }
+  };
+
+  const addSliceForPurpose = (purposeId: string) => {
+    const targetPurpose = purposeById.get(purposeId);
+    if (!targetPurpose) return;
+    const existingEvents = day.events.filter((e) => e.purposeId === purposeId);
+    const range = getDefaultPlannerSliceRange(displayEvents);
+    const eventId = makeId("evt");
+    const eventTitle = `${targetPurpose.title} ${existingEvents.length + 1}`;
     dispatch({
       type: "create-planner-event",
       presetId,
       eventId,
       dayKey: effectiveDayKey,
-      purposeId: selectedPurpose.id,
+      purposeId: targetPurpose.id,
+      title: eventTitle,
       startMinutes: range.startMinutes,
       endMinutes: range.endMinutes,
+      color: targetPurpose.color,
+      notes: "",
     });
+    setSelectedPurposeId(purposeId);
     setSelectedEventId(eventId);
+    setPurposeDraft(purposeToDraft(targetPurpose));
   };
 
-  const updateEventRange = (
-    event: PlannerEvent,
-    startMinutes: number,
-    endMinutes: number,
-  ) => {
-    const start = Math.min(MINUTES_PER_DAY - PLANNER_SNAP_MINUTES, startMinutes);
-    const end = Math.min(
-      MINUTES_PER_DAY,
-      Math.max(start + PLANNER_SNAP_MINUTES, endMinutes),
-    );
+  const addSlice = () => {
+    if (!selectedPurpose) return;
+    addSliceForPurpose(selectedPurpose.id);
+  };
+
+  const updateEventRange = (event: PlannerEvent, startMinutes: number, endMinutes: number) => {
     dispatch({
       type: "update-planner-event",
       presetId,
       dayKey: effectiveDayKey,
       eventId: event.id,
-      updates: { startMinutes: start, endMinutes: end },
+      updates: {
+        startMinutes: clampPlannerMinute(startMinutes),
+        endMinutes: clampPlannerMinute(endMinutes),
+      },
     });
+  };
+
+  const deleteEvent = (eventId: string) => {
+    dispatch({
+      type: "delete-planner-event",
+      presetId,
+      dayKey: effectiveDayKey,
+      eventId,
+    });
+    const nextEvent = purposeEvents.find((event) => event.id !== eventId) ?? null;
+    setSelectedEventId(nextEvent?.id ?? null);
+  };
+
+  const createPurpose = () => {
+    const title = purposeDraft.title.trim();
+    if (!title) return;
+    const purpose = createPlannerPurpose({
+      title,
+      color: purposeDraft.color,
+      targetMinutes: purposeDraft.targetMinutes,
+      role: purposeDraft.role,
+      notes: purposeDraft.notes,
+    });
+    dispatch({
+      type: "create-planner-purpose",
+      presetId,
+      dayKeys: applyDayKeys.length ? applyDayKeys : [effectiveDayKey],
+      purpose,
+    });
+    setSelectedPurposeId(purpose.id);
+    setSelectedEventId(null);
+    setIsCreatingPurpose(false);
+    setPurposeDraft(purposeToDraft(purpose));
+    setApplyDayKeys([effectiveDayKey]);
+  };
+
+  const savePurpose = () => {
+    if (!selectedPurpose) return;
+    const title = purposeDraft.title.trim();
+    if (!title) return;
+    dispatch({
+      type: "update-planner-purpose",
+      presetId,
+      dayKey: effectiveDayKey,
+      purposeId: selectedPurpose.id,
+      updates: {
+        title,
+        color: purposeDraft.color,
+        targetMinutes: purposeDraft.targetMinutes,
+        role: purposeDraft.role,
+        notes: purposeDraft.notes,
+      },
+    });
+  };
+
+  const deletePurpose = (purposeId: string) => {
+    const nextPurpose = purposes.find((candidate) => candidate.id !== purposeId) ?? null;
+    dispatch({
+      type: "delete-planner-purpose",
+      presetId,
+      dayKey: effectiveDayKey,
+      purposeId,
+    });
+    setSelectedPurposeId(nextPurpose?.id ?? null);
+    setSelectedEventId(
+      day.events.find((event) => event.purposeId === nextPurpose?.id)?.id ?? null,
+    );
+    setPurposeDraft(purposeToDraft(nextPurpose));
+    setApplyDayKeys([effectiveDayKey]);
+  };
+
+  const getMinuteFromPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const chart = chartRef.current;
+    if (!chart) return 0;
+    const rect = chart.getBoundingClientRect();
+    const x = event.clientX - rect.left - rect.width / 2;
+    const y = event.clientY - rect.top - rect.height / 2;
+    const angle = Math.atan2(y, x);
+    let degrees = angle * (180 / Math.PI) + 90;
+    if (degrees < 0) degrees += 360;
+    const rawMinutes = (degrees / 360) * MINUTES_PER_DAY;
+    return snapPlannerMinute(rawMinutes);
   };
 
   const startHandleDrag = (
     event: ReactPointerEvent<SVGCircleElement>,
-    plannerEvent: PlannerEvent,
-    edge: DragState["edge"],
+    eventId: string,
+    edge: "start" | "end",
   ) => {
-    event.preventDefault();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // SVG-level pointer events still work when pointer capture is unavailable.
-    }
-    dragStateRef.current = { eventId: plannerEvent.id, edge };
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStateRef.current = { eventId, edge };
+    const targetEvent = displayEvents.find((candidate) => candidate.id === eventId);
+    if (!targetEvent) return;
     setDragPreview({
-      eventId: plannerEvent.id,
-      startMinutes: plannerEvent.startMinutes,
-      endMinutes: plannerEvent.endMinutes,
+      eventId,
+      startMinutes: targetEvent.startMinutes,
+      endMinutes: targetEvent.endMinutes,
     });
-  };
-
-  const getPointerMinutes = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const bounds = chartRef.current?.getBoundingClientRect();
-    if (!bounds) return 0;
-    const x = ((event.clientX - bounds.left) / bounds.width) * 600;
-    const y = ((event.clientY - bounds.top) / bounds.height) * 600;
-    let angle = Math.atan2(y - 300, x - 300) + Math.PI / 2;
-    if (angle < 0) angle += Math.PI * 2;
-    return snapPlannerMinute((angle / (Math.PI * 2)) * MINUTES_PER_DAY);
   };
 
   const handleChartPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const dragState = dragStateRef.current;
     if (!dragState) return;
-    const plannerEvent = displayEvents.find((candidate) => candidate.id === dragState.eventId);
-    if (!plannerEvent) return;
-    const nextMinutes = getPointerMinutes(event);
-    setDragPreview({
-      eventId: plannerEvent.id,
-      startMinutes:
-        dragState.edge === "start"
-          ? Math.min(nextMinutes, plannerEvent.endMinutes - PLANNER_SNAP_MINUTES)
-          : plannerEvent.startMinutes,
-      endMinutes:
-        dragState.edge === "end"
-          ? Math.max(nextMinutes, plannerEvent.startMinutes + PLANNER_SNAP_MINUTES)
-          : plannerEvent.endMinutes,
+    const minute = getMinuteFromPointer(event);
+    setDragPreview((current) => {
+      const targetEvent = displayEvents.find((candidate) => candidate.id === dragState.eventId);
+      if (!targetEvent) return current;
+      const baseStart = current?.startMinutes ?? targetEvent.startMinutes;
+      const baseEnd = current?.endMinutes ?? targetEvent.endMinutes;
+      if (dragState.edge === "start") {
+        const nextStart = Math.min(minute, baseEnd - PLANNER_SNAP_MINUTES);
+        return {
+          eventId: dragState.eventId,
+          startMinutes: clampPlannerMinute(nextStart),
+          endMinutes: baseEnd,
+        };
+      }
+      const nextEnd = Math.max(minute, baseStart + PLANNER_SNAP_MINUTES);
+      return {
+        eventId: dragState.eventId,
+        startMinutes: baseStart,
+        endMinutes: clampPlannerMinute(nextEnd),
+      };
     });
   };
 
   const finishHandleDrag = () => {
-    const preview = dragPreview;
-    const event = preview
-      ? day.events.find((candidate) => candidate.id === preview.eventId)
-      : null;
-    if (preview && event) {
-      updateEventRange(event, preview.startMinutes, preview.endMinutes);
+    const dragState = dragStateRef.current;
+    if (!dragState || !dragPreview) {
+      dragStateRef.current = null;
+      setDragPreview(null);
+      return;
+    }
+    const targetEvent = displayEvents.find((candidate) => candidate.id === dragState.eventId);
+    if (targetEvent) {
+      updateEventRange(targetEvent, dragPreview.startMinutes, dragPreview.endMinutes);
     }
     dragStateRef.current = null;
     setDragPreview(null);
   };
 
-  const nudgeHandle = (
-    keyboardEvent: ReactKeyboardEvent<SVGCircleElement>,
-    event: PlannerEvent,
-    edge: DragState["edge"],
+  const adjustEventHandleByKeyboard = (
+    event: ReactKeyboardEvent<SVGCircleElement>,
+    eventId: string,
+    edge: "start" | "end",
   ) => {
-    const delta =
-      keyboardEvent.key === "ArrowLeft" || keyboardEvent.key === "ArrowDown"
-        ? -PLANNER_SNAP_MINUTES
-        : keyboardEvent.key === "ArrowRight" || keyboardEvent.key === "ArrowUp"
-          ? PLANNER_SNAP_MINUTES
-          : 0;
-    if (!delta) return;
-    keyboardEvent.preventDefault();
+    const targetEvent = displayEvents.find((candidate) => candidate.id === eventId);
+    if (!targetEvent) return;
+    const delta = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -PLANNER_SNAP_MINUTES : PLANNER_SNAP_MINUTES;
     if (edge === "start") {
       updateEventRange(
-        event,
-        clampPlannerMinute(
-          Math.min(event.startMinutes + delta, event.endMinutes - PLANNER_SNAP_MINUTES),
-          MINUTES_PER_DAY - PLANNER_SNAP_MINUTES,
-        ),
-        event.endMinutes,
+        targetEvent,
+        Math.min(targetEvent.startMinutes + delta, targetEvent.endMinutes - PLANNER_SNAP_MINUTES),
+        targetEvent.endMinutes,
       );
     } else {
       updateEventRange(
-        event,
-        event.startMinutes,
-        clampPlannerMinute(
-          Math.max(event.endMinutes + delta, event.startMinutes + PLANNER_SNAP_MINUTES),
-        ),
+        targetEvent,
+        targetEvent.startMinutes,
+        Math.max(targetEvent.endMinutes + delta, targetEvent.startMinutes + PLANNER_SNAP_MINUTES),
       );
     }
   };
 
-  const bandGap = laneCount > 8 ? 1 : laneCount > 5 ? 2 : 4;
-  const bandWidth = Math.max(
-    3,
-    Math.min(54, (100 - bandGap * (laneCount - 1)) / laneCount),
-  );
   const laneRadius = (lane: number) => {
-    const inner = 164 + lane * (bandWidth + bandGap);
-    return { inner, outer: inner + bandWidth, center: inner + bandWidth / 2 };
+    const baseOuter = 265;
+    const laneWidth = 24;
+    const laneGap = 6;
+    const outer = baseOuter - lane * (laneWidth + laneGap);
+    const inner = outer - laneWidth;
+    return { inner, outer };
   };
+
   const selectedLayout = eventLayouts.find((layout) => layout.event.id === effectiveEventId);
   const selectedEventForHandles = selectedLayout?.event ?? null;
   const allocatedDifference = MINUTES_PER_DAY - primaryAllocatedMinutes;
+
+  const closeTour = () => {
+    setIsTourOpen(false);
+    if (!state.uiState.hasSeenPlannerTour) {
+      dispatch({ type: "complete-planner-tour" });
+    }
+  };
 
   return (
     <section className="planner-layout">
       <div className="planner-radial-board">
         <header className="planner-radial-header">
-          <div>
-            <p className="planner-kicker">{preset.name}</p>
-            <h1>Your daily rhythm</h1>
-            <p>Set your main focuses, then place each child block on the 24-hour clock.</p>
+          <div className="planner-heading-copy" data-planner-tour="heading">
+            <p className="planner-kicker">
+              <span>Daily planner</span>
+              <span aria-hidden="true">·</span>
+              <time dateTime={preset.createdAt}>{formatPlannerCreationDate(preset.createdAt)}</time>
+            </p>
+            <EditablePlannerHeading
+              value={preset.name}
+              label="Planner title"
+              variant="title"
+              onSave={(name) => dispatch({ type: "rename-planner-preset", presetId, name })}
+            />
+            <EditablePlannerHeading
+              value={preset.subtitle}
+              label="Planner subtitle"
+              variant="subtitle"
+              onSave={(subtitle) =>
+                dispatch({ type: "update-planner-preset-subtitle", presetId, subtitle })
+              }
+            />
           </div>
           <div className="planner-header-actions">
             <button
@@ -630,6 +1413,14 @@ function PlannerPresetView({ state, dispatch }: Props) {
             >
               <Plus className="h-4 w-4" />
               Add focus
+            </button>
+            <button
+              type="button"
+              className="planner-secondary-btn planner-guide-btn"
+              onClick={() => setIsTourOpen(true)}
+            >
+              <CircleHelp className="h-4 w-4" />
+              Guide
             </button>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -648,33 +1439,15 @@ function PlannerPresetView({ state, dispatch }: Props) {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {isDetailsVisible ? "Give the wheel more room" : "Open focus details"}
+                {isDetailsVisible ? "Give the clock more room" : "Open focus & budget panel"}
               </TooltipContent>
             </Tooltip>
           </div>
         </header>
 
+        {/* Weekday Selector Bar */}
         <div className="planner-radial-controls">
-          <div className="planner-mode-toggle" aria-label="Planner mode">
-            <button
-              type="button"
-              aria-pressed={mode === "schedule"}
-              onClick={() => setMode("schedule")}
-            >
-              <CalendarClock className="h-4 w-4" />
-              Schedule
-            </button>
-            <button
-              type="button"
-              aria-pressed={mode === "allocate"}
-              onClick={() => setMode("allocate")}
-            >
-              <PieChart className="h-4 w-4" />
-              Allocate
-            </button>
-          </div>
-
-          <div className="planner-day-tabs" aria-label="Planner day">
+          <div className="planner-day-tabs" aria-label="Planner day" data-planner-tour="days">
             {preset.dayOrder.map((dayKey) => (
               <button
                 key={dayKey}
@@ -690,8 +1463,10 @@ function PlannerPresetView({ state, dispatch }: Props) {
           </div>
         </div>
 
+        {/* Main Stage */}
         <div className={`planner-radial-stage${isDetailsVisible ? "" : " planner-radial-stage--wide"}`}>
-          <div className="planner-wheel-panel">
+          {/* Left Canvas: 24-Hour Radial Clock */}
+          <div className="planner-wheel-panel" data-planner-tour="wheel">
             <div className="planner-wheel-header">
               <label>
                 <span>{DAY_LABELS[effectiveDayKey]}</span>
@@ -709,12 +1484,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
                   }
                 />
               </label>
-              {mode === "schedule" ? (
-                <span className="planner-wheel-status">
-                  <Layers2 className="h-4 w-4" />
-                  {laneCount === 1 ? "No overlaps" : `${laneCount} overlap lanes`}
-                </span>
-              ) : (
+              <div className="planner-wheel-header-metrics">
                 <span
                   className={`planner-wheel-status${allocatedDifference < 0 ? " planner-wheel-status--warning" : ""}`}
                 >
@@ -722,7 +1492,11 @@ function PlannerPresetView({ state, dispatch }: Props) {
                     ? `${formatPlannerDuration(allocatedDifference)} open`
                     : `${formatPlannerDuration(Math.abs(allocatedDifference))} over`}
                 </span>
-              )}
+                <span className="planner-wheel-status">
+                  <Layers2 className="h-4 w-4" />
+                  {laneCount === 1 ? "No overlaps" : `${laneCount} overlap lanes`}
+                </span>
+              </div>
             </div>
 
             <div className="planner-wheel-wrap">
@@ -731,303 +1505,332 @@ function PlannerPresetView({ state, dispatch }: Props) {
                 className="planner-wheel"
                 viewBox="0 0 600 600"
                 role="img"
-                aria-label={
-                  mode === "schedule"
-                    ? `${DAY_LABELS[effectiveDayKey]} radial schedule`
-                    : `${DAY_LABELS[effectiveDayKey]} focus allocation`
-                }
+                aria-label={`${DAY_LABELS[effectiveDayKey]} radial schedule`}
                 onPointerMove={handleChartPointerMove}
                 onPointerUp={finishHandleDrag}
                 onPointerCancel={finishHandleDrag}
               >
                 <title id="planner-wheel-title">
-                  {mode === "schedule"
-                    ? `${DAY_LABELS[effectiveDayKey]} radial schedule`
-                    : `${DAY_LABELS[effectiveDayKey]} focus allocation`}
+                  {`${DAY_LABELS[effectiveDayKey]} radial schedule`}
                 </title>
                 <desc id="planner-wheel-description">
-                  {mode === "schedule"
-                    ? "A 24-hour radial timeline. Main focuses may contain multiple child blocks, and overlapping blocks use additional rings."
-                    : "A daily allocation chart where primary focus targets share a 24-hour budget."}
+                  A 24-hour radial timeline. Main focuses may contain multiple child blocks, and overlapping blocks use additional concentric rings.
                 </desc>
 
-                {mode === "schedule" ? (
-                  <>
-                    {Array.from({ length: 24 }, (_, hour) => {
-                      const minutes = hour * 60;
-                      const inner = getPlannerPoint(minutes, hour % 6 === 0 ? 270 : 275);
-                      const outer = getPlannerPoint(minutes, 284);
-                      return (
-                        <line
-                          key={hour}
-                          className={`planner-wheel-tick${hour % 6 === 0 ? " planner-wheel-tick--major" : ""}`}
-                          x1={inner.x}
-                          y1={inner.y}
-                          x2={outer.x}
-                          y2={outer.y}
-                        />
-                      );
-                    })}
-                    {CLOCK_LABELS.map(({ minutes, label }) => {
-                      const point = getPlannerPoint(minutes, 294);
-                      return (
-                        <text
-                          key={minutes}
-                          className="planner-wheel-hour-label"
-                          x={point.x}
-                          y={point.y}
-                        >
-                          {label}
-                        </text>
-                      );
-                    })}
-                    {Array.from({ length: laneCount }, (_, lane) => {
-                      const radii = laneRadius(lane);
-                      return (
-                        <circle
-                          key={lane}
-                          className="planner-wheel-track"
-                          cx="300"
-                          cy="300"
-                          r={(radii.inner + radii.outer) / 2}
-                          strokeWidth={radii.outer - radii.inner}
-                        />
-                      );
-                    })}
-                    {eventLayouts.map(({ event, lane }) => {
-                      const purpose = event.purposeId ? purposeById.get(event.purposeId) : null;
-                      const radii = laneRadius(lane);
-                      const isSelected = purpose?.id === effectivePurposeId;
-                      return (
-                        <path
-                          key={event.id}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`${event.title}, under ${purpose?.title ?? "No main focus"}, ${formatPlannerTime(event.startMinutes)} to ${formatPlannerTime(event.endMinutes)}`}
-                          className={`planner-wheel-arc${isSelected ? " planner-wheel-arc--selected" : " planner-wheel-arc--muted"}`}
-                          d={getPlannerArcPath(
-                            event.startMinutes,
-                            event.endMinutes,
-                            radii.inner,
-                            radii.outer,
-                          )}
-                          fill={COLOR_VARS[purpose?.color ?? event.color]}
-                          onClick={() => {
-                            if (event.purposeId) selectTimeBlock(event.purposeId, event.id);
-                            setSelectedEventId(event.id);
-                            setIsDetailsVisible(true);
-                          }}
-                          onKeyDown={(keyboardEvent) => {
-                            if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") return;
-                            keyboardEvent.preventDefault();
-                            if (event.purposeId) selectTimeBlock(event.purposeId, event.id);
-                            setSelectedEventId(event.id);
-                            setIsDetailsVisible(true);
-                          }}
-                        >
-                          <title>
-                            {event.title} · {purpose?.title ?? "No main focus"}: {formatPlannerTime(event.startMinutes)} – {formatPlannerTime(event.endMinutes)}
-                          </title>
-                        </path>
-                      );
-                    })}
-                  </>
-                ) : (
-                  <>
+                {/* Clock Ticks */}
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const minutes = hour * 60;
+                  const inner = getPlannerPoint(minutes, hour % 3 === 0 ? 270 : 276);
+                  const outer = getPlannerPoint(minutes, 284);
+                  return (
+                    <line
+                      key={hour}
+                      className={`planner-wheel-tick${hour % 3 === 0 ? " planner-wheel-tick--major" : ""}`}
+                      x1={inner.x}
+                      y1={inner.y}
+                      x2={outer.x}
+                      y2={outer.y}
+                    />
+                  );
+                })}
+
+                {/* Clock Hour Labels */}
+                {CLOCK_LABELS.map(({ minutes, label }) => {
+                  const point = getPlannerPoint(minutes, 294);
+                  return (
+                    <text
+                      key={minutes}
+                      className="planner-wheel-hour-label"
+                      x={point.x}
+                      y={point.y}
+                    >
+                      {label}
+                    </text>
+                  );
+                })}
+
+                {/* Concentric Lane Tracks */}
+                {Array.from({ length: laneCount }, (_, lane) => {
+                  const radii = laneRadius(lane);
+                  return (
                     <circle
+                      key={lane}
                       className="planner-wheel-track"
                       cx="300"
                       cy="300"
-                      r="207"
-                      strokeWidth="86"
+                      r={(radii.inner + radii.outer) / 2}
+                      strokeWidth={radii.outer - radii.inner}
                     />
-                    {allocationSegments.map((segment) => (
-                      <path
-                        key={segment.purpose.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${segment.purpose.title}, ${formatPlannerDuration(segment.purpose.targetMinutes)} daily target`}
-                        className={`planner-wheel-arc${segment.purpose.id === effectivePurposeId ? " planner-wheel-arc--selected" : " planner-wheel-arc--muted"}`}
-                        d={getPlannerArcPath(
-                          segment.startMinutes,
-                          segment.endMinutes,
-                          164,
-                          250,
-                        )}
-                        fill={COLOR_VARS[segment.purpose.color]}
-                        onClick={() => {
-                          selectPurpose(segment.purpose.id);
-                          setIsDetailsVisible(true);
-                        }}
-                        onKeyDown={(keyboardEvent) => {
-                          if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") return;
-                          keyboardEvent.preventDefault();
-                          selectPurpose(segment.purpose.id);
-                          setIsDetailsVisible(true);
-                        }}
-                      >
-                        <title>
-                          {segment.purpose.title}: {formatPlannerDuration(segment.purpose.targetMinutes)}
-                        </title>
-                      </path>
-                    ))}
-                  </>
+                  );
+                })}
+
+                {/* Scheduled Child Time Block Arcs */}
+                {eventLayouts.map(({ event, lane }) => {
+                  const purpose = event.purposeId ? purposeById.get(event.purposeId) : null;
+                  const radii = laneRadius(lane);
+                  const isSelected = purpose?.id === effectivePurposeId;
+                  const isEventSelected = event.id === effectiveEventId;
+                  return (
+                    <path
+                      key={event.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${event.title}, ${formatPlannerTime(event.startMinutes)} to ${formatPlannerTime(event.endMinutes)}${purpose ? ` under ${purpose.title}` : ""}`}
+                      className={`planner-wheel-slice${isSelected ? " planner-wheel-slice--active" : ""}${isEventSelected ? " planner-wheel-slice--focused" : ""}`}
+                      style={getPurposeStyle(event.color)}
+                      d={getPlannerArcPath(event.startMinutes, event.endMinutes, radii.inner, radii.outer)}
+                      onClick={() => selectTimeBlock(event.purposeId ?? "", event.id)}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+                          keyEvent.preventDefault();
+                          selectTimeBlock(event.purposeId ?? "", event.id);
+                        }
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Draggable Arc Handles for Selected Time Block */}
+                {selectedEventForHandles && (
+                  (() => {
+                    const radii = laneRadius(selectedLayout?.lane ?? 0);
+                    const midRadius = (radii.inner + radii.outer) / 2;
+                    const startPoint = getPlannerPoint(selectedEventForHandles.startMinutes, midRadius);
+                    const endPoint = getPlannerPoint(selectedEventForHandles.endMinutes, midRadius);
+                    return (
+                      <g className="planner-drag-handles">
+                        <circle
+                          data-testid="planner-drag-handle-start"
+                          tabIndex={0}
+                          role="slider"
+                          aria-label={`Start time for ${selectedEventForHandles.title}`}
+                          aria-valuenow={selectedEventForHandles.startMinutes}
+                          aria-valuetext={formatPlannerTime(selectedEventForHandles.startMinutes)}
+                          className="planner-drag-handle"
+                          cx={startPoint.x}
+                          cy={startPoint.y}
+                          r={11}
+                          onPointerDown={(e) => startHandleDrag(e, selectedEventForHandles.id, "start")}
+                          onKeyDown={(e) => adjustEventHandleByKeyboard(e, selectedEventForHandles.id, "start")}
+                        />
+                        <circle
+                          data-testid="planner-drag-handle-end"
+                          tabIndex={0}
+                          role="slider"
+                          aria-label={`End time for ${selectedEventForHandles.title}`}
+                          aria-valuenow={selectedEventForHandles.endMinutes}
+                          aria-valuetext={formatPlannerTime(selectedEventForHandles.endMinutes)}
+                          className="planner-drag-handle"
+                          cx={endPoint.x}
+                          cy={endPoint.y}
+                          r={11}
+                          onPointerDown={(e) => startHandleDrag(e, selectedEventForHandles.id, "end")}
+                          onKeyDown={(e) => adjustEventHandleByKeyboard(e, selectedEventForHandles.id, "end")}
+                        />
+                      </g>
+                    );
+                  })()
                 )}
 
-                <circle className="planner-wheel-center" cx="300" cy="300" r="146" />
-                <text className="planner-wheel-center-day" x="300" y="245">
-                  {DAY_LABELS[effectiveDayKey]}
-                </text>
-                <text className="planner-wheel-center-title" x="300" y="286">
-                  {selectedPurpose?.title ?? "No main focuses yet"}
-                </text>
-                <text className="planner-wheel-center-total" x="300" y="340">
-                  {selectedPurpose
-                    ? formatPlannerDuration(
-                        mode === "schedule"
-                          ? selectedScheduledMinutes
-                          : selectedPurpose.targetMinutes,
-                      )
-                    : "24h"}
-                </text>
-                <text className="planner-wheel-center-sub" x="300" y="372">
-                  {selectedPurpose
-                    ? mode === "schedule"
-                      ? `${purposeEvents.length} ${purposeEvents.length === 1 ? "block" : "blocks"} today`
-                      : selectedPurpose.role === "primary"
-                        ? "daily primary target"
-                        : "secondary · may overlap"
-                    : "waiting to be shaped"}
-                </text>
-
-                {mode === "schedule" && selectedEventForHandles ? (
-                  <>
-                    {(["start", "end"] as const).map((edge) => {
-                      const radii = laneRadius(selectedLayout?.lane ?? 0);
-                      const value =
-                        edge === "start"
-                          ? selectedEventForHandles.startMinutes
-                          : selectedEventForHandles.endMinutes;
-                      const point = getPlannerPoint(value, radii.center);
-                      return (
-                        <circle
-                          key={edge}
-                          role="slider"
-                          tabIndex={0}
-                          aria-label={`Adjust ${edge} time for ${selectedPurpose?.title ?? selectedEventForHandles.title}`}
-                          aria-valuemin={0}
-                          aria-valuemax={MINUTES_PER_DAY}
-                          aria-valuenow={value}
-                          aria-valuetext={formatPlannerTime(value)}
-                          data-testid={`planner-drag-handle-${edge}`}
-                          className="planner-wheel-handle"
-                          cx={point.x}
-                          cy={point.y}
-                          r="11"
-                          onPointerDown={(event) =>
-                            startHandleDrag(event, selectedEventForHandles, edge)
-                          }
-                          onKeyDown={(event) =>
-                            nudgeHandle(event, selectedEventForHandles, edge)
-                          }
-                        >
-                          <title>Drag or use arrow keys to adjust {edge} time</title>
-                        </circle>
-                      );
-                    })}
-                  </>
-                ) : null}
+                {/* Center of the Radial Clock */}
+                {selectedPurpose ? (
+                  <g className="planner-wheel-center">
+                    <circle
+                      className="planner-wheel-center-bg"
+                      cx="300"
+                      cy="300"
+                      r="108"
+                    />
+                    <circle
+                      className="planner-wheel-center-progress-bg"
+                      cx="300"
+                      cy="300"
+                      r="96"
+                      fill="none"
+                      stroke="color-mix(in srgb, var(--line) 40%, transparent)"
+                      strokeWidth="6"
+                    />
+                    {selectedPurpose.targetMinutes > 0 && (
+                      <circle
+                        className="planner-wheel-center-progress-fill"
+                        cx="300"
+                        cy="300"
+                        r="96"
+                        fill="none"
+                        stroke={COLOR_VARS[selectedPurpose.color]}
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray={2 * Math.PI * 96}
+                        strokeDashoffset={
+                          2 * Math.PI * 96 * (1 - Math.min(1, selectedScheduledMinutes / selectedPurpose.targetMinutes))
+                        }
+                        transform="rotate(-90 300 300)"
+                      />
+                    )}
+                    <text className="planner-wheel-center-title" x="300" y="274">
+                      {selectedPurpose.title}
+                    </text>
+                    <text className="planner-wheel-center-time" x="300" y="298">
+                      {formatPlannerDuration(selectedScheduledMinutes)} / {formatPlannerDuration(selectedPurpose.targetMinutes)}
+                    </text>
+                    <text className="planner-wheel-center-caption" x="300" y="318">
+                      {selectedPurpose.targetMinutes > 0
+                        ? `${Math.round((selectedScheduledMinutes / selectedPurpose.targetMinutes) * 100)}% scheduled`
+                        : "No target set"}
+                    </text>
+                    <text className="planner-wheel-center-secondary" x="300" y="336">
+                      {selectedPurpose.role === "primary"
+                        ? `${((selectedPurpose.targetMinutes / MINUTES_PER_DAY) * 100).toFixed(0)}% of 24h budget`
+                        : "Secondary · Overlap"}
+                    </text>
+                  </g>
+                ) : (
+                  <g className="planner-wheel-center">
+                    <circle
+                      className="planner-wheel-center-bg"
+                      cx="300"
+                      cy="300"
+                      r="108"
+                    />
+                    <text className="planner-wheel-center-title" x="300" y="278">
+                      24-Hour Rhythm
+                    </text>
+                    <text className="planner-wheel-center-time" x="300" y="304">
+                      {formatPlannerDuration(totalScheduledMinutes)} placed
+                    </text>
+                    <text className="planner-wheel-center-caption" x="300" y="326">
+                      {formatPlannerDuration(primaryAllocatedMinutes)} budgeted
+                    </text>
+                  </g>
+                )}
               </svg>
             </div>
 
+            {/* Bottom Legend */}
             <div className="planner-wheel-legend" aria-label="Purpose colors">
-              {purposes.map((purpose) => (
-                <button
-                  key={purpose.id}
-                  type="button"
-                  aria-pressed={purpose.id === effectivePurposeId}
-                  style={getPurposeStyle(purpose.color)}
-                  onClick={() => selectPurpose(purpose.id)}
-                >
-                  <span className="planner-purpose-dot" />
-                  {purpose.title}
-                  {purpose.role === "secondary" ? <small>overlap</small> : null}
-                </button>
-              ))}
+              {purposes.map((purpose) => {
+                const scheduled = getPlannerPurposeScheduledMinutes(day.events, purpose.id);
+                return (
+                  <button
+                    key={purpose.id}
+                    type="button"
+                    aria-pressed={purpose.id === effectivePurposeId}
+                    style={getPurposeStyle(purpose.color)}
+                    onClick={() => selectPurpose(purpose.id)}
+                  >
+                    <span className="planner-purpose-dot" />
+                    {purpose.title}
+                    <small>
+                      {formatPlannerDuration(scheduled)} / {formatPlannerDuration(purpose.targetMinutes)}
+                    </small>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
+          {/* Right Canvas: Unified Focus Areas & Budget Panel */}
           {isDetailsVisible ? (
-            <aside className="planner-details-panel" aria-label="Planner details">
+            <aside
+              className="planner-details-panel"
+              aria-label="Planner details"
+              data-planner-tour="details"
+            >
               <div className="planner-details-header">
                 <div>
-                  <p className="planner-editor-kicker">
-                    {isCreatingPurpose ? "New main focus" : "Day structure"}
-                  </p>
-                  <h2>{isCreatingPurpose ? "Shape a daily allocation" : "Main focuses"}</h2>
+                  <p className="planner-editor-kicker">24-Hour Budget</p>
+                  <h2>Focus areas &amp; schedule</h2>
                 </div>
               </div>
 
+              {/* Total Day Budget Summary Bar */}
+              <div className="planner-budget-overview-card">
+                <div className="planner-budget-overview-metrics">
+                  <span>
+                    <strong>{formatPlannerDuration(primaryAllocatedMinutes)}</strong> allocated
+                  </span>
+                  <span className={allocatedDifference < 0 ? "text-[var(--warn)]" : ""}>
+                    <strong>{formatPlannerDuration(Math.abs(allocatedDifference))}</strong>{" "}
+                    {allocatedDifference >= 0 ? "open" : "over"}
+                  </span>
+                </div>
+                <div className="planner-allocation-progress-bar">
+                  <div
+                    className="planner-allocation-progress-fill"
+                    style={{
+                      width: `${Math.min(100, (primaryAllocatedMinutes / MINUTES_PER_DAY) * 100)}%`,
+                      background:
+                        allocatedDifference < 0
+                          ? "var(--warn)"
+                          : "var(--brand)",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Focus Cards List or Create Mode */}
               {!isCreatingPurpose ? (
                 <div
                   className="planner-purpose-list"
                   aria-label="Main focuses and child time blocks"
                 >
                   {purposes.map((purpose) => {
-                    const scheduledMinutes = getPlannerPurposeScheduledMinutes(day.events, purpose.id);
-                    const childBlocks = day.events.filter(
+                    const scheduledEvents = day.events.filter(
                       (event) => event.purposeId === purpose.id,
                     );
+                    const isSelected = purpose.id === effectivePurposeId;
                     return (
-                      <div
+                      <UnifiedFocusCard
                         key={purpose.id}
-                        className="planner-focus-group"
-                        style={getPurposeStyle(purpose.color)}
-                      >
-                        <button
-                          type="button"
-                          className="planner-focus-row"
-                          aria-pressed={purpose.id === effectivePurposeId}
-                          onClick={() => selectPurpose(purpose.id)}
-                        >
-                          <span className="planner-purpose-dot" />
-                          <strong>{purpose.title}</strong>
-                          <span>
-                            {mode === "schedule"
-                              ? formatPlannerDuration(scheduledMinutes)
-                              : formatPlannerDuration(purpose.targetMinutes)}
-                          </span>
-                        </button>
-                        {mode === "schedule" && childBlocks.length ? (
-                          <div className="planner-child-blocks">
-                            {childBlocks.map((event) => (
-                              <button
-                                key={event.id}
-                                type="button"
-                                className="planner-child-block"
-                                aria-label={`${event.title}, ${formatPlannerTime(event.startMinutes)} to ${formatPlannerTime(event.endMinutes)}, under ${purpose.title}`}
-                                aria-pressed={event.id === effectiveEventId}
-                                onClick={() => selectTimeBlock(purpose.id, event.id)}
-                              >
-                                <span className="planner-child-block-marker" />
-                                <span>{event.title}</span>
-                                <small>
-                                  {formatPlannerTime(event.startMinutes)}–{formatPlannerTime(event.endMinutes)}
-                                </small>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
+                        purpose={purpose}
+                        isSelected={isSelected}
+                        scheduledEvents={scheduledEvents}
+                        effectiveEventId={effectiveEventId}
+                        onSelect={() => selectPurpose(purpose.id)}
+                        onSelectEvent={(eventId) => selectTimeBlock(purpose.id, eventId)}
+                        onUpdateTitle={(title) => handleDirectPurposeTitleUpdate(purpose.id, title)}
+                        onAdjustMinutes={(delta) => handleDirectPurposeTargetAdjust(purpose, delta)}
+                        onToggleRole={() => handleDirectPurposeRoleToggle(purpose)}
+                        onAddBlock={() => addSliceForPurpose(purpose.id)}
+                        onUpdateEventRange={updateEventRange}
+                        onUpdateEventTitle={(event, title) => {
+                          dispatch({
+                            type: "update-planner-event",
+                            presetId,
+                            dayKey: effectiveDayKey,
+                            eventId: event.id,
+                            updates: { title },
+                          });
+                        }}
+                        onDeleteEvent={deleteEvent}
+                        onDeletePurpose={() => deletePurpose(purpose.id)}
+                        onChangeColor={(color) => handleDirectPurposeColorChange(purpose.id, color)}
+                        onChangeNotes={(notes) => handleDirectPurposeNotesChange(purpose.id, notes)}
+                        onApplyDaysToggle={toggleApplyDay}
+                        applyDays={applyDayKeys}
+                        effectiveDayKey={effectiveDayKey}
+                      />
                     );
                   })}
+
                   {!purposes.length ? (
                     <p className="planner-purpose-empty">No main focuses on {DAY_LABELS[effectiveDayKey]} yet.</p>
                   ) : null}
-                </div>
-              ) : null}
 
-              {isCreatingPurpose ? (
+                  <button
+                    type="button"
+                    className="planner-empty-add"
+                    onClick={() => {
+                      setPurposeDraft(purposeToDraft());
+                      setApplyDayKeys([effectiveDayKey]);
+                      setIsCreatingPurpose(true);
+                    }}
+                  >
+                    <Plus className="h-5 w-5" />
+                    Add new focus
+                  </button>
+                </div>
+              ) : (
                 <div className="planner-purpose-editor">
                   <PurposeFields draft={purposeDraft} onChange={setPurposeDraft} />
                   <PlannerDayPicker
@@ -1057,278 +1860,12 @@ function PlannerPresetView({ state, dispatch }: Props) {
                     </button>
                   </div>
                 </div>
-              ) : selectedPurpose ? (
-                <div className="planner-purpose-editor">
-                  <PurposeFields draft={purposeDraft} onChange={setPurposeDraft} />
-                  <button
-                    type="button"
-                    className="planner-primary-btn planner-save-purpose"
-                    disabled={!purposeDraft.title.trim()}
-                    onClick={savePurpose}
-                  >
-                    Save main focus
-                  </button>
-
-                  {mode === "schedule" ? (
-                    <div className="planner-slices-section">
-                      <div className="planner-section-heading">
-                        <div>
-                          <span>Child time blocks</span>
-                          <small>Each block belongs to this main focus.</small>
-                        </div>
-                        <button type="button" onClick={addSlice}>
-                          <Plus className="h-4 w-4" />
-                          Add block
-                        </button>
-                      </div>
-
-                      <div className="planner-slice-tabs">
-                        {purposeEvents.map((event) => (
-                          <button
-                            key={event.id}
-                            type="button"
-                            aria-pressed={event.id === effectiveEventId}
-                            onClick={() => setSelectedEventId(event.id)}
-                          >
-                            {event.title}
-                            <small>{formatPlannerDuration(event.endMinutes - event.startMinutes)}</small>
-                          </button>
-                        ))}
-                      </div>
-
-                      {selectedDisplayEvent ? (
-                        <div className="planner-slice-editor">
-                          <label className="planner-field" key={selectedDisplayEvent.id}>
-                            <span>Time block label</span>
-                            <input
-                              aria-label="Planner time block title"
-                              className="planner-text-input"
-                              defaultValue={selectedDisplayEvent.title}
-                              onBlur={(event) => {
-                                const title = event.currentTarget.value.trim();
-                                if (!title || title === selectedDisplayEvent.title) return;
-                                dispatch({
-                                  type: "update-planner-event",
-                                  presetId,
-                                  dayKey: effectiveDayKey,
-                                  eventId: selectedDisplayEvent.id,
-                                  updates: { title },
-                                });
-                              }}
-                            />
-                          </label>
-                          <div className="planner-field-grid">
-                            <label className="planner-field">
-                              <span>Start</span>
-                              <select
-                                aria-label="Planner time block start time"
-                                className="planner-select"
-                                value={plannerMinutesToInputValue(selectedDisplayEvent.startMinutes)}
-                                onChange={(event) => {
-                                  const nextStart = plannerInputValueToMinutes(event.target.value);
-                                  updateEventRange(
-                                    selectedDisplayEvent,
-                                    Math.min(
-                                      nextStart,
-                                      selectedDisplayEvent.endMinutes - PLANNER_SNAP_MINUTES,
-                                    ),
-                                    selectedDisplayEvent.endMinutes,
-                                  );
-                                }}
-                              >
-                                {TIME_OPTIONS.slice(0, -1).map((option) => (
-                                  <option
-                                    key={option.value}
-                                    value={plannerMinutesToInputValue(option.value)}
-                                  >
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="planner-field">
-                              <span>End</span>
-                              <select
-                                aria-label="Planner time block end time"
-                                className="planner-select"
-                                value={
-                                  selectedDisplayEvent.endMinutes === MINUTES_PER_DAY
-                                    ? "24:00"
-                                    : plannerMinutesToInputValue(selectedDisplayEvent.endMinutes)
-                                }
-                                onChange={(event) => {
-                                  const nextEnd =
-                                    event.target.value === "24:00"
-                                      ? MINUTES_PER_DAY
-                                      : plannerInputValueToMinutes(event.target.value);
-                                  updateEventRange(
-                                    selectedDisplayEvent,
-                                    selectedDisplayEvent.startMinutes,
-                                    Math.max(
-                                      nextEnd,
-                                      selectedDisplayEvent.startMinutes + PLANNER_SNAP_MINUTES,
-                                    ),
-                                  );
-                                }}
-                              >
-                                {TIME_OPTIONS.slice(1).map((option) => (
-                                  <option
-                                    key={option.value}
-                                    value={
-                                      option.value === MINUTES_PER_DAY
-                                        ? "24:00"
-                                        : plannerMinutesToInputValue(option.value)
-                                    }
-                                  >
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
-                          <div className="planner-slice-summary">
-                            <Clock3 className="h-4 w-4" />
-                            <span>
-                              {formatPlannerTime(selectedDisplayEvent.startMinutes)} – {formatPlannerTime(selectedDisplayEvent.endMinutes)}
-                            </span>
-                            <strong>
-                              {formatPlannerDuration(
-                                selectedDisplayEvent.endMinutes - selectedDisplayEvent.startMinutes,
-                              )}
-                            </strong>
-                          </div>
-                          <AlertDialog>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <AlertDialogTrigger
-                                  aria-label="Delete selected time block"
-                                  className="planner-delete-slice"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Delete block
-                                </AlertDialogTrigger>
-                              </TooltipTrigger>
-                              <TooltipContent>Delete this time block</TooltipContent>
-                            </Tooltip>
-                            <AlertDialogContent className="alert-dialog-content">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
-                                  Delete this time block?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription className="text-[var(--ink-700)]">
-                                  The main focus remains, but this scheduled block will be removed.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="alert-dialog-destructive"
-                                  onClick={() => {
-                                    dispatch({
-                                      type: "delete-planner-event",
-                                      presetId,
-                                      dayKey: effectiveDayKey,
-                                      eventId: selectedDisplayEvent.id,
-                                    });
-                                    setSelectedEventId(null);
-                                  }}
-                                >
-                                  Delete block
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      ) : (
-                        <p className="planner-slice-empty">Add a block, then drag its handles around the wheel.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="planner-allocation-explainer">
-                      <PieChart className="h-5 w-5" />
-                      <p>
-                        Primary focus targets share the 24-hour budget. Secondary focuses can overlap without increasing that total.
-                      </p>
-                    </div>
-                  )}
-
-                  <PlannerDayPicker
-                    selectedDayKey={effectiveDayKey}
-                    selectedDays={applyDayKeys}
-                    onToggle={toggleApplyDay}
-                    label="Copy current setup to"
-                  />
-                  <button
-                    type="button"
-                    className="planner-secondary-btn planner-apply-purpose"
-                    disabled={applyDayKeys.length <= 1 || !purposeDraft.title.trim()}
-                    onClick={saveAndApplyPurpose}
-                  >
-                    Apply to selected days
-                  </button>
-
-                  <AlertDialog>
-                    <AlertDialogTrigger className="planner-delete-purpose">
-                      <Trash2 className="h-4 w-4" />
-                      Delete main focus from {DAY_LABELS[effectiveDayKey]}
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="alert-dialog-content">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
-                          Delete {selectedPurpose.title}?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-[var(--ink-700)]">
-                          This removes the main focus and all of its child time blocks from {DAY_LABELS[effectiveDayKey]}. Other days are unchanged.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="alert-dialog-destructive"
-                          onClick={() => {
-                            const nextPurpose = purposes.find(
-                              (purpose) => purpose.id !== selectedPurpose.id,
-                            );
-                            dispatch({
-                              type: "delete-planner-purpose",
-                              presetId,
-                              dayKey: effectiveDayKey,
-                              purposeId: selectedPurpose.id,
-                            });
-                            setSelectedPurposeId(nextPurpose?.id ?? null);
-                            setSelectedEventId(
-                              day.events.find(
-                                (event) => event.purposeId === nextPurpose?.id,
-                              )?.id ?? null,
-                            );
-                            setPurposeDraft(purposeToDraft(nextPurpose));
-                            setApplyDayKeys([effectiveDayKey]);
-                          }}
-                        >
-                          Delete main focus
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="planner-empty-add"
-                  onClick={() => {
-                    setPurposeDraft(purposeToDraft());
-                    setApplyDayKeys([effectiveDayKey]);
-                    setIsCreatingPurpose(true);
-                  }}
-                >
-                  <Plus className="h-5 w-5" />
-                  Add the first main focus
-                </button>
               )}
             </aside>
           ) : null}
         </div>
       </div>
+      <PlannerTour open={isTourOpen} onClose={closeTour} />
     </section>
   );
 }
