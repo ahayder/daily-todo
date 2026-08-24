@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -376,6 +377,12 @@ function ContentCardItem({
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [text, setText] = useState(() => getContentCardText(card));
+  const textRef = useRef(text);
+  textRef.current = text;
+  const isEditingRef = useRef(isEditing);
+  isEditingRef.current = isEditing;
+  const cardRef = useRef(card);
+  cardRef.current = card;
   const didDragRef = useRef(false);
   const isCollapsed = collapsedOverride ?? collapseByDefault;
   const isDragEnabled = !isTouchFirstInput && layout === "board";
@@ -403,6 +410,12 @@ function ContentCardItem({
   };
 
   useEffect(() => {
+    if (!isEditing) {
+      setText(getContentCardText(card));
+    }
+  }, [card, isEditing]);
+
+  useEffect(() => {
     if (!isCopied) return;
 
     const resetCopiedState = window.setTimeout(() => setIsCopied(false), 1500);
@@ -424,16 +437,56 @@ function ContentCardItem({
     }
   };
 
-  const save = () => {
-    const content = splitContentCardText(text);
+  const flushCardEdits = useCallback(() => {
+    const currentCard = cardRef.current;
+    if (!isEditingRef.current) return;
+    const content = splitContentCardText(textRef.current);
     if (!content) {
-      setText(getContentCardText(card));
-    } else if (
-      content.title !== card.title ||
-      content.notes !== card.notes
+      setText(getContentCardText(currentCard));
+      return;
+    }
+    if (
+      content.title !== currentCard.title ||
+      content.notes !== currentCard.notes
     ) {
       onUpdate(content.title, content.notes);
     }
+  }, [onUpdate]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const timer = window.setTimeout(() => {
+      const content = splitContentCardText(text);
+      if (
+        content &&
+        (content.title !== card.title || content.notes !== card.notes)
+      ) {
+        onUpdate(content.title, content.notes);
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [card.notes, card.title, isEditing, onUpdate, text]);
+
+  useEffect(() => {
+    return () => {
+      if (isEditingRef.current) {
+        const currentCard = cardRef.current;
+        const content = splitContentCardText(textRef.current);
+        if (
+          content &&
+          (content.title !== currentCard.title ||
+            content.notes !== currentCard.notes)
+        ) {
+          onUpdate(content.title, content.notes);
+        }
+      }
+    };
+  }, [onUpdate]);
+
+  const save = () => {
+    flushCardEdits();
     setIsEditing(false);
   };
 
@@ -1343,10 +1396,52 @@ export function ContentPlannerView({
     closeMoveCard();
   };
 
+  const viewingCardTextRef = useRef(viewingCardText);
+  viewingCardTextRef.current = viewingCardText;
+  const isEditingViewingCardRef = useRef(isEditingViewingCard);
+  isEditingViewingCardRef.current = isEditingViewingCard;
+  const viewingCardRef = useRef(viewingCard);
+  viewingCardRef.current = viewingCard;
+
   const startEditingViewingCard = () => {
     if (!viewingCard) return;
     setViewingCardText(getContentCardText(viewingCard));
     setIsEditingViewingCard(true);
+  };
+
+  const flushViewingCardEdits = useCallback(() => {
+    const currentViewingCard = viewingCardRef.current;
+    if (!isEditingViewingCardRef.current || !currentViewingCard) return;
+    const content = splitContentCardText(viewingCardTextRef.current);
+    if (!content) return;
+    if (
+      content.title !== currentViewingCard.title ||
+      content.notes !== currentViewingCard.notes
+    ) {
+      onUpdateCard(currentViewingCard.id, content.title, content.notes);
+    }
+  }, [onUpdateCard]);
+
+  useEffect(() => {
+    if (!isEditingViewingCard || !viewingCard) return;
+
+    const timer = window.setTimeout(() => {
+      const content = splitContentCardText(viewingCardText);
+      if (
+        content &&
+        (content.title !== viewingCard.title ||
+          content.notes !== viewingCard.notes)
+      ) {
+        onUpdateCard(viewingCard.id, content.title, content.notes);
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [isEditingViewingCard, onUpdateCard, viewingCard, viewingCardText]);
+
+  const saveViewingCard = () => {
+    flushViewingCardEdits();
+    setIsEditingViewingCard(false);
   };
 
   const cancelEditingViewingCard = () => {
@@ -1354,18 +1449,12 @@ export function ContentPlannerView({
     setIsEditingViewingCard(false);
   };
 
-  const saveViewingCard = () => {
-    if (!viewingCard) return;
-    const content = splitContentCardText(viewingCardText);
-    if (!content) return;
-    if (
-      content.title !== viewingCard.title ||
-      content.notes !== viewingCard.notes
-    ) {
-      onUpdateCard(viewingCard.id, content.title, content.notes);
-    }
+  const closeViewingCard = useCallback(() => {
+    flushViewingCardEdits();
+    setViewingCardId(null);
     setIsEditingViewingCard(false);
-  };
+    setViewingCardText("");
+  }, [flushViewingCardEdits]);
 
   return (
     <section
@@ -1741,9 +1830,7 @@ export function ContentPlannerView({
         open={Boolean(viewingCard)}
         onOpenChange={(open) => {
           if (!open) {
-            setViewingCardId(null);
-            setIsEditingViewingCard(false);
-            setViewingCardText("");
+            closeViewingCard();
           }
         }}
       >
@@ -1770,11 +1857,12 @@ export function ContentPlannerView({
                   rows={12}
                   maxLength={2000}
                   onChange={(event) => setViewingCardText(event.target.value)}
+                  onBlur={flushViewingCardEdits}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
                       event.preventDefault();
                       event.stopPropagation();
-                      cancelEditingViewingCard();
+                      saveViewingCard();
                     } else if (
                       event.key === "Enter" &&
                       (event.metaKey || event.ctrlKey)
