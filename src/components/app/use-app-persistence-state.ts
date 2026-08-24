@@ -20,6 +20,7 @@ import {
   type PersistenceStatus,
 } from "@/lib/persistence";
 import { isDevelopmentWorkspaceSession } from "@/lib/dev-mode";
+import { toISODate } from "@/lib/date";
 import { mergeHydratedAppState } from "@/lib/store";
 import type { AppState, NoteBodyStatus } from "@/lib/types";
 import { appReducer, loadDevelopmentWorkspaceState, saveDevelopmentWorkspaceState, serializeStateForSync } from "./app-context.reducer";
@@ -734,6 +735,46 @@ export function useAppPersistenceState({
     return clearSaveTimer;
   }, [authStatus, clearSaveTimer, queueSave, repository, session, state]);
 
+  // Advance the daily view to the real "today" whenever the workspace loads or
+  // the calendar day rolls over while the app stays open. Without this the app
+  // stays pinned to whatever `selectedDailyDate` was last synced, so a returning
+  // user keeps editing an old day and never sees yesterday's notes/todos carried
+  // forward into a fresh page.
+  const lastEnsuredDayRef = useRef<string | null>(null);
+  const isReady = authStatus === "authenticated" && state !== null;
+  useEffect(() => {
+    if (!isReady) {
+      lastEnsuredDayRef.current = null;
+      return;
+    }
+
+    const ensureToday = () => {
+      const today = toISODate(new Date());
+      if (lastEnsuredDayRef.current === today) {
+        return;
+      }
+      lastEnsuredDayRef.current = today;
+      dispatch({ type: "ensure-daily-today", date: today });
+    };
+
+    ensureToday();
+
+    const handleFocus = () => ensureToday();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        ensureToday();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [dispatch, isReady]);
+
   const retrySync = useCallback(async () => {
     if (!session || !state || authStatus !== "authenticated") {
       return;
@@ -773,10 +814,12 @@ export function useAppPersistenceState({
       }
     };
 
+    window.addEventListener("beforeunload", flushIfNeeded);
     window.addEventListener("pagehide", flushIfNeeded);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      window.removeEventListener("beforeunload", flushIfNeeded);
       window.removeEventListener("pagehide", flushIfNeeded);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

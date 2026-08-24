@@ -30,6 +30,7 @@ import {
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
   duplicatePlannerPreset,
+  ensureDailyPageForDate,
   getContentCardsForColumn,
   getActiveTodoWorkspaceId,
   getDailyPageKey,
@@ -453,6 +454,25 @@ function getActiveDailyPageEntry(state: AppState, date: string) {
 
 function handleTodoActions(state: AppState, action: AppAction): AppState | null {
   switch (action.type) {
+    case "ensure-daily-today": {
+      const pageKey = getDailyPageKey(getActiveTodoWorkspaceId(state), action.date);
+      if (state.uiState.selectedDailyDate === action.date && state.dailyPages[pageKey]) {
+        return state;
+      }
+
+      const ensured = ensureDailyPageForDate(state, action.date);
+      if (ensured.uiState.selectedDailyDate === action.date) {
+        return ensured;
+      }
+
+      return {
+        ...ensured,
+        uiState: {
+          ...ensured.uiState,
+          selectedDailyDate: action.date,
+        },
+      };
+    }
     case "update-daily-markdown": {
       const { key, page } = getActiveDailyPageEntry(state, action.date);
       if (!page) {

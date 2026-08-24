@@ -33,6 +33,7 @@ export type AppAction =
   | { type: "rename-todo-workspace"; workspaceId: string; name: string }
   | { type: "delete-todo-workspace"; workspaceId: string; date: string }
   | { type: "select-daily"; date: string }
+  | { type: "ensure-daily-today"; date: string }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
   | { type: "toggle-note-folder"; folderId: string }
