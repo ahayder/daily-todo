@@ -2429,7 +2429,7 @@ select {
   --planner-rose: #d47c73;
   --planner-sage: #83a58c;
   --planner-lavender: #9e93be;
-  --planner-track: #292f38;
+  --planner-track: #363d4a;
   --surface-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.18);
   --background: oklch(0.23 0.02 247);
   --foreground: oklch(0.94 0.01 250);
@@ -3162,12 +3162,12 @@ select {
 
 .planner-wheel-center-title {
   font-family: var(--font-body), ui-sans-serif, sans-serif;
-  font-size: 23px;
+  font-size: 16px;
   font-weight: 650;
 }
 
 .planner-wheel-center-total {
-  font-size: 42px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -4629,6 +4629,46 @@ select {
 .dark .planner-select,
 .dark .planner-textarea {
   background: color-mix(in srgb, var(--paper) 96%, transparent);
+}
+
+.dark .planner-wheel-center {
+  fill: var(--paper-strong);
+  stroke: color-mix(in srgb, var(--line) 60%, transparent);
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.22));
+}
+
+.dark .planner-wheel-center-title {
+  fill: #f0ece4;
+}
+
+.dark .planner-wheel-center-total {
+  fill: #f0ece4;
+}
+
+.dark .planner-wheel-center-sub {
+  fill: #b0b8c8;
+}
+
+.dark .planner-wheel-center-secondary {
+  fill: #9aa2b4;
+  opacity: 1;
+}
+
+.dark .planner-wheel-arc {
+  stroke: color-mix(in srgb, var(--paper-strong) 50%, transparent);
+  stroke-width: 2px;
+}
+
+.dark .planner-wheel-arc--selected,
+.dark .planner-wheel-arc:hover,
+.dark .planner-wheel-arc:focus-visible {
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.3));
+}
+
+.dark .planner-wheel-handle {
+  fill: var(--paper-strong);
+  stroke: var(--ink-900);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
 }
 
 /* ─── Tailwind Theme Token Bridge ─────────────── */

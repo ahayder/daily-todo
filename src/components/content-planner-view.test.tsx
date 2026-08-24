@@ -792,4 +792,70 @@ describe("ContentPlannerView", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(props.onDeleteColumn).toHaveBeenCalledWith(props.board.columns[1].id);
   }, 10_000);
+
+  test("auto-saves preview card edits when the preview dialog is closed or dismissed", async () => {
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "View card Draft launch story" }),
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const previewSurface = within(dialog).getByTestId("content-card-preview-surface");
+    const previewEditButton = within(previewSurface).getByRole("button", {
+      name: "Edit card Draft launch story from preview",
+    });
+    await user.click(previewEditButton);
+
+    const previewEditor = within(previewSurface).getByRole("textbox", {
+      name: "Edit card Draft launch story in preview",
+    });
+    await user.clear(previewEditor);
+    await user.type(
+      previewEditor,
+      "New Title From Preview{Enter}{Enter}Important notes typed before accidental close.",
+    );
+
+    // Simulate accidental click on close dialog or backdrop
+    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+
+    // Verify it was auto-saved to onUpdateCard without losing any notes
+    expect(props.onUpdateCard).toHaveBeenCalledWith(
+      "card-1",
+      "New Title From Preview",
+      "Important notes typed before accidental close.",
+    );
+  }, 10_000);
+
+  test("debounces auto-saving while editing a card inline", async () => {
+    const user = userEvent.setup();
+    const props = createProps();
+    render(<ContentPlannerView {...props} />);
+
+    const editButton = screen.getByRole("button", {
+      name: "Edit card Draft launch story",
+    });
+    await user.click(editButton);
+
+    const editor = screen.getByRole("textbox", {
+      name: "Edit card Draft launch story",
+    });
+    await user.clear(editor);
+    await user.type(
+      editor,
+      "Inline Title{Enter}{Enter}Autosaved note content while typing.",
+    );
+
+    // Wait for debounce timer (400ms)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(props.onUpdateCard).toHaveBeenCalledWith(
+      "card-1",
+      "Inline Title",
+      "Autosaved note content while typing.",
+    );
+  }, 10_000);
 });
+
