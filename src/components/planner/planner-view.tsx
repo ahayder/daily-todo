@@ -1516,6 +1516,11 @@ function PlannerPresetView({ state, dispatch }: Props) {
                 <desc id="planner-wheel-description">
                   A 24-hour radial timeline. Main focuses may contain multiple child blocks, and overlapping blocks use additional concentric rings.
                 </desc>
+                <defs>
+                  <clipPath id="planner-center-clip">
+                    <circle cx="300" cy="300" r="90" />
+                  </clipPath>
+                </defs>
 
                 {/* Clock Ticks */}
                 {Array.from({ length: 24 }, (_, hour) => {
@@ -1576,8 +1581,9 @@ function PlannerPresetView({ state, dispatch }: Props) {
                       role="button"
                       tabIndex={0}
                       aria-label={`${event.title}, ${formatPlannerTime(event.startMinutes)} to ${formatPlannerTime(event.endMinutes)}${purpose ? ` under ${purpose.title}` : ""}`}
-                      className={`planner-wheel-slice${isSelected ? " planner-wheel-slice--active" : ""}${isEventSelected ? " planner-wheel-slice--focused" : ""}`}
+                      className={`planner-wheel-arc${isSelected ? " planner-wheel-arc--selected" : " planner-wheel-arc--muted"}${isEventSelected ? " planner-wheel-arc--focused" : ""}`}
                       style={getPurposeStyle(event.color)}
+                      fill={COLOR_VARS[event.color]}
                       d={getPlannerArcPath(event.startMinutes, event.endMinutes, radii.inner, radii.outer)}
                       onClick={() => selectTimeBlock(event.purposeId ?? "", event.id)}
                       onKeyDown={(keyEvent) => {
@@ -1606,7 +1612,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
                           aria-label={`Start time for ${selectedEventForHandles.title}`}
                           aria-valuenow={selectedEventForHandles.startMinutes}
                           aria-valuetext={formatPlannerTime(selectedEventForHandles.startMinutes)}
-                          className="planner-drag-handle"
+                          className="planner-wheel-handle"
                           cx={startPoint.x}
                           cy={startPoint.y}
                           r={11}
@@ -1620,7 +1626,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
                           aria-label={`End time for ${selectedEventForHandles.title}`}
                           aria-valuenow={selectedEventForHandles.endMinutes}
                           aria-valuetext={formatPlannerTime(selectedEventForHandles.endMinutes)}
-                          className="planner-drag-handle"
+                          className="planner-wheel-handle"
                           cx={endPoint.x}
                           cy={endPoint.y}
                           r={11}
@@ -1667,18 +1673,18 @@ function PlannerPresetView({ state, dispatch }: Props) {
                         transform="rotate(-90 300 300)"
                       />
                     )}
-                    <text className="planner-wheel-center-title" x="300" y="274">
+                    <text className="planner-wheel-center-title" x="300" y="274" clipPath="url(#planner-center-clip)">
                       {selectedPurpose.title}
                     </text>
-                    <text className="planner-wheel-center-time" x="300" y="298">
+                    <text className="planner-wheel-center-total" x="300" y="298" clipPath="url(#planner-center-clip)">
                       {formatPlannerDuration(selectedScheduledMinutes)} / {formatPlannerDuration(selectedPurpose.targetMinutes)}
                     </text>
-                    <text className="planner-wheel-center-caption" x="300" y="318">
+                    <text className="planner-wheel-center-sub" x="300" y="318" clipPath="url(#planner-center-clip)">
                       {selectedPurpose.targetMinutes > 0
                         ? `${Math.round((selectedScheduledMinutes / selectedPurpose.targetMinutes) * 100)}% scheduled`
                         : "No target set"}
                     </text>
-                    <text className="planner-wheel-center-secondary" x="300" y="336">
+                    <text className="planner-wheel-center-secondary" x="300" y="336" clipPath="url(#planner-center-clip)">
                       {selectedPurpose.role === "primary"
                         ? `${((selectedPurpose.targetMinutes / MINUTES_PER_DAY) * 100).toFixed(0)}% of 24h budget`
                         : "Secondary · Overlap"}
@@ -1692,13 +1698,13 @@ function PlannerPresetView({ state, dispatch }: Props) {
                       cy="300"
                       r="108"
                     />
-                    <text className="planner-wheel-center-title" x="300" y="278">
+                    <text className="planner-wheel-center-title" x="300" y="278" clipPath="url(#planner-center-clip)">
                       24-Hour Rhythm
                     </text>
-                    <text className="planner-wheel-center-time" x="300" y="304">
+                    <text className="planner-wheel-center-total" x="300" y="304" clipPath="url(#planner-center-clip)">
                       {formatPlannerDuration(totalScheduledMinutes)} placed
                     </text>
-                    <text className="planner-wheel-center-caption" x="300" y="326">
+                    <text className="planner-wheel-center-sub" x="300" y="326" clipPath="url(#planner-center-clip)">
                       {formatPlannerDuration(primaryAllocatedMinutes)} budgeted
                     </text>
                   </g>
