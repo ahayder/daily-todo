@@ -682,3 +682,43 @@ describe("planner state", () => {
     expect(copied.days.thursday.events).toHaveLength(1);
   });
 });
+
+describe("mergeHydratedAppState daily-page preservation", () => {
+  test("keeps a past day that is present locally but missing from remote", () => {
+    // base + local both hold Aug 26 (unchanged locally); the freshly loaded
+    // remote does not have it yet (e.g. it was never uploaded). It must survive.
+    const base = createInitialState("2026-08-26");
+    base.dailyPages["2026-08-26"].markdown = "August 26 note";
+
+    const local: typeof base = {
+      ...base,
+      dailyPages: { ...base.dailyPages },
+    };
+
+    const remote: typeof base = {
+      ...base,
+      dailyPages: {}, // remote is missing Aug 26 entirely
+    };
+
+    const merged = mergeHydratedAppState(base, local, remote);
+
+    expect(merged.dailyPages["2026-08-26"]).toBeDefined();
+    expect(merged.dailyPages["2026-08-26"].markdown).toBe("August 26 note");
+  });
+
+  test("still drops a note the user deleted (local removed it)", () => {
+    // A user deletion removes the record locally, so local differs from base and
+    // the record is correctly dropped — the never-delete guard is daily-page only.
+    const base = createInitialState("2026-08-26");
+    const noteId = Object.keys(base.notesDocs)[0];
+
+    const local: typeof base = {
+      ...base,
+      notesDocs: {}, // user deleted the note locally
+    };
+
+    const merged = mergeHydratedAppState(base, local, base);
+
+    expect(merged.notesDocs[noteId]).toBeUndefined();
+  });
+});

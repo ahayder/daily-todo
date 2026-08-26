@@ -805,6 +805,7 @@ function mergeHydratedRecord<T>(
   base: Record<string, T>,
   local: Record<string, T>,
   remote: Record<string, T>,
+  options: { keepLocalWhenRemoteMissing?: boolean } = {},
 ): Record<string, T> {
   const merged: Record<string, T> = {};
   const keys = new Set([
@@ -827,6 +828,17 @@ function mergeHydratedRecord<T>(
 
     if (hasOwnKey(remote, key)) {
       merged[key] = remote[key];
+      continue;
+    }
+
+    // The record is unchanged locally and absent from the freshly loaded
+    // remote. For most collections that means the record was deleted remotely,
+    // so it is dropped. Daily pages are append-only history with no per-page
+    // delete action, so a page that is present locally but missing remotely was
+    // almost certainly never uploaded (or is a stale-remote read) rather than
+    // deleted — keep it so a past day's notes/todos are never lost on sync.
+    if (options.keepLocalWhenRemoteMissing && hasOwnKey(local, key)) {
+      merged[key] = local[key];
     }
   }
 
@@ -862,6 +874,7 @@ export function mergeHydratedAppState(
       base.dailyPages,
       local.dailyPages,
       remote.dailyPages,
+      { keepLocalWhenRemoteMissing: true },
     ),
     todoWorkspaces: mergeHydratedRecord(
       base.todoWorkspaces,
