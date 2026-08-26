@@ -725,7 +725,15 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
           }
         }
 
-        if (remoteChangedSinceLastSync) {
+        // Never let a daily page that still exists locally be dropped just
+        // because it is absent from the remote read. Daily history is
+        // append-only, so re-upload it instead of resolving it as a remote
+        // deletion. (Real removals come from workspace deletion, where the page
+        // is gone from localRecord too and handled by the delete branch below.)
+        const isLocalOnlyDailyPage =
+          Boolean(localRecord) && !remoteRecord && localRecord.kind === "daily_page";
+
+        if (remoteChangedSinceLastSync && !isLocalOnlyDailyPage) {
           const remoteTimestamp =
             currentRemote?.lastRemoteUpdatedAtClient ??
             currentRemote?.lastRemoteUpdatedAt ??
@@ -983,6 +991,13 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       if (remoteRecord) {
         mergedValues[key] = remoteRecord;
         hasRemoteNewer = true;
+      } else if (localRecord && !localWasMutated && localRecord.kind === "daily_page") {
+        // A daily page present locally but absent from remote is treated as a
+        // never-uploaded page rather than a remote deletion. Daily history is
+        // append-only (no per-page delete), so keep it and re-upload instead of
+        // dropping a past day's notes/todos.
+        mergedValues[key] = localRecord;
+        hasLocalNewer = true;
       } else if (localRecord && !localWasMutated) {
         hasRemoteNewer = true;
       } else if (localRecord) {
