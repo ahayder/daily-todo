@@ -79,7 +79,7 @@ describe("PlannerView", () => {
     render(<Harness />);
 
     expect(screen.getByRole("img", { name: "Monday radial schedule" })).toBeInTheDocument();
-    expect(screen.getByText("2 overlap lanes")).toBeInTheDocument();
+    expect(screen.getByText("12h 30m open")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tuesday" })).toBeInTheDocument();
     expect(screen.getByText(/Created .* 2026/)).toBeInTheDocument();
   });

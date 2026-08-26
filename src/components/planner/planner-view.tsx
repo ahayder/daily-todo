@@ -57,14 +57,11 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
-  Clock3,
-  Layers2,
   Layers3,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
   Plus,
-  Settings2,
   Trash2,
 } from "lucide-react";
 
@@ -464,12 +461,18 @@ function UnifiedFocusCard({
 }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(purpose.title);
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Calm by default: a card opens its controls when it becomes the selected
+  // focus (accordion feel), and can be toggled independently after that.
+  const [isExpanded, setIsExpanded] = useState(isSelected);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTitleDraft(purpose.title);
   }, [purpose.title]);
+
+  useEffect(() => {
+    setIsExpanded(isSelected);
+  }, [isSelected]);
 
   useEffect(() => {
     if (isEditingTitle) {
@@ -496,88 +499,84 @@ function UnifiedFocusCard({
 
   return (
     <div
-      className={`planner-unified-card${isSelected ? " planner-unified-card--active" : ""}`}
+      className={`planner-unified-card${isSelected ? " planner-unified-card--active" : ""}${isExpanded ? " planner-unified-card--expanded" : ""}`}
       style={getPurposeStyle(purpose.color)}
       onClick={onSelect}
     >
-      {/* Top Header Row */}
-      <div className="planner-unified-card-top">
-        <div className="planner-unified-card-title-wrap">
-          <span className="planner-purpose-dot" />
-          {isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              aria-label={`Edit title for ${purpose.title}`}
-              className="planner-allocation-card-title-input"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={() => finishTitleEdit(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  finishTitleEdit(true);
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  finishTitleEdit(false);
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <button
-              type="button"
-              className="planner-allocation-card-title-btn"
-              aria-label={`${purpose.title}, click to edit title`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEditingTitle(true);
-              }}
-            >
-              <strong>{purpose.title}</strong>
-              <Pencil className="h-3 w-3 text-[var(--ink-700)] opacity-60" />
-            </button>
-          )}
-        </div>
-
-        <div className="planner-unified-card-top-actions">
+      {/* Calm summary row — always visible */}
+      <div className="planner-unified-card-summary">
+        <span className="planner-purpose-dot" />
+        {isEditingTitle ? (
+          <input
+            ref={titleInputRef}
+            aria-label={`Edit title for ${purpose.title}`}
+            className="planner-allocation-card-title-input"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => finishTitleEdit(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                finishTitleEdit(true);
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                finishTitleEdit(false);
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
           <button
             type="button"
-            aria-label={`Toggle role for ${purpose.title}, currently ${purpose.role}`}
-            className={`planner-allocation-role-badge planner-allocation-role-badge--${purpose.role}`}
+            className="planner-allocation-card-title-btn"
+            aria-label={`${purpose.title}, click to edit title`}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleRole();
+              setIsEditingTitle(true);
             }}
           >
-            {purpose.role === "primary" ? "Primary · 24h" : "Secondary · Overlap"}
+            <strong>{purpose.title}</strong>
+            <Pencil className="h-3 w-3 text-[var(--ink-700)] opacity-60" />
           </button>
+        )}
 
-          <button
-            type="button"
-            aria-label={isExpanded ? `Collapse settings for ${purpose.title}` : `Expand settings for ${purpose.title}`}
-            className="planner-card-expand-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded((expanded) => !expanded);
-            }}
-          >
-            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <Settings2 className="h-3.5 w-3.5" />}
-          </button>
-        </div>
+        <span className="planner-unified-card-progress-text">
+          {formatPlannerDuration(scheduledMinutes)} / {formatPlannerDuration(purpose.targetMinutes)}
+        </span>
+
+        <button
+          type="button"
+          aria-label={isExpanded ? `Collapse ${purpose.title}` : `Expand ${purpose.title}`}
+          aria-expanded={isExpanded}
+          className="planner-card-expand-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded((expanded) => !expanded);
+          }}
+        >
+          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
       </div>
 
-      {/* Target & Stepper Row */}
+      {/* Slim progress bar — always visible */}
+      <div className="planner-unified-card-slimbar" aria-hidden="true">
+        <div
+          className="planner-allocation-progress-fill"
+          style={{ width: `${Math.min(100, progressRatio)}%` }}
+        />
+      </div>
+
+      {isExpanded && (
+      <div className="planner-unified-card-body" onClick={(e) => e.stopPropagation()}>
+      {/* Role toggle + target stepper */}
       <div className="planner-unified-card-target-row">
         <div className="planner-allocation-time-controls">
           <button
             type="button"
             aria-label={`Decrease ${purpose.title} target by 1 hour`}
             className="planner-allocation-card-stepper"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdjustMinutes(-60);
-            }}
+            onClick={() => onAdjustMinutes(-60)}
           >
             -1h
           </button>
@@ -585,10 +584,7 @@ function UnifiedFocusCard({
             type="button"
             aria-label={`Decrease ${purpose.title} target by 15 minutes`}
             className="planner-allocation-card-stepper"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdjustMinutes(-15);
-            }}
+            onClick={() => onAdjustMinutes(-15)}
           >
             -15m
           </button>
@@ -599,10 +595,7 @@ function UnifiedFocusCard({
             type="button"
             aria-label={`Increase ${purpose.title} target by 15 minutes`}
             className="planner-allocation-card-stepper"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdjustMinutes(15);
-            }}
+            onClick={() => onAdjustMinutes(15)}
           >
             +15m
           </button>
@@ -610,40 +603,35 @@ function UnifiedFocusCard({
             type="button"
             aria-label={`Increase ${purpose.title} target by 1 hour`}
             className="planner-allocation-card-stepper"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdjustMinutes(60);
-            }}
+            onClick={() => onAdjustMinutes(60)}
           >
             +1h
           </button>
         </div>
 
-        <span className="planner-allocation-pct">
-          {purpose.role === "primary" ? `${pct}% of 24h` : "overlap target"}
-        </span>
+        <button
+          type="button"
+          aria-label={`Toggle role for ${purpose.title}, currently ${purpose.role}`}
+          className={`planner-allocation-role-badge planner-allocation-role-badge--${purpose.role}`}
+          onClick={onToggleRole}
+        >
+          {purpose.role === "primary" ? "Primary · 24h" : "Secondary · Overlap"}
+        </button>
       </div>
 
-      {/* Progress Bar */}
-      <div className="planner-unified-card-progress-wrap">
-        <div className="planner-allocation-progress-bar">
-          <div
-            className="planner-allocation-progress-fill"
-            style={{ width: `${Math.min(100, progressRatio)}%` }}
-          />
-        </div>
-        <div className="planner-allocation-scheduled-info">
-          <span>
-            {formatPlannerDuration(scheduledMinutes)} of {formatPlannerDuration(purpose.targetMinutes)} scheduled
-          </span>
-          {scheduledMinutes < purpose.targetMinutes ? (
-            <small>({formatPlannerDuration(purpose.targetMinutes - scheduledMinutes)} remaining)</small>
-          ) : scheduledMinutes > purpose.targetMinutes ? (
-            <small>({formatPlannerDuration(scheduledMinutes - purpose.targetMinutes)} over target)</small>
-          ) : (
-            <small>(target reached)</small>
-          )}
-        </div>
+      {/* Scheduled detail */}
+      <div className="planner-allocation-scheduled-info">
+        <span>
+          {formatPlannerDuration(scheduledMinutes)} of {formatPlannerDuration(purpose.targetMinutes)} scheduled
+          {purpose.role === "primary" ? ` · ${pct}% of 24h` : ""}
+        </span>
+        {scheduledMinutes < purpose.targetMinutes ? (
+          <small>({formatPlannerDuration(purpose.targetMinutes - scheduledMinutes)} remaining)</small>
+        ) : scheduledMinutes > purpose.targetMinutes ? (
+          <small>({formatPlannerDuration(scheduledMinutes - purpose.targetMinutes)} over target)</small>
+        ) : (
+          <small>(target reached)</small>
+        )}
       </div>
 
       {/* Child Time Blocks */}
@@ -790,9 +778,8 @@ function UnifiedFocusCard({
         )}
       </div>
 
-      {/* Expanded Settings & Controls */}
-      {isExpanded && (
-        <div className="planner-unified-card-expanded" onClick={(e) => e.stopPropagation()}>
+      {/* Settings & controls */}
+          <div className="planner-unified-card-expanded">
           <div className="planner-field">
             <span>Color theme</span>
             <div className="planner-color-row">
@@ -881,7 +868,8 @@ function UnifiedFocusCard({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </div>
+          </div>
+      </div>
       )}
     </div>
   );
@@ -1356,9 +1344,14 @@ function PlannerPresetView({ state, dispatch }: Props) {
   };
 
   const laneRadius = (lane: number) => {
-    const baseOuter = 265;
-    const laneWidth = 24;
+    // Fat, adaptive rings: a single track is a bold ~52px-thick donut, and
+    // extra overlap lanes shrink gracefully inward while staying clear of the
+    // center readout (bg circle r=108).
+    const baseOuter = 268;
+    const innerBound = 150;
     const laneGap = 6;
+    const available = baseOuter - innerBound;
+    const laneWidth = Math.min(52, available / laneCount - laneGap);
     const outer = baseOuter - lane * (laneWidth + laneGap);
     const inner = outer - laneWidth;
     return { inner, outer };
@@ -1492,10 +1485,6 @@ function PlannerPresetView({ state, dispatch }: Props) {
                     ? `${formatPlannerDuration(allocatedDifference)} open`
                     : `${formatPlannerDuration(Math.abs(allocatedDifference))} over`}
                 </span>
-                <span className="planner-wheel-status">
-                  <Layers2 className="h-4 w-4" />
-                  {laneCount === 1 ? "No overlaps" : `${laneCount} overlap lanes`}
-                </span>
               </div>
             </div>
 
@@ -1603,8 +1592,32 @@ function PlannerPresetView({ state, dispatch }: Props) {
                     const midRadius = (radii.inner + radii.outer) / 2;
                     const startPoint = getPlannerPoint(selectedEventForHandles.startMinutes, midRadius);
                     const endPoint = getPlannerPoint(selectedEventForHandles.endMinutes, midRadius);
+                    const isDraggingThis = dragPreview?.eventId === selectedEventForHandles.id;
+                    const draggingEdge = dragStateRef.current?.edge;
+                    const renderTimePill = (minute: number, active: boolean) => {
+                      const point = getPlannerPoint(minute, radii.inner - 20);
+                      const label = formatPlannerTime(minute);
+                      const width = label.length * 7.4 + 18;
+                      return (
+                        <g
+                          className={`planner-wheel-time-pill${active ? " planner-wheel-time-pill--active" : ""}`}
+                          pointerEvents="none"
+                        >
+                          <rect x={point.x - width / 2} y={point.y - 12} width={width} height={24} rx={12} />
+                          <text x={point.x} y={point.y + 0.5}>{label}</text>
+                        </g>
+                      );
+                    };
                     return (
                       <g className="planner-drag-handles">
+                        {renderTimePill(
+                          selectedEventForHandles.startMinutes,
+                          isDraggingThis && draggingEdge === "start",
+                        )}
+                        {renderTimePill(
+                          selectedEventForHandles.endMinutes,
+                          isDraggingThis && draggingEdge === "end",
+                        )}
                         <circle
                           data-testid="planner-drag-handle-start"
                           tabIndex={0}
@@ -1615,7 +1628,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
                           className="planner-wheel-handle"
                           cx={startPoint.x}
                           cy={startPoint.y}
-                          r={11}
+                          r={13}
                           onPointerDown={(e) => startHandleDrag(e, selectedEventForHandles.id, "start")}
                           onKeyDown={(e) => adjustEventHandleByKeyboard(e, selectedEventForHandles.id, "start")}
                         />
@@ -1629,7 +1642,7 @@ function PlannerPresetView({ state, dispatch }: Props) {
                           className="planner-wheel-handle"
                           cx={endPoint.x}
                           cy={endPoint.y}
-                          r={11}
+                          r={13}
                           onPointerDown={(e) => startHandleDrag(e, selectedEventForHandles.id, "end")}
                           onKeyDown={(e) => adjustEventHandleByKeyboard(e, selectedEventForHandles.id, "end")}
                         />
@@ -1639,7 +1652,30 @@ function PlannerPresetView({ state, dispatch }: Props) {
                 )}
 
                 {/* Center of the Radial Clock */}
-                {selectedPurpose ? (
+                {dragPreview ? (
+                  <g className="planner-wheel-center">
+                    <circle className="planner-wheel-center-bg" cx="300" cy="300" r="108" />
+                    <text
+                      className="planner-wheel-center-time"
+                      x="300"
+                      y="280"
+                      clipPath="url(#planner-center-clip)"
+                    >
+                      {formatPlannerTime(dragPreview.startMinutes)}
+                    </text>
+                    <text className="planner-wheel-center-sub" x="300" y="304" clipPath="url(#planner-center-clip)">
+                      {formatPlannerDuration(dragPreview.endMinutes - dragPreview.startMinutes)}
+                    </text>
+                    <text
+                      className="planner-wheel-center-time"
+                      x="300"
+                      y="328"
+                      clipPath="url(#planner-center-clip)"
+                    >
+                      {formatPlannerTime(dragPreview.endMinutes)}
+                    </text>
+                  </g>
+                ) : selectedPurpose ? (
                   <g className="planner-wheel-center">
                     <circle
                       className="planner-wheel-center-bg"
