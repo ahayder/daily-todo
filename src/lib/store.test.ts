@@ -8,6 +8,7 @@ import {
   applyPlannerPurposeToDays,
   createContentCard,
   createContentColumn,
+  createCarryoverDailyPage,
   createIdealPlannerPreset,
   createInitialState,
   createPlannerEvent,
@@ -26,6 +27,7 @@ import {
   getDailyPageKey,
   makeTodoSubtask,
   mergeHydratedAppState,
+  repairMisSourcedTodayCarryover,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
@@ -720,5 +722,78 @@ describe("mergeHydratedAppState daily-page preservation", () => {
     const merged = mergeHydratedAppState(base, local, base);
 
     expect(merged.notesDocs[noteId]).toBeUndefined();
+  });
+});
+
+describe("repairMisSourcedTodayCarryover", () => {
+  test("re-derives a today that was carried from an older day than yesterday", () => {
+    // History has Aug 18 (old note) and Aug 27 (yesterday's real note), but today
+    // (Aug 28) was carried forward from Aug 18 instead of Aug 27.
+    const state = createInitialState("2026-08-18");
+    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
+    state.dailyPages["2026-08-27"] = {
+      date: "2026-08-27",
+      markdown: "August 27 plan",
+      todos: [],
+    };
+    // Simulate the mis-sourced today: Aug 28 = carryover of Aug 18.
+    state.dailyPages["2026-08-28"] = createCarryoverDailyPage(
+      { "2026-08-18": state.dailyPages["2026-08-18"] },
+      "2026-08-28",
+    );
+    state.uiState.selectedDailyDate = "2026-08-28";
+
+    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
+
+    // Today now carries Aug 27's content, and Aug 27/Aug 18 are untouched.
+    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("August 27 plan");
+    expect(repaired.dailyPages["2026-08-27"].markdown).toBe("August 27 plan");
+    expect(repaired.dailyPages["2026-08-18"].markdown).toBe("Old Velox note");
+  });
+
+  test("leaves today alone when it already carries yesterday", () => {
+    const state = createInitialState("2026-08-27");
+    state.dailyPages["2026-08-27"].markdown = "August 27 plan";
+    const withToday = ensureDailyPageForDate(state, "2026-08-28");
+
+    const repaired = repairMisSourcedTodayCarryover(withToday, "2026-08-28");
+
+    expect(repaired).toBe(withToday);
+    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("August 27 plan");
+  });
+
+  test("preserves a today the user has edited", () => {
+    const state = createInitialState("2026-08-18");
+    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
+    state.dailyPages["2026-08-27"] = {
+      date: "2026-08-27",
+      markdown: "August 27 plan",
+      todos: [],
+    };
+    state.dailyPages["2026-08-28"] = {
+      date: "2026-08-28",
+      markdown: "My own fresh writing for today",
+      todos: [],
+    };
+
+    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
+
+    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("My own fresh writing for today");
+  });
+
+  test("does not repair toward stale data when yesterday is not loaded yet", () => {
+    // Only Aug 18 is present; the correct source (Aug 27) has not hydrated. Today
+    // equals a carryover of Aug 18, which is also the latest available day, so
+    // there is nothing to repair to.
+    const state = createInitialState("2026-08-18");
+    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
+    state.dailyPages["2026-08-28"] = createCarryoverDailyPage(
+      { "2026-08-18": state.dailyPages["2026-08-18"] },
+      "2026-08-28",
+    );
+
+    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
+
+    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("Old Velox note");
   });
 });

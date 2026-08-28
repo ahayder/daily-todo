@@ -21,7 +21,7 @@ import {
 } from "@/lib/persistence";
 import { isDevelopmentWorkspaceSession } from "@/lib/dev-mode";
 import { toISODate } from "@/lib/date";
-import { mergeHydratedAppState } from "@/lib/store";
+import { mergeHydratedAppState, repairMisSourcedTodayCarryover } from "@/lib/store";
 import type { AppState, NoteBodyStatus } from "@/lib/types";
 import { appReducer, loadDevelopmentWorkspaceState, saveDevelopmentWorkspaceState, serializeStateForSync } from "./app-context.reducer";
 import type { AppAction, AppContextValue } from "./app-context.types";
@@ -366,10 +366,9 @@ export function useAppPersistenceState({
       }
 
       const localState = latestStateRef.current ?? baseState;
-      const nextState = mergeHydratedAppState(
-        baseState,
-        localState,
-        remoteResult.state,
+      const nextState = repairMisSourcedTodayCarryover(
+        mergeHydratedAppState(baseState, localState, remoteResult.state),
+        toISODate(new Date()),
       );
       const remoteSnapshot = serializeStateForSync(remoteResult.state);
       const nextSnapshot = serializeStateForSync(nextState);
