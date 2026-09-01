@@ -3,6 +3,56 @@ import { describe, expect, test } from "vitest";
 import { createInitialState } from "@/lib/store";
 import { appReducer } from "./app-context.reducer";
 
+describe("dev-advance-day", () => {
+  test("rolls forward from the latest day, carrying incomplete todos and note markdown", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].markdown = "Carry me forward";
+    state.dailyPages["2026-03-10"].todos = [
+      {
+        id: "open",
+        text: "Open task",
+        priority: 1,
+        status: "pending",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T10:00:00.000Z",
+      },
+      {
+        id: "done",
+        text: "Done task",
+        priority: 2,
+        status: "finished",
+        estimatedMinutes: null,
+        createdAt: "2026-03-10T10:00:00.000Z",
+      },
+    ];
+
+    const next = appReducer(state, { type: "dev-advance-day" });
+
+    expect(next.uiState.selectedDailyDate).toBe("2026-03-11");
+    expect(next.dailyPages["2026-03-11"]).toBeDefined();
+    expect(next.dailyPages["2026-03-11"].markdown).toBe("Carry me forward");
+    // Only the incomplete task carries forward.
+    expect(next.dailyPages["2026-03-11"].todos).toHaveLength(1);
+    expect(next.dailyPages["2026-03-11"].todos[0].text).toBe("Open task");
+    expect(next.dailyPages["2026-03-11"].todos[0].status).toBe("pending");
+    // The source day is preserved intact.
+    expect(next.dailyPages["2026-03-10"].todos).toHaveLength(2);
+  });
+
+  test("marches forward one day per call, chaining from the newest page", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].markdown = "Day one";
+
+    const afterFirst = appReducer(state, { type: "dev-advance-day" });
+    const afterSecond = appReducer(afterFirst, { type: "dev-advance-day" });
+
+    expect(afterFirst.uiState.selectedDailyDate).toBe("2026-03-11");
+    expect(afterSecond.uiState.selectedDailyDate).toBe("2026-03-12");
+    expect(afterSecond.dailyPages["2026-03-12"]).toBeDefined();
+    expect(afterSecond.dailyPages["2026-03-12"].markdown).toBe("Day one");
+  });
+});
+
 describe("ensure-daily-today", () => {
   test("advances a stale selection to today, carrying the previous day forward", () => {
     const state = createInitialState("2026-03-10");

@@ -38,6 +38,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth/auth-context";
+import { isDevelopmentWorkspaceSession } from "@/lib/dev-mode";
+import { isSuperAdmin } from "@/lib/super-admin";
 import { cn } from "@/lib/utils";
 import { DEFAULT_NOTES_FOLDER_ID, getSortedDailyDates } from "@/lib/store";
 import type { AppState, NoteDoc, NoteFolder, ThemeMode } from "@/lib/types";
@@ -57,6 +59,9 @@ import {
   ArrowDownToLine,
   LoaderCircle,
   LogOut,
+  KeyRound,
+  CalendarPlus,
+  FlaskConical,
   Monitor,
   Moon,
   Sun,
@@ -118,18 +123,23 @@ function SidebarProfileMenu({
   email,
   hasUnsyncedChanges,
   retrySync,
+  dispatch,
 }: {
   email: string | null | undefined;
   hasUnsyncedChanges: boolean;
   retrySync: () => Promise<void>;
+  dispatch: Dispatch<AppAction>;
 }) {
-  const { signOut } = useAuth();
+  const { signOut, session, requestPasswordReset } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [resetStatus, setResetStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const avatarInitials = getAvatarInitials(email);
   const accountLabel = email ?? "Workspace account";
+  const canResetPassword = Boolean(email) && !isDevelopmentWorkspaceSession(session);
+  const showDevTools = isSuperAdmin(email);
 
   useEffect(() => {
     if (!isOpen) {
@@ -165,6 +175,65 @@ function SidebarProfileMenu({
             <span className="sidebar-profile-menu__eyebrow">Signed in as</span>
             <span className="sidebar-profile-menu__email">{accountLabel}</span>
           </div>
+          {canResetPassword ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="sidebar-profile-menu__item"
+              disabled={resetStatus === "sending"}
+              onClick={async () => {
+                if (!email) return;
+                try {
+                  setResetStatus("sending");
+                  await requestPasswordReset({ email });
+                  setResetStatus("sent");
+                } catch {
+                  setResetStatus("error");
+                }
+              }}
+            >
+              <span className="sidebar-profile-menu__item-copy">
+                <span className="sidebar-profile-menu__item-title">Reset password</span>
+                <span className="sidebar-profile-menu__item-subtitle">
+                  {resetStatus === "sent"
+                    ? "Reset link sent to your email"
+                    : resetStatus === "error"
+                      ? "Couldn't send — try again"
+                      : "Email me a password reset link"}
+                </span>
+              </span>
+              {resetStatus === "sending" ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+            </button>
+          ) : null}
+          {showDevTools ? (
+            <div className="sidebar-profile-menu__section" role="group" aria-label="Developer tools">
+              <span className="sidebar-profile-menu__section-label">
+                <FlaskConical className="h-3 w-3" />
+                Developer tools
+              </span>
+              <button
+                type="button"
+                role="menuitem"
+                className="sidebar-profile-menu__item"
+                onClick={() => {
+                  dispatch({ type: "dev-advance-day" });
+                  setIsOpen(false);
+                }}
+              >
+                <span className="sidebar-profile-menu__item-copy">
+                  <span className="sidebar-profile-menu__item-title">Simulate next day</span>
+                  <span className="sidebar-profile-menu__item-subtitle">
+                    Roll the daily view forward to test carry-forward
+                  </span>
+                </span>
+                <CalendarPlus className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -197,7 +266,14 @@ function SidebarProfileMenu({
         aria-controls={menuId}
         aria-label={getAvatarLabel(email)}
         className="sidebar-profile-trigger"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() =>
+          setIsOpen((current) => {
+            if (!current) {
+              setResetStatus("idle");
+            }
+            return !current;
+          })
+        }
       >
         <span className="sidebar-profile-trigger__avatar" aria-hidden="true">
           {avatarInitials}
@@ -822,6 +898,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
             email={session?.email}
             hasUnsyncedChanges={sync.hasUnsyncedChanges}
             retrySync={retrySync}
+            dispatch={dispatch}
           />
           <Tooltip>
             <TooltipTrigger asChild>
