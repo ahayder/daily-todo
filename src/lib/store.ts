@@ -1536,6 +1536,58 @@ export function ensureDailyPageForDate(
   };
 }
 
+/**
+ * Repairs a "today" page whose carryover was sourced from the wrong day.
+ *
+ * The client eagerly creates today's page on the cache-first render so the app
+ * is usable offline. When this device's cache is stale (e.g. yesterday was
+ * written on another client), that eager carryover copies an *older* day, and
+ * the wrong page can even get persisted before the authoritative history loads.
+ *
+ * Once the full history is available (after remote hydration), this recomputes
+ * the correct carryover — from the most recent previous day — and adopts it when
+ * today is still an *unedited* carryover of some earlier day (its content matches
+ * a prior day's carryover). A today the user actually edited matches no prior
+ * day and is always preserved. It is also a no-op when today already equals the
+ * correct carryover, or when the correct source day is not present yet (so it
+ * never "repairs" toward stale data).
+ */
+export function repairMisSourcedTodayCarryover(
+  merged: AppState,
+  todayISO: string,
+): AppState {
+  const workspaceId = getActiveTodoWorkspaceId(merged);
+  const key = getDailyPageKey(workspaceId, todayISO);
+  const today = merged.dailyPages[key];
+  if (!today) return merged;
+
+  const history = getDailyPagesForWorkspace(merged, workspaceId);
+  const historyWithoutToday = { ...history };
+  delete historyWithoutToday[todayISO];
+
+  const correct = createCarryoverDailyPage(historyWithoutToday, todayISO);
+  if (serializedValuesMatch(today, correct)) return merged;
+
+  // Today is an unedited carryover if its content is exactly what a carryover of
+  // some earlier day would produce. That signals a mis-sourced auto-carryover
+  // rather than user edits.
+  const isUneditedCarryover = Object.entries(historyWithoutToday).some(
+    ([date, page]) =>
+      date < todayISO &&
+      page.markdown === today.markdown &&
+      serializedValuesMatch(today.todos, cloneCarryoverTodos(page.todos, todayISO)),
+  );
+  if (!isUneditedCarryover) return merged;
+
+  return {
+    ...merged,
+    dailyPages: {
+      ...merged.dailyPages,
+      [key]: correct,
+    },
+  };
+}
+
 export function groupTodosByPriority(todos: Todo[]): Record<Priority, Todo[]> {
   const grouped: Record<Priority, Todo[]> = {
     1: [],

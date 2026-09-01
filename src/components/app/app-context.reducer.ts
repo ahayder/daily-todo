@@ -13,6 +13,7 @@ import {
   seedAppState,
   stripNoteBodies,
 } from "@/lib/persistence";
+import { toISODate } from "@/lib/date";
 import {
   addPlannerPurposeToDays,
   addContentColumn,
@@ -35,6 +36,7 @@ import {
   getActiveTodoWorkspaceId,
   getDailyPageKey,
   getDailyPageForWorkspace,
+  getDailyPagesForWorkspace,
   getSortedDailyDates,
   makeTodoSubtask,
   moveContentCard,
@@ -470,6 +472,30 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
         uiState: {
           ...ensured.uiState,
           selectedDailyDate: action.date,
+        },
+      };
+    }
+    case "dev-advance-day": {
+      // Owner-only testing tool: synthesize the calendar day after the active
+      // workspace's most recent daily page and land on it. This drives the exact
+      // production carryover path (ensureDailyPageForDate → createCarryoverDailyPage),
+      // so incomplete todos and the daily note markdown copy forward just like a
+      // real day rollover. Repeated calls march forward one day at a time.
+      const workspaceId = getActiveTodoWorkspaceId(state);
+      const dates = Object.keys(getDailyPagesForWorkspace(state, workspaceId)).sort();
+      const latest = dates.length > 0 ? dates[dates.length - 1] : null;
+      const base = latest ?? state.uiState.selectedDailyDate ?? toISODate(new Date());
+
+      const nextDay = new Date(`${base}T00:00:00`);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDate = toISODate(nextDay);
+
+      const advanced = ensureDailyPageForDate(state, nextDate, workspaceId);
+      return {
+        ...advanced,
+        uiState: {
+          ...advanced.uiState,
+          selectedDailyDate: nextDate,
         },
       };
     }

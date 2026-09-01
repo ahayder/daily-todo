@@ -34,6 +34,7 @@ export type AppAction =
   | { type: "delete-todo-workspace"; workspaceId: string; date: string }
   | { type: "select-daily"; date: string }
   | { type: "ensure-daily-today"; date: string }
+  | { type: "dev-advance-day" }
   | { type: "toggle-year"; year: string }
   | { type: "toggle-month"; month: string }
   | { type: "toggle-note-folder"; folderId: string }
