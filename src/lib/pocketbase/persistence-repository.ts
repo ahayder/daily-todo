@@ -198,6 +198,38 @@ export function isUntouchedEmptyDailyPage(
   );
 }
 
+function describeWriteError(reason: unknown): string | null {
+  if (!reason || typeof reason !== "object") {
+    return typeof reason === "string" ? reason : null;
+  }
+
+  // PocketBase ClientResponseError carries per-field validation details under
+  // response.data (e.g. { todos_json: { code, message } }). Prefer those, then
+  // fall back to the top-level message.
+  const response = (reason as { response?: unknown }).response;
+  const data =
+    response && typeof response === "object"
+      ? (response as { data?: unknown }).data
+      : undefined;
+  if (data && typeof data === "object") {
+    const fieldErrors = Object.entries(data as Record<string, unknown>)
+      .map(([field, detail]) => {
+        const message =
+          detail && typeof detail === "object" && "message" in detail
+            ? String((detail as { message?: unknown }).message ?? "")
+            : "";
+        return message ? `${field}: ${message}` : field;
+      })
+      .filter(Boolean);
+    if (fieldErrors.length > 0) {
+      return fieldErrors.join("; ");
+    }
+  }
+
+  const message = (reason as { message?: unknown }).message;
+  return typeof message === "string" && message ? message : null;
+}
+
 function isNotFoundError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -773,7 +805,19 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         }
       }
 
-      await Promise.all(operations);
+      // Settle each write independently. Previously a single rejected record
+      // (e.g. a PocketBase validation 400) rejected the whole Promise.all, which
+      // was caught below and misreported as a generic "offline" — silently
+      // freezing the entire workspace while other records in the batch had
+      // already been written. Isolating writes means one bad record can no
+      // longer block every other record's sync; we still reload authoritative
+      // remote state afterward, so successful writes are reflected and the
+      // failed one is retried on the next save.
+      const settledOperations = await Promise.allSettled(operations);
+      const failedOperations = settledOperations.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      const firstWriteError = describeWriteError(failedOperations[0]?.reason);
 
       const resolvedState = assembleStateFromValues(resolvedValues, state, now);
       const dualWriteTimestamp = metadata.lastLocalMutationAt ?? now.toISOString();
@@ -795,6 +839,23 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         conflictResolution = "remote-overwrote-local";
       } else if (localWonAfterConflict) {
         conflictResolution = "local-overwrote-remote";
+      }
+
+      // A record failed to write (e.g. validation rejection). Successful writes
+      // are already persisted and reflected in the reloaded metadata/state, so
+      // we keep those — but surface the failure so the client shows a sync issue
+      // and retries, rather than pretending everything synced.
+      if (failedOperations.length > 0) {
+        return {
+          status: "error",
+          metadata: resolvedMetadata,
+          conflictResolution,
+          notice: null,
+          errorMessage: firstWriteError
+            ? `Some changes could not be saved to PocketBase: ${firstWriteError}`
+            : "Some changes could not be saved to PocketBase.",
+          resolvedState: finalRemote.state,
+        };
       }
 
       return {
