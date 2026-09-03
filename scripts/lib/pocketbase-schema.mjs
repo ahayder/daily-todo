@@ -70,9 +70,14 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           type: "text",
         },
         {
+          // NOT required: a daily page legitimately carries an empty todo list
+          // (e.g. the previous day's todos were all finished, so none carry
+          // forward). PocketBase treats an empty array on a required JSON field
+          // as "blank" and rejects the create with a 400, which previously froze
+          // the whole workspace sync. An empty list must be a savable state.
           name: "todos_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "updated_at_client",
@@ -198,14 +203,17 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           required: true,
         },
         {
+          // Not required: an empty array/object is a valid, savable state, and
+          // PocketBase rejects "blank" JSON on a required field with a 400. The
+          // read side normalizes with safeArray/safeRecord. See todos_json.
           name: "day_order_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "days_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "updated_at_client",
@@ -235,9 +243,12 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           cascadeDelete: true,
         },
         {
+          // Not required: a board with all columns removed is an empty array,
+          // which PocketBase would reject as "blank" on a required field. See
+          // todos_json.
           name: "columns_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "updated_at_client",
@@ -345,14 +356,18 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           type: "text",
         },
         {
+          // Not required: these expand-state arrays are empty whenever nothing
+          // is expanded, and PocketBase rejects a "blank" array on a required
+          // field with a 400 — which would freeze workspace_state sync. See
+          // todos_json.
           name: "expanded_years_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "expanded_months_json",
           type: "json",
-          required: true,
+          required: false,
         },
         {
           name: "last_view",

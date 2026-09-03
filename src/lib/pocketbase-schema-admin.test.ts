@@ -64,6 +64,21 @@ describe("buildSchemaDefinitions", () => {
       );
     }
   });
+
+  test("daily_pages.todos_json is not required so empty-todo carryover pages can save", () => {
+    // Regression: a day whose previous day's todos were all finished carries an
+    // empty todo list. PocketBase rejects an empty array on a required JSON
+    // field with a 400, which used to freeze the entire workspace sync. Keep
+    // this field optional so an empty todo list is always a savable state.
+    const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+    const dailyPages = definitions.find((item) => item.name === "daily_pages");
+    const todosField = dailyPages?.fields.find(
+      (field: { name: string }) => field.name === "todos_json",
+    ) as { required?: boolean } | undefined;
+
+    expect(todosField).toBeDefined();
+    expect(todosField?.required).toBe(false);
+  });
 });
 
 describe("mergeCollectionDefinition", () => {
