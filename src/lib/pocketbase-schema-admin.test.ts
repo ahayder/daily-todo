@@ -79,6 +79,26 @@ describe("buildSchemaDefinitions", () => {
     expect(todosField).toBeDefined();
     expect(todosField?.required).toBe(false);
   });
+
+  test("content_cards.position and title are not required so top-of-column moves can save", () => {
+    // Regression: card order is 0-based, so the top card of every column has
+    // position 0, and a card's first line (title) can be empty. PocketBase
+    // rejects a blank/zero value on a required field with a 400, which reverted
+    // card moves after refresh. Keep both fields optional so those states save.
+    const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+    const contentCards = definitions.find((item) => item.name === "content_cards");
+    const positionField = contentCards?.fields.find(
+      (field: { name: string }) => field.name === "position",
+    ) as { required?: boolean } | undefined;
+    const titleField = contentCards?.fields.find(
+      (field: { name: string }) => field.name === "title",
+    ) as { required?: boolean } | undefined;
+
+    expect(positionField).toBeDefined();
+    expect(positionField?.required).toBe(false);
+    expect(titleField).toBeDefined();
+    expect(titleField?.required).toBe(false);
+  });
 });
 
 describe("mergeCollectionDefinition", () => {

@@ -16,7 +16,7 @@ import type {
   RegisterInput,
   SignInInput,
 } from "@/lib/auth";
-import { requiresEmailVerification } from "@/lib/auth-config";
+import { getDevAutoLoginCredentials, requiresEmailVerification } from "@/lib/auth-config";
 import {
   createDevelopmentWorkspaceSession,
   getDevelopmentWorkspaceEnabled,
@@ -94,7 +94,18 @@ export function AuthProvider({
       }
 
       try {
-        const nextSession = await repository.getSession();
+        let nextSession = await repository.getSession();
+
+        // Dev-only: if no session and auto-login credentials are configured, sign in
+        // to a REAL PocketBase account so the login screen never blocks local work.
+        // A failure here falls through to the normal anonymous state below.
+        if (!nextSession) {
+          const devCredentials = getDevAutoLoginCredentials();
+          if (devCredentials) {
+            nextSession = await repository.signIn(devCredentials);
+          }
+        }
+
         if (!mounted) {
           return;
         }
