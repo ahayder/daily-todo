@@ -38,6 +38,7 @@ import {
   ArrowRightLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Columns3,
   Copy,
@@ -88,6 +89,7 @@ import {
 import {
   CONTENT_COLUMN_INBOX_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
+  DEFAULT_CONTENT_COLUMNS,
   SHOOT_NEXT_SOFT_CAP,
   getContentCardsForColumn,
 } from "@/lib/store";
@@ -1517,6 +1519,101 @@ function ContentInboxReview({
   );
 }
 
+const EMPTY_STATE_EXAMPLE_TITLE = "Why job boards aren't the problem";
+
+function ContentConveyorEmptyState({
+  typographyStyle,
+}: {
+  typographyStyle: CSSProperties;
+}) {
+  const [inboxStage, ...laterStages] = DEFAULT_CONTENT_COLUMNS;
+
+  return (
+    <div
+      aria-label="Getting started"
+      className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:py-8"
+      role="region"
+      data-testid="content-conveyor-empty-state"
+      style={typographyStyle}
+    >
+      <div className="mx-auto flex max-w-md flex-col gap-6">
+        <nav
+          aria-label="How ideas flow"
+          className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-[length:var(--content-planner-font-xs,0.75rem)]"
+        >
+          {DEFAULT_CONTENT_COLUMNS.map((stage, index) => (
+            <span key={stage.id} className="flex items-center gap-1.5">
+              {index > 0 ? (
+                <ChevronRight
+                  className="size-3.5 text-[var(--ink-700)] opacity-60"
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span
+                className={
+                  index === 0
+                    ? "font-semibold text-[var(--brand)]"
+                    : "text-[var(--ink-700)]"
+                }
+              >
+                {stage.title}
+              </span>
+            </span>
+          ))}
+        </nav>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)]">
+              {inboxStage.title}
+            </span>
+            <span className="text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
+              everything starts here
+            </span>
+          </div>
+
+          <div
+            aria-hidden="true"
+            className="rounded-2xl border border-dashed border-[color:color-mix(in_srgb,var(--brand)_45%,var(--line))] bg-[color:color-mix(in_srgb,var(--brand-soft)_50%,var(--paper-strong))] p-4"
+          >
+            <span className="mb-2 inline-block rounded-full bg-[var(--paper-strong)] px-2 py-0.5 text-[length:var(--content-planner-font-micro,0.6875rem)] font-semibold uppercase tracking-[0.04em] text-[var(--ink-700)]">
+              Example
+            </span>
+            <p className="text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)]">
+              {EMPTY_STATE_EXAMPLE_TITLE}
+            </p>
+            <div className="mt-3 flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[color:color-mix(in_srgb,var(--brand)_35%,var(--line))] bg-[var(--paper-strong)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--brand)]">
+              Develop this
+              <ArrowRight className="size-4" />
+            </div>
+          </div>
+          <p className="text-[length:var(--content-planner-font-xs,0.75rem)] leading-relaxed text-[var(--ink-700)]">
+            This is how a card moves forward — every idea you capture gets a
+            button like this to nudge it one step along.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {laterStages.map((stage, index) => (
+            <div
+              key={stage.id}
+              className="flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_45%,var(--paper))] px-3 py-2.5"
+              style={{ opacity: 0.72 - index * 0.14 }}
+            >
+              <span className="text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)]">
+                {stage.title}
+              </span>
+              <span className="ml-auto text-right text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
+                {index === 0 ? "appears once you develop an idea" : stage.subtitle}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ContentPlannerView({
   board,
   cards,
@@ -1594,6 +1691,15 @@ export function ContentPlannerView({
     board.columns.find((column) => column.id === pendingDeleteColumnId) ?? null;
   const movingCard = movingCardId ? cards[movingCardId] ?? null : null;
   const totalCards = Object.keys(cards).length;
+  // The self-teaching empty state only replaces the board for a pristine
+  // conveyor (exactly the four canonical columns). Custom or not-yet-cleaned-up
+  // boards keep the normal view so their columns stay manageable when empty.
+  const isPristineConveyor =
+    board.columns.length === DEFAULT_CONTENT_COLUMNS.length &&
+    board.columns.every((column) =>
+      DEFAULT_CONTENT_COLUMNS.some((canonical) => canonical.id === column.id),
+    );
+  const showEmptyState = totalCards === 0 && isPristineConveyor;
   const showMobileFontControls = Boolean(
     onDecreaseFontScale && onIncreaseFontScale,
   );
@@ -1865,6 +1971,11 @@ export function ContentPlannerView({
       </header>
 
       <div className="border-b border-[var(--line)] bg-[var(--paper-strong)] px-3 py-2.5 sm:px-4 md:px-6">
+        {showEmptyState ? (
+          <p className="mb-2 text-center text-[length:var(--content-planner-font-sm,0.875rem)] font-medium text-[var(--ink-900)]">
+            {"What's on your mind?"}
+          </p>
+        ) : null}
         <form
           className="flex items-center gap-2"
           onSubmit={(event) => {
@@ -1904,8 +2015,16 @@ export function ContentPlannerView({
             </button>
           ) : null}
         </form>
+        {showEmptyState ? (
+          <p className="mt-2 text-center text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
+            It lands in your inbox — nothing else to fill in.
+          </p>
+        ) : null}
       </div>
 
+      {showEmptyState ? (
+        <ContentConveyorEmptyState typographyStyle={plannerTypographyStyle} />
+      ) : (
       <DndContext
         sensors={sensors}
         collisionDetection={contentBoardCollisionDetection}
@@ -2101,6 +2220,7 @@ export function ContentPlannerView({
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
 
       <Dialog
         open={Boolean(movingCard)}
