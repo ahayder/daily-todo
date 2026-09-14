@@ -829,6 +829,30 @@ describe("ContentPlannerView", () => {
     );
   }, 10_000);
 
+  test("shows a self-teaching empty state when the board has no cards", () => {
+    const props = createProps({ cards: {} });
+    render(<ContentPlannerView {...props} />);
+
+    const emptyState = screen.getByTestId("content-conveyor-empty-state");
+    expect(emptyState).toBeInTheDocument();
+    expect(screen.getByText("What's on your mind?")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "How ideas flow" }),
+    ).toBeInTheDocument();
+    expect(within(emptyState).getByText("Example")).toBeInTheDocument();
+    expect(
+      within(emptyState).getByText("Why job boards aren't the problem"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Content workflow board" }),
+    ).not.toBeInTheDocument();
+
+    // The example is illustrative only — no real card action is exposed.
+    expect(
+      within(emptyState).queryByRole("button", { name: /Develop this/ }),
+    ).not.toBeInTheDocument();
+  });
+
   test("captures a thought straight into Inbox", async () => {
     const user = userEvent.setup();
     const props = createProps();
