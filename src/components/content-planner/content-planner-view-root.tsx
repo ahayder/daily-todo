@@ -32,6 +32,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
@@ -43,9 +44,13 @@ import {
   Ellipsis,
   Eye,
   LayoutGrid,
+  ListChecks,
   Pencil,
   Plus,
+  Send,
+  Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { ContentCardMarkdown } from "@/components/content-planner/content-card-markdown";
@@ -80,7 +85,18 @@ import {
   CONTENT_FONT_SCALE_MAX,
   CONTENT_FONT_SCALE_MIN,
 } from "@/lib/content-font-scale";
-import { getContentCardsForColumn } from "@/lib/store";
+import {
+  CONTENT_COLUMN_INBOX_ID,
+  CONTENT_COLUMN_SHOOT_NEXT_ID,
+  SHOOT_NEXT_SOFT_CAP,
+  getContentCardsForColumn,
+} from "@/lib/store";
+import {
+  appendSection,
+  buildChatGptClipboard,
+  getNextStep,
+  hasChatGptPrompt,
+} from "@/lib/content-conveyor";
 import type { ContentBoard, ContentCard, ContentColumn } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -357,7 +373,10 @@ function ContentCardItem({
   typographyStyle,
   onView,
   onUpdate,
+  onAdvance,
   onRequestMove,
+  onMoveDown,
+  canMoveDown,
   onRequestDelete,
 }: {
   card: ContentCard;
@@ -369,13 +388,19 @@ function ContentCardItem({
   typographyStyle: CSSProperties;
   onView: () => void;
   onUpdate: (title: string, notes: string) => void;
+  onAdvance: () => void;
   onRequestMove: () => void;
+  onMoveDown: () => void;
+  canMoveDown: boolean;
   onRequestDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isChatGptCopied, setIsChatGptCopied] = useState(false);
+  const nextStep = getNextStep(card.columnId);
+  const chatGptAvailable = hasChatGptPrompt(card.columnId);
   const [text, setText] = useState(() => getContentCardText(card));
   const textRef = useRef(text);
   textRef.current = text;
@@ -423,6 +448,13 @@ function ContentCardItem({
   }, [isCopied]);
 
   useEffect(() => {
+    if (!isChatGptCopied) return;
+
+    const resetCopiedState = window.setTimeout(() => setIsChatGptCopied(false), 1800);
+    return () => window.clearTimeout(resetCopiedState);
+  }, [isChatGptCopied]);
+
+  useEffect(() => {
     if (isDragging) {
       didDragRef.current = true;
     }
@@ -434,6 +466,17 @@ function ContentCardItem({
       setIsCopied(true);
     } catch {
       setIsCopied(false);
+    }
+  };
+
+  const copyForChatGpt = async () => {
+    const payload = buildChatGptClipboard(card.columnId, card);
+    if (!payload) return;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setIsChatGptCopied(true);
+    } catch {
+      setIsChatGptCopied(false);
     }
   };
 
@@ -581,6 +624,18 @@ function ContentCardItem({
         </div>
       )}
 
+      {!isEditing && nextStep ? (
+        <button
+          type="button"
+          onClick={onAdvance}
+          data-testid={`content-card-advance-${card.id}`}
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] bg-[color:color-mix(in_srgb,var(--brand-soft)_55%,var(--paper-strong))] px-3 py-2.5 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--brand)] transition-colors duration-150 hover:bg-[var(--brand-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:min-h-9"
+        >
+          {nextStep.label}
+          <ArrowRight className="size-4" />
+        </button>
+      ) : null}
+
       {!isEditing ? (
         <div
           role="toolbar"
@@ -640,6 +695,19 @@ function ContentCardItem({
                 </div>
               </PopoverContent>
             </Popover>
+            <Tooltip>
+              <TooltipTrigger
+                aria-label={`Move card ${card.title} down`}
+                disabled={!canMoveDown}
+                onClick={onMoveDown}
+                className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none sm:size-7"
+              >
+                <ArrowDown className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Move down one card
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -655,6 +723,30 @@ function ContentCardItem({
                 View card
               </TooltipContent>
             </Tooltip>
+
+            {chatGptAvailable ? (
+              <Tooltip>
+                <TooltipTrigger
+                  aria-label={`${isChatGptCopied ? "Copied prompt for" : "Copy for ChatGPT"} card ${card.title}`}
+                  onClick={copyForChatGpt}
+                  className={cn(
+                    "inline-flex size-9 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:size-7",
+                    isChatGptCopied
+                      ? "text-[var(--brand)]"
+                      : "text-[var(--ink-700)] hover:text-[var(--ink-900)]",
+                  )}
+                >
+                  {isChatGptCopied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {isChatGptCopied ? "Copied for ChatGPT" : "Copy for ChatGPT"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
 
             <Tooltip>
               <TooltipTrigger
@@ -709,7 +801,11 @@ function ContentCardItem({
               </TooltipContent>
             </Tooltip>
             <span className="sr-only" role="status">
-              {isCopied ? `Copied card ${card.title}` : null}
+              {isCopied
+                ? `Copied card ${card.title}`
+                : isChatGptCopied
+                  ? `Copied ChatGPT prompt for card ${card.title}`
+                  : null}
             </span>
           </div>
         </div>
@@ -818,7 +914,9 @@ function ContentColumnView({
   onAddCard,
   onViewCard,
   onUpdateCard,
+  onAdvanceCard,
   onRequestMoveCard,
+  onMoveCardDown,
   canMoveLeft,
   canMoveRight,
   onMoveLeft,
@@ -844,7 +942,9 @@ function ContentColumnView({
   onAddCard: (title: string, notes: string) => void;
   onViewCard: (cardId: string) => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onAdvanceCard: (cardId: string) => void;
   onRequestMoveCard: (cardId: string) => void;
+  onMoveCardDown: (cardId: string) => void;
   canMoveLeft: boolean;
   canMoveRight: boolean;
   onMoveLeft: () => void;
@@ -999,9 +1099,23 @@ function ContentColumnView({
           )}
         </div>
 
-        <span className="mt-1 rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
-          {cards.length}
-        </span>
+        {column.id === CONTENT_COLUMN_SHOOT_NEXT_ID ? (
+          <span
+            aria-label={`${cards.length} of ${SHOOT_NEXT_SOFT_CAP} shoot-next cards`}
+            className={cn(
+              "mt-1 shrink-0 rounded-full px-2 py-0.5 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)]",
+              cards.length > SHOOT_NEXT_SOFT_CAP
+                ? "bg-[color:color-mix(in_srgb,var(--warn)_16%,transparent)] text-[var(--warn)]"
+                : "bg-[var(--paper)] text-[var(--ink-700)]",
+            )}
+          >
+            {cards.length}/{SHOOT_NEXT_SOFT_CAP}
+          </span>
+        ) : (
+          <span className="mt-1 shrink-0 rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
+            {cards.length}
+          </span>
+        )}
 
         {isCompactMobileLayout && !isComposerOpen ? (
           <Tooltip>
@@ -1122,6 +1236,9 @@ function ContentColumnView({
                 onUpdate={(title, notes) =>
                   onUpdateCard(card.id, title, notes)
                 }
+                onAdvance={() => onAdvanceCard(card.id)}
+                canMoveDown={cards[cards.length - 1]?.id !== card.id}
+                onMoveDown={() => onMoveCardDown(card.id)}
                 onRequestMove={() => onRequestMoveCard(card.id)}
                 onRequestDelete={() => onRequestDeleteCard(card.id)}
               />
@@ -1157,7 +1274,9 @@ function ContentGalleryView({
   typographyStyle,
   onViewCard,
   onUpdateCard,
+  onAdvanceCard,
   onRequestMoveCard,
+  onMoveCardDown,
   onRequestDeleteCard,
 }: {
   board: ContentBoard;
@@ -1166,7 +1285,9 @@ function ContentGalleryView({
   typographyStyle: CSSProperties;
   onViewCard: (cardId: string) => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onAdvanceCard: (cardId: string) => void;
   onRequestMoveCard: (cardId: string) => void;
+  onMoveCardDown: (cardId: string) => void;
   onRequestDeleteCard: (cardId: string) => void;
 }) {
   const galleryItems = board.columns.flatMap((column) =>
@@ -1212,6 +1333,9 @@ function ContentGalleryView({
                   onUpdate={(title, notes) =>
                     onUpdateCard(card.id, title, notes)
                   }
+                  onAdvance={() => onAdvanceCard(card.id)}
+                  canMoveDown={cardsByColumn[column.id]?.at(-1)?.id !== card.id}
+                  onMoveDown={() => onMoveCardDown(card.id)}
                   onRequestMove={() => onRequestMoveCard(card.id)}
                   onRequestDelete={() => onRequestDeleteCard(card.id)}
                 />
@@ -1236,6 +1360,163 @@ function ContentGalleryView({
   );
 }
 
+function ContentInboxReview({
+  cards,
+  typographyStyle,
+  onClose,
+  onDevelop,
+  onPromote,
+  onDelete,
+}: {
+  cards: ContentCard[];
+  typographyStyle: CSSProperties;
+  onClose: () => void;
+  onDevelop: (cardId: string) => void;
+  onPromote: (cardId: string) => void;
+  onDelete: (cardId: string) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const card = cards[index];
+  const confirmingDelete = Boolean(card) && confirmingDeleteId === card.id;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const actionClass =
+    "inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Review Inbox"
+      className="absolute inset-0 z-40 flex flex-col bg-[var(--paper)]"
+      style={typographyStyle}
+      data-testid="content-inbox-review"
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--paper-strong)] px-3 py-2.5 sm:px-4 md:px-6">
+        <div className="flex items-center gap-2 text-[var(--ink-900)]">
+          <ListChecks className="size-4 text-[var(--brand)]" />
+          <span className="text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold">
+            Review Inbox
+          </span>
+          <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[length:var(--content-planner-font-micro,0.6875rem)] text-[var(--ink-700)]">
+            {cards.length} left
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close review"
+          onClick={onClose}
+          className="inline-flex size-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          <X className="size-4" />
+        </button>
+      </header>
+
+      {card ? (
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="mx-auto max-w-xl rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-4 shadow-[var(--surface-shadow)] sm:p-5">
+              <ContentCardMarkdown title={card.title} notes={card.notes} variant="plain" />
+            </div>
+          </div>
+          <footer className="border-t border-[var(--line)] bg-[var(--paper-strong)] p-3 sm:p-4">
+            <div className="mx-auto grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => onDevelop(card.id)}
+                className={cn(
+                  actionClass,
+                  "bg-[var(--brand)] text-white hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] sm:order-1",
+                )}
+              >
+                <Pencil className="size-4" />
+                Develop
+              </button>
+              <button
+                type="button"
+                onClick={() => onPromote(card.id)}
+                className={cn(
+                  actionClass,
+                  "border border-[var(--line)] bg-[var(--paper)] text-[var(--ink-900)] hover:border-[var(--brand)] sm:order-2",
+                )}
+              >
+                <ArrowRight className="size-4" />
+                Promote to shoot
+              </button>
+              <button
+                type="button"
+                onClick={() => setIndex((current) => current + 1)}
+                className={cn(
+                  actionClass,
+                  "border border-[var(--line)] bg-[var(--paper)] text-[var(--ink-900)] hover:border-[var(--brand)] sm:order-3",
+                )}
+              >
+                <Check className="size-4" />
+                Keep for now
+              </button>
+              {confirmingDelete ? (
+                <button
+                  type="button"
+                  onClick={() => onDelete(card.id)}
+                  className={cn(
+                    actionClass,
+                    "bg-[var(--warn)] text-white hover:bg-[color:color-mix(in_srgb,var(--warn)_88%,black)] sm:order-4",
+                  )}
+                >
+                  <Trash2 className="size-4" />
+                  Tap again to delete
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDeleteId(card.id)}
+                  className={cn(
+                    actionClass,
+                    "border border-[color:color-mix(in_srgb,var(--warn)_40%,var(--line))] bg-[var(--paper)] text-[var(--warn)] hover:bg-[color:color-mix(in_srgb,var(--warn)_10%,transparent)] sm:order-4",
+                  )}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </button>
+              )}
+            </div>
+            <p className="mx-auto mt-2 max-w-xl text-center text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)]">
+              One decision per idea. Keep skips it for now.
+            </p>
+          </footer>
+        </>
+      ) : (
+        <div className="grid flex-1 place-items-center p-6 text-center">
+          <div>
+            <Check className="mx-auto mb-3 size-6 text-[var(--brand)]" />
+            <p className="text-[length:var(--content-planner-font-base,1rem)] font-semibold text-[var(--ink-900)]">
+              Inbox reviewed.
+            </p>
+            <p className="mt-1 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-700)]">
+              Nothing left to decide right now.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--brand)] px-4 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ContentPlannerView({
   board,
   cards,
@@ -1253,6 +1534,8 @@ export function ContentPlannerView({
   onDeleteCard,
 }: ContentPlannerViewProps) {
   const [composerColumnId, setComposerColumnId] = useState<string | null>(null);
+  const [captureText, setCaptureText] = useState("");
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [newColumnSubtitle, setNewColumnSubtitle] = useState("");
@@ -1289,6 +1572,22 @@ export function ContentPlannerView({
       ) as Record<string, ContentCard[]>,
     [board.columns, cards],
   );
+  const inboxColumn =
+    board.columns.find((column) => column.id === CONTENT_COLUMN_INBOX_ID) ??
+    board.columns[0] ??
+    null;
+  const inboxCards = inboxColumn ? cardsByColumn[inboxColumn.id] ?? [] : [];
+  const submitCapture = () => {
+    const content = splitContentCardText(captureText);
+    if (!content || !inboxColumn) return;
+    onAddCard(inboxColumn.id, content.title, content.notes);
+    setCaptureText("");
+  };
+  const promoteToShoot = (cardId: string) => {
+    const targetCards = cardsByColumn[CONTENT_COLUMN_SHOOT_NEXT_ID];
+    if (!targetCards) return;
+    onMoveCard(cardId, CONTENT_COLUMN_SHOOT_NEXT_ID, 0);
+  };
   const viewingCard = viewingCardId ? cards[viewingCardId] ?? null : null;
   const pendingDeleteCard = pendingDeleteCardId ? cards[pendingDeleteCardId] ?? null : null;
   const pendingDeleteColumn =
@@ -1369,6 +1668,26 @@ export function ContentPlannerView({
     setNewColumnTitle("");
     setNewColumnSubtitle("");
     setIsAddingColumn(false);
+  };
+
+  const advanceCard = (cardId: string) => {
+    const card = cards[cardId];
+    if (!card) return;
+    const step = getNextStep(card.columnId);
+    if (!step) return;
+    if (step.sectionToAdd) {
+      onUpdateCard(card.id, card.title, appendSection(card.notes, step.sectionToAdd));
+    }
+    onMoveCard(card.id, step.nextColumnId, 0);
+  };
+
+  const moveCardDown = (cardId: string) => {
+    const card = cards[cardId];
+    if (!card) return;
+    const columnCards = cardsByColumn[card.columnId] ?? [];
+    const index = columnCards.findIndex((item) => item.id === cardId);
+    if (index < 0 || index >= columnCards.length - 1) return;
+    onMoveCard(cardId, card.columnId, index + 1);
   };
 
   const requestMoveCard = (cardId: string) => {
@@ -1461,7 +1780,7 @@ export function ContentPlannerView({
       data-testid="content-planner-view"
       data-touch-first-input={isTouchFirstInput ? "true" : undefined}
       data-layout={activeLayout}
-      className="flex h-full min-h-0 flex-col bg-[var(--paper)]"
+      className="relative flex h-full min-h-0 flex-col bg-[var(--paper)]"
       style={plannerTypographyStyle}
     >
       <header className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--paper-strong)_92%,var(--paper))] px-3 py-2 sm:flex-wrap sm:items-end sm:gap-3 sm:px-4 sm:py-4 md:px-6">
@@ -1545,6 +1864,48 @@ export function ContentPlannerView({
         </div>
       </header>
 
+      <div className="border-b border-[var(--line)] bg-[var(--paper-strong)] px-3 py-2.5 sm:px-4 md:px-6">
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitCapture();
+          }}
+        >
+          <input
+            value={captureText}
+            onChange={(event) => setCaptureText(event.target.value)}
+            enterKeyHint="done"
+            aria-label="Capture an idea to Inbox"
+            placeholder="Dump a thought — it lands in Inbox"
+            className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus-visible:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] sm:h-10"
+          />
+          <button
+            type="submit"
+            disabled={!captureText.trim()}
+            aria-label="Add to Inbox"
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-white transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--brand)_88%,black)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
+          >
+            <Send className="size-4" />
+            <span className="hidden sm:inline">Add</span>
+          </button>
+          {inboxCards.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsReviewOpen(true)}
+              aria-label={`Review Inbox, ${inboxCards.length} cards`}
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] font-semibold text-[var(--ink-900)] transition-colors duration-150 hover:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] sm:h-10"
+            >
+              <ListChecks className="size-4" />
+              <span className="hidden sm:inline">Review</span>
+              <span className="font-mono text-[length:var(--content-planner-font-micro,0.6875rem)]">
+                {inboxCards.length}
+              </span>
+            </button>
+          ) : null}
+        </form>
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={contentBoardCollisionDetection}
@@ -1606,7 +1967,9 @@ export function ContentPlannerView({
                     }}
                     onViewCard={setViewingCardId}
                     onUpdateCard={onUpdateCard}
+                    onAdvanceCard={advanceCard}
                     onRequestMoveCard={requestMoveCard}
+                    onMoveCardDown={moveCardDown}
                     canMoveLeft={columnIndex > 0}
                     canMoveRight={columnIndex < board.columns.length - 1}
                     onMoveLeft={() => {
@@ -1714,7 +2077,9 @@ export function ContentPlannerView({
             typographyStyle={plannerTypographyStyle}
             onViewCard={setViewingCardId}
             onUpdateCard={onUpdateCard}
+            onAdvanceCard={advanceCard}
             onRequestMoveCard={requestMoveCard}
+            onMoveCardDown={moveCardDown}
             onRequestDeleteCard={setPendingDeleteCardId}
           />
         )}
@@ -1986,6 +2351,17 @@ export function ContentPlannerView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isReviewOpen ? (
+        <ContentInboxReview
+          cards={inboxCards}
+          typographyStyle={plannerTypographyStyle}
+          onClose={() => setIsReviewOpen(false)}
+          onDevelop={(cardId) => advanceCard(cardId)}
+          onPromote={(cardId) => promoteToShoot(cardId)}
+          onDelete={(cardId) => onDeleteCard(cardId)}
+        />
+      ) : null}
     </section>
   );
 }

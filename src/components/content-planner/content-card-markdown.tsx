@@ -1,8 +1,14 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+import {
+  hasConveyorSections,
+  parseSections,
+  type ParsedSection,
+} from "@/lib/content-conveyor";
 
 function withoutNode<T extends { node?: unknown }>(props: T): Omit<T, "node"> {
   const { node, ...elementProps } = props;
@@ -166,6 +172,65 @@ const titleMarkdownComponents: Components = {
 
 const remarkPlugins = [remarkGfm];
 
+function sectionLabel(section: ParsedSection): string {
+  if (!section.name) return "Raw idea";
+  return section.name.charAt(0) + section.name.slice(1).toLowerCase();
+}
+
+function SectionBlock({ section }: { section: ParsedSection }) {
+  return (
+    <div className="border-l-2 border-[color:color-mix(in_srgb,var(--brand)_55%,var(--line))] pl-3">
+      <p className="mb-0.5 text-[length:var(--content-planner-font-micro,0.6875rem)] font-semibold uppercase tracking-[0.04em] text-[var(--ink-700)]">
+        {sectionLabel(section)}
+      </p>
+      {section.body ? (
+        <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
+          {section.body}
+        </ReactMarkdown>
+      ) : (
+        <p className="text-[length:var(--content-planner-font-sm,0.875rem)] italic text-[var(--ink-700)]">
+          Empty — tap edit to fill this in.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SectionedNotes({
+  notes,
+  collapsible,
+}: {
+  notes: string;
+  collapsible: boolean;
+}) {
+  const [showOlder, setShowOlder] = useState(false);
+  const sections = parseSections(notes);
+  const lastIndex = sections.length - 1;
+  const older = sections.slice(0, lastIndex);
+  const current = sections[lastIndex];
+  const showAll = !collapsible || showOlder || older.length === 0;
+
+  return (
+    <div className="space-y-3">
+      {showAll ? (
+        older.map((section, index) => <SectionBlock key={index} section={section} />)
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowOlder(true);
+          }}
+          className="text-left text-[length:var(--content-planner-font-xs,0.75rem)] text-[var(--ink-700)] underline decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-[var(--ink-900)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          {older.map((section) => sectionLabel(section)).join(" · ")} — tap to expand
+        </button>
+      )}
+      {current ? <SectionBlock section={current} /> : null}
+    </div>
+  );
+}
+
 export const ContentCardMarkdown = memo(function ContentCardMarkdown({
   title,
   notes,
@@ -202,12 +267,16 @@ export const ContentCardMarkdown = memo(function ContentCardMarkdown({
       </div>
       {notes ? (
         <div className={isCard ? "px-4 py-3.5" : undefined}>
-          <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            components={markdownComponents}
-          >
-            {notes}
-          </ReactMarkdown>
+          {hasConveyorSections(notes) ? (
+            <SectionedNotes notes={notes} collapsible={isCard} />
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={remarkPlugins}
+              components={markdownComponents}
+            >
+              {notes}
+            </ReactMarkdown>
+          )}
         </div>
       ) : null}
     </div>

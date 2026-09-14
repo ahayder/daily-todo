@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  CONTENT_COLUMN_DEVELOP_ID,
+  CONTENT_COLUMN_INBOX_ID,
+  CONTENT_COLUMN_PUBLISHED_ID,
+  CONTENT_COLUMN_SHOOT_NEXT_ID,
   DEFAULT_CONTENT_COLUMNS,
   DEFAULT_NOTES_FOLDER_ID,
   DEFAULT_TODO_WORKSPACE_ID,
@@ -158,6 +162,8 @@ describe("ensureDailyPageForDate", () => {
     expect(rolled.dailyPages["2026-03-11"].todos).toHaveLength(1);
     expect(rolled.dailyPages["2026-03-11"].todos[0].text).toBe("Open task");
     expect(rolled.dailyPages["2026-03-11"].todos[0].status).toBe("pending");
+    const next = ensureDailyPageForDate(rolled, "2026-03-13");
+    expect(next.dailyPages["2026-03-13"].todos[0].createdAt).toBe("2026-03-10T10:00:00.000Z");
   });
 
   test("carries subtasks with deterministic ids linked to their copied parent", () => {
@@ -530,22 +536,71 @@ describe("planner state", () => {
     });
   });
 
-  test("adds sample subtitles to legacy default columns without changing custom columns", () => {
+  test("backfills subtitles on canonical columns without changing custom columns", () => {
     const state = createInitialState("2026-03-11");
+    const inbox = state.contentBoard.columns.find(
+      (column) => column.id === CONTENT_COLUMN_INBOX_ID,
+    )!;
     const customColumn = createContentColumn("Custom")!;
     const repaired = ensureContentPlannerState({
       ...state,
       contentBoard: {
         ...state.contentBoard,
-        columns: [
-          { ...state.contentBoard.columns[0], subtitle: "" },
-          customColumn,
-        ],
+        columns: [{ ...inbox, subtitle: "" }, customColumn],
       },
     });
 
-    expect(repaired.contentBoard.columns[0].subtitle).toBe("Capture raw concepts");
-    expect(repaired.contentBoard.columns[1].subtitle).toBe("");
+    const repairedInbox = repaired.contentBoard.columns.find(
+      (column) => column.id === CONTENT_COLUMN_INBOX_ID,
+    )!;
+    const repairedCustom = repaired.contentBoard.columns.find(
+      (column) => column.id === customColumn.id,
+    )!;
+    expect(repairedInbox.subtitle).toBe("Dump anything, decide later");
+    expect(repairedCustom.subtitle).toBe("");
+  });
+
+  test("leaves a fresh canonical board untouched", () => {
+    const state = createInitialState("2026-03-11");
+    const repaired = ensureContentPlannerState(state);
+    expect(repaired).toBe(state);
+    expect(repaired.contentBoard.columns).toHaveLength(4);
+  });
+
+  test("adds canonical conveyor columns to a legacy board without touching legacy cards", () => {
+    const state = createInitialState("2026-03-11");
+    const legacyColumns = [
+      { id: "content-column-ideas", title: "Ideas", subtitle: "Capture raw concepts" },
+      { id: "content-column-planned", title: "Planned", subtitle: "Ready to work on" },
+      {
+        id: "content-column-in-progress",
+        title: "In Progress",
+        subtitle: "Currently being created",
+      },
+      { id: "content-column-ready", title: "Ready", subtitle: "Prepared to publish" },
+      { id: CONTENT_COLUMN_PUBLISHED_ID, title: "Published", subtitle: "Live and complete" },
+    ];
+    const legacyCard = createContentCard({
+      columnId: "content-column-ideas",
+      title: "Legacy idea",
+      order: 0,
+    })!;
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentBoard: { columns: legacyColumns, updatedAt: state.contentBoard.updatedAt },
+      contentCards: { [legacyCard.id]: legacyCard },
+    });
+
+    const ids = repaired.contentBoard.columns.map((column) => column.id);
+    expect(ids.slice(0, 3)).toEqual([
+      CONTENT_COLUMN_INBOX_ID,
+      CONTENT_COLUMN_DEVELOP_ID,
+      CONTENT_COLUMN_SHOOT_NEXT_ID,
+    ]);
+    expect(ids).toContain("content-column-ideas");
+    expect(ids).toContain("content-column-ready");
+    expect(ids.filter((id) => id === CONTENT_COLUMN_PUBLISHED_ID)).toHaveLength(1);
+    expect(repaired.contentCards[legacyCard.id].columnId).toBe("content-column-ideas");
   });
 
   test("merges remote hydration without discarding a local card drag", () => {
