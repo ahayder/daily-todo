@@ -23,6 +23,7 @@ export function Workspace({ forcedView }: Props) {
   const activeView = forcedView ?? state.uiState.lastView;
   const isFocusMode = state.uiState.isFocusMode;
   const isContentPlanner = activeView === "content-planner";
+  const isPlanner = activeView === "planner";
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
   const previousViewRef = useRef<ViewMode | null>(null);
   const shellStyle = {
@@ -120,13 +121,13 @@ export function Workspace({ forcedView }: Props) {
 
       <div
         className={
-          state.uiState.isSidebarCollapsed || isContentPlanner
+          state.uiState.isSidebarCollapsed || isContentPlanner || isPlanner
             ? "app-body app-body--sidebar-collapsed"
             : "app-body"
         }
         data-content-planner-full-width={isContentPlanner ? "true" : undefined}
       >
-        {!isFocusMode && !isContentPlanner ? (
+        {!isFocusMode && !isContentPlanner && !isPlanner ? (
           <Sidebar
             state={workspaceState}
             dispatch={dispatch}
