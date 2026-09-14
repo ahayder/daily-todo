@@ -39,31 +39,32 @@ export const PLANNER_EVENT_COLORS: PlannerEventColor[] = [
 ];
 export const DEFAULT_PLANNER_SUBTITLE =
   "Shape a reusable weekly rhythm around the things that matter most.";
+export const CONTENT_COLUMN_INBOX_ID = "content-column-inbox";
+export const CONTENT_COLUMN_DEVELOP_ID = "content-column-develop";
+export const CONTENT_COLUMN_SHOOT_NEXT_ID = "content-column-shoot-next";
+export const CONTENT_COLUMN_PUBLISHED_ID = "content-column-published";
+export const SHOOT_NEXT_SOFT_CAP = 5;
+
 export const DEFAULT_CONTENT_COLUMNS: ContentColumn[] = [
   {
-    id: "content-column-ideas",
-    title: "Ideas",
-    subtitle: "Capture raw concepts",
+    id: CONTENT_COLUMN_INBOX_ID,
+    title: "Inbox",
+    subtitle: "Dump anything, decide later",
   },
   {
-    id: "content-column-planned",
-    title: "Planned",
-    subtitle: "Ready to work on",
+    id: CONTENT_COLUMN_DEVELOP_ID,
+    title: "Develop",
+    subtitle: "Ideas worth keeping",
   },
   {
-    id: "content-column-in-progress",
-    title: "In Progress",
-    subtitle: "Currently being created",
+    id: CONTENT_COLUMN_SHOOT_NEXT_ID,
+    title: "Shoot next",
+    subtitle: "Ready to record — max 5",
   },
   {
-    id: "content-column-ready",
-    title: "Ready",
-    subtitle: "Prepared to publish",
-  },
-  {
-    id: "content-column-published",
+    id: CONTENT_COLUMN_PUBLISHED_ID,
     title: "Published",
-    subtitle: "Live and complete",
+    subtitle: "Done and live",
   },
 ];
 
@@ -1228,15 +1229,43 @@ export function ensureContentPlannerState(state: AppState): AppState {
   const defaultSubtitles = new Map(
     DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column.subtitle]),
   );
-  const columns = state.contentBoard.columns.map((column) => {
+
+  // Ensure the canonical conveyor columns exist. This is non-destructive:
+  // legacy columns (Ideas/Planned/In Progress/Ready) and their cards are left
+  // in place so the user can relocate cards and delete the old columns
+  // themselves. Inbox/Develop/Shoot next are prepended in order; Published is
+  // ensured at the end. New boards already contain all four, so this is a
+  // no-op for them.
+  const existingColumnIds = new Set(
+    state.contentBoard.columns.map((column) => column.id),
+  );
+  const canonicalById = new Map(
+    DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column]),
+  );
+  const missingFront = [
+    CONTENT_COLUMN_INBOX_ID,
+    CONTENT_COLUMN_DEVELOP_ID,
+    CONTENT_COLUMN_SHOOT_NEXT_ID,
+  ]
+    .filter((id) => !existingColumnIds.has(id))
+    .map((id) => ({ ...canonicalById.get(id)! }));
+  const missingPublished = existingColumnIds.has(CONTENT_COLUMN_PUBLISHED_ID)
+    ? []
+    : [{ ...canonicalById.get(CONTENT_COLUMN_PUBLISHED_ID)! }];
+  const baseColumns =
+    missingFront.length === 0 && missingPublished.length === 0
+      ? state.contentBoard.columns
+      : [...missingFront, ...state.contentBoard.columns, ...missingPublished];
+
+  const columns = baseColumns.map((column) => {
     const defaultSubtitle = defaultSubtitles.get(column.id);
     return !column.subtitle && defaultSubtitle
       ? { ...column, subtitle: defaultSubtitle }
       : column;
   });
-  const columnsChanged = columns.some(
-    (column, index) => column !== state.contentBoard.columns[index],
-  );
+  const columnsChanged =
+    columns.length !== state.contentBoard.columns.length ||
+    columns.some((column, index) => column !== state.contentBoard.columns[index]);
   const availableColumnIds = new Set(columns.map((column) => column.id));
   const fallbackColumnId = columns[0]?.id;
   const repairedCards = Object.fromEntries(
@@ -1300,7 +1329,6 @@ function cloneCarryoverTodos(todos: Todo[], targetDateISO: string): Todo[] {
     ...todo,
     id: nextIdByPreviousId.get(todo.id)!,
     status: "pending",
-    createdAt: `${targetDateISO}T00:00:00.000Z`,
     parentId: todo.parentId ? nextIdByPreviousId.get(todo.parentId) : undefined,
   }));
 }
