@@ -61,7 +61,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { parseISO, differenceInDays } from "date-fns";
+import { getAttentionTodos, getTaskAgeDays, getTaskAgeLabel, needsTaskAttention } from "@/lib/task-attention";
 import {
   DndContext,
   closestCenter,
@@ -416,17 +416,8 @@ function EditableTaskItem({
     setIsEstimateEditorOpen(false);
   };
 
-  const isStale = useMemo(() => {
-    if (!todo.createdAt || !date) return false;
-    try {
-        const createdDate = parseISO(todo.createdAt);
-        const pageDate = parseISO(date);
-        const diff = differenceInDays(pageDate, createdDate);
-        return diff >= 2;
-    } catch {
-        return false;
-    }
-  }, [todo.createdAt, date]);
+  const taskAge = getTaskAgeDays(todo, date);
+  const ageLabel = getTaskAgeLabel(taskAge);
 
   const showSubtaskComposer =
     !todo.parentId && (isSubtaskComposerVisible || isSubtaskFocused);
@@ -575,7 +566,7 @@ function EditableTaskItem({
               <div className="flex flex-1 flex-col gap-1 min-w-0">
                 <span
                   className={cn(
-                    "task-text flex items-center gap-2",
+                    "task-text flex flex-wrap items-center gap-2",
                     todo.status === "finished" && "task-text--done",
                   )}
                   onClick={handleTaskTextClick}
@@ -598,12 +589,13 @@ function EditableTaskItem({
                       Active
                     </span>
                   ) : null}
-                  {isStale && todo.status !== "finished" && (
+                  {ageLabel && todo.status !== "finished" && (
                     <span
-                      className="inline-flex items-center rounded-sm bg-[var(--warning-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--warning)] tracking-wide"
+                      className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-[var(--ink-900)]", taskAge >= 2 ? "bg-[var(--priority-2-soft)]" : "bg-[var(--paper)]") }
                       title={`Created on ${todo.createdAt.split("T")[0]}`}
                     >
-                      Stale
+                      <Clock3 aria-hidden="true" className="h-3 w-3" />
+                      {ageLabel}
                     </span>
                   )}
                 </span>
@@ -886,6 +878,7 @@ function SortableTaskItem({
   onRequestFocus,
   dropIndicatorPosition,
   isSubtaskDropTarget,
+  disableDrag = false,
 }: {
   todo: import("@/lib/types").Todo;
   date: string;
@@ -895,6 +888,7 @@ function SortableTaskItem({
   onRequestFocus?: (todoId: string) => void;
   dropIndicatorPosition?: DropIndicatorPosition | null;
   isSubtaskDropTarget?: boolean;
+  disableDrag?: boolean;
 }) {
   const {
     attributes,
@@ -905,6 +899,7 @@ function SortableTaskItem({
     isDragging,
   } = useSortable({
     id: todo.id,
+    disabled: disableDrag,
     data: { priority: todo.priority },
   });
 
@@ -923,7 +918,7 @@ function SortableTaskItem({
         dispatch={dispatch}
         onCelebrate={onCelebrate}
         onRequestFocus={onRequestFocus}
-        dragSurfaceProps={{ ...attributes, ...listeners }}
+        dragSurfaceProps={disableDrag ? undefined : { ...attributes, ...listeners }}
         dropIndicatorPosition={dropIndicatorPosition}
         isSubtaskDropTarget={isSubtaskDropTarget}
       />
@@ -1193,6 +1188,16 @@ export function TodosView({ state, dispatch }: Props) {
     () => groupTodosByPriority(page?.todos ?? []),
     [page?.todos]
   );
+  const [reviewScope, setReviewScope] = useState<string | null>(null);
+  const isReviewing = reviewScope === `${activeWorkspaceId}:${date}`;
+  const attentionCount = (page?.todos ?? []).filter((todo) => needsTaskAttention(todo, date ?? "")).length;
+  const reviewGrouped = useMemo(
+    () => {
+      const todos = getAttentionTodos(page?.todos ?? [], date ?? "");
+      return { 1: todos.filter(todo => todo.priority === 1), 2: todos.filter(todo => todo.priority === 2), 3: todos.filter(todo => todo.priority === 3) };
+    },
+    [page?.todos, date],
+  );
   const categoryTheme = state.uiState.categoryTheme;
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
   const [subtaskDropTargetId, setSubtaskDropTargetId] = useState<string | null>(null);
@@ -1205,6 +1210,7 @@ export function TodosView({ state, dispatch }: Props) {
 
   if (workspaceDateKey !== renderDate) {
     setRenderDate(workspaceDateKey);
+    setReviewScope(null);
     setIsLoadingDate(true);
   }
 
@@ -1844,6 +1850,15 @@ export function TodosView({ state, dispatch }: Props) {
           </div>
 
           <TodoWorkspaceControl state={state} dispatch={dispatch} date={date} />
+          {(attentionCount > 0 || isReviewing) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--priority-2-soft)] px-3 py-2 text-sm text-[var(--ink-900)]">
+              <span role="status">{attentionCount === 0 ? "All caught up for now" : `${attentionCount} ${attentionCount === 1 ? "task" : "tasks"} worth a look`}</span>
+              <Button variant="ghost" size="sm" aria-pressed={isReviewing}
+                onClick={() => setReviewScope(isReviewing ? null : workspaceDateKey)}>
+                {isReviewing ? "Show all tasks" : "Review"}
+              </Button>
+            </div>
+          )}
         </div>
 
         <ScrollArea className="todo-pane-scroll" data-testid="task-pane-scroll">
@@ -1855,10 +1870,15 @@ export function TodosView({ state, dispatch }: Props) {
             onDragEnd={handleDragEnd}
           >
             <div className="priority-groups">
+              {isReviewing && attentionCount === 0 && (
+                <p className="px-4 py-6 text-sm text-[var(--ink-700)]">No older unfinished tasks to review. You can return to all tasks whenever you’re ready.</p>
+              )}
               {([1, 2, 3] as const).map((priorityLevel) => {
-                const todosInPriority = grouped[priorityLevel];
+                const todosInPriority = (isReviewing ? reviewGrouped : grouped)[priorityLevel];
                 const parentTodos = todosInPriority.filter((t) => !t.parentId);
                 const meta = getPriorityMeta(state.uiState.categoryTheme, priorityLevel);
+
+                if (isReviewing && parentTodos.length === 0) return null;
 
                 return (
                   <div key={priorityLevel} className="priority-group">
@@ -1909,7 +1929,7 @@ export function TodosView({ state, dispatch }: Props) {
                           "task-list--drop-target",
                       )}
                     >
-                      {parentTodos.length === 0 && (
+                      {!isReviewing && parentTodos.length === 0 && (
                         <li>
                           <InlineTaskInput
                             date={date}
@@ -1927,7 +1947,8 @@ export function TodosView({ state, dispatch }: Props) {
                         );
                         return (
                           <SortableTaskItem
-                            key={parentTodo.id}
+                            key={`${parentTodo.id}:${isReviewing ? "review" : "all"}`}
+                            disableDrag={isReviewing}
                             todo={parentTodo}
                             date={date}
                             subtasks={subtasks}
@@ -1944,7 +1965,7 @@ export function TodosView({ state, dispatch }: Props) {
                         );
                       })}
 
-                      {parentTodos.length > 0 && (
+                      {!isReviewing && parentTodos.length > 0 && (
                         <li>
                           <InlineTaskInput
                             date={date}
@@ -1956,7 +1977,7 @@ export function TodosView({ state, dispatch }: Props) {
                         </li>
                       )}
 
-                      {parentTodos.length === 0 && (
+                      {!isReviewing && parentTodos.length === 0 && (
                         <li className="task-empty">No tasks yet</li>
                       )}
                     </ul>

@@ -23,8 +23,6 @@ import {
   getDefaultPlannerSliceRange,
   getPlannerArcPath,
   getPlannerPoint,
-  plannerInputValueToMinutes,
-  plannerMinutesToInputValue,
 } from "@/components/planner/planner-radial-utils";
 import {
   dayKeyForDate,
@@ -50,6 +48,10 @@ const WEEKDAY_LABELS: Record<PlannerTemplateKey, string> = {
   saturday: "Saturday",
   sunday: "Sunday",
 };
+
+const MINUTES_OF_DAY = 24 * 60;
+// Selectable times every 15 minutes, 0:00 through 24:00 (midnight end).
+const TIME_OPTIONS = Array.from({ length: MINUTES_OF_DAY / 15 + 1 }, (_, i) => i * 15);
 
 const DAY_NAMES = [
   "Sunday",
@@ -286,23 +288,11 @@ function EventRow({
     }, 400);
   };
 
+  const selectClass =
+    "h-9 rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-2 text-[13px] text-[var(--ink-900)] tabular-nums";
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="time"
-        value={plannerMinutesToInputValue(event.startMinutes)}
-        onChange={(e) => onUpdate({ startMinutes: plannerInputValueToMinutes(e.target.value) })}
-        aria-label="Start time"
-        className="h-9 rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-2 text-[13px] text-[var(--ink-900)]"
-      />
-      <span className="text-[var(--ink-700)]">–</span>
-      <input
-        type="time"
-        value={plannerMinutesToInputValue(event.endMinutes)}
-        onChange={(e) => onUpdate({ endMinutes: plannerInputValueToMinutes(e.target.value) })}
-        aria-label="End time"
-        className="h-9 rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-2 text-[13px] text-[var(--ink-900)]"
-      />
+    <div className="flex flex-col gap-2 rounded-lg border border-[var(--line)] p-2 sm:flex-row sm:items-center sm:gap-2 sm:border-0 sm:p-0">
       <input
         ref={inputRef}
         type="text"
@@ -317,21 +307,52 @@ function EventRow({
           else setTitle(event.title);
         }}
         aria-label="Block name"
-        className="h-9 flex-1 rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-[13px] text-[var(--ink-900)]"
+        placeholder="Block name"
+        className="order-1 h-9 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-[13px] text-[var(--ink-900)] sm:order-2 sm:min-w-0 sm:flex-1"
       />
-      <AlertDialog>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <AlertDialogTrigger
-              aria-label="Remove block"
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors hover:bg-[var(--paper-strong)] hover:text-[var(--warn)]"
-            >
-              <Trash2 className="h-[15px] w-[15px]" />
-            </AlertDialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent>Remove block</TooltipContent>
-        </Tooltip>
-        <AlertDialogContent>
+      <div className="order-2 flex items-center gap-2 sm:order-1 sm:shrink-0">
+        <select
+          value={event.startMinutes}
+          onChange={(e) => {
+            const start = Number(e.target.value);
+            const end = event.endMinutes < start + 30 ? Math.min(start + 30, MINUTES_OF_DAY) : event.endMinutes;
+            onUpdate({ startMinutes: start, endMinutes: end });
+          }}
+          aria-label="Start time"
+          className={selectClass}
+        >
+          {TIME_OPTIONS.filter((m) => m <= MINUTES_OF_DAY - 30).map((m) => (
+            <option key={m} value={m}>
+              {formatClock(m)}
+            </option>
+          ))}
+        </select>
+        <span className="text-[var(--ink-700)]">–</span>
+        <select
+          value={event.endMinutes}
+          onChange={(e) => onUpdate({ endMinutes: Number(e.target.value) })}
+          aria-label="End time"
+          className={selectClass}
+        >
+          {TIME_OPTIONS.filter((m) => m >= event.startMinutes + 30).map((m) => (
+            <option key={m} value={m}>
+              {formatClock(m)}
+            </option>
+          ))}
+        </select>
+        <AlertDialog>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogTrigger
+                aria-label="Remove block"
+                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors hover:bg-[var(--paper-strong)] hover:text-[var(--warn)] sm:ml-0"
+              >
+                <Trash2 className="h-[15px] w-[15px]" />
+              </AlertDialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Remove block</TooltipContent>
+          </Tooltip>
+          <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[var(--ink-900)]">Remove this block?</AlertDialogTitle>
             <AlertDialogDescription className="text-[var(--ink-700)]">
@@ -343,7 +364,8 @@ function EventRow({
             <AlertDialogAction onClick={onDelete}>Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

@@ -488,3 +488,20 @@ describe("TodosView", () => {
     expect(firstTextbox).toHaveAttribute("placeholder", "Add a critical task…");
   });
 });
+
+ test("reviews older tasks and restores the complete list", async () => {
+  const user = userEvent.setup();
+  render(<Harness todos={[
+    { id: "old", text: "Older task", priority: 1, status: "pending", estimatedMinutes: null, createdAt: "2026-03-08T12:00:00" },
+    { id: "new", text: "Fresh task", priority: 1, status: "pending", estimatedMinutes: null, createdAt: "2026-03-11T09:00:00" },
+    { id: "done", text: "Completed task", priority: 1, status: "finished", estimatedMinutes: null, createdAt: "2026-03-08T12:00:00" },
+  ]} />);
+  expect(screen.getByText("3 days waiting")).toBeInTheDocument();
+  expect(screen.getByText("1 task worth a look")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Review" }));
+  expect(screen.queryByText("Fresh task")).not.toBeInTheDocument();
+  expect(screen.queryByText("Completed task")).not.toBeInTheDocument();
+  expect(screen.getByText("Older task")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Show all tasks" }));
+  expect(screen.getByText("Fresh task")).toBeInTheDocument();
+ });
