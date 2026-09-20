@@ -365,6 +365,39 @@ export function resolveContentBoardDragHighlight(
   };
 }
 
+/**
+ * Gentle, optional prompts shown beside the edit box. They are hints only —
+ * nothing is inserted into the card and nothing extra is copied — so the user
+ * is reminded *what* to capture without any workflow change.
+ */
+const CARD_EDIT_HINTS = [
+  "Trigger — কেন idea-টা মাথায় এলো?",
+  "Point — আমি আসলে কী বলতে চাই?",
+  "Anchor — কোন example/method/detail-টা ভুলে গেলে idea-টা incomplete হবে?",
+] as const;
+
+/** Hint under the Inbox "Develop this" button. */
+const INBOX_ADVANCE_HINT =
+  "Ready when you know your point + one concrete example/method.";
+
+function CardEditHints({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "text-[length:var(--content-planner-font-xs,0.75rem)] leading-snug text-[var(--ink-700)]",
+        className,
+      )}
+    >
+      <p className="mb-1 font-medium">Optional — so future you recalls it:</p>
+      <ul className="list-none space-y-0.5">
+        {CARD_EDIT_HINTS.map((hint) => (
+          <li key={hint}>{hint}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ContentCardItem({
   card,
   isDropTarget,
@@ -564,29 +597,32 @@ function ContentCardItem({
         />
       ) : null}
       {isEditing ? (
-        <textarea
-          autoFocus
-          aria-label={`Edit card ${card.title}`}
-          value={text}
-          rows={5}
-          maxLength={2000}
-          onChange={(event) => setText(event.target.value)}
-          onBlur={save}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setText(getContentCardText(card));
-              setIsEditing(false);
-            } else if (
-              event.key === "Enter" &&
-              (event.metaKey || event.ctrlKey)
-            ) {
-              event.preventDefault();
-              save();
-            }
-          }}
-          className="block min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-        />
+        <div>
+          <textarea
+            autoFocus
+            aria-label={`Edit card ${card.title}`}
+            value={text}
+            rows={5}
+            maxLength={2000}
+            onChange={(event) => setText(event.target.value)}
+            onBlur={save}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setText(getContentCardText(card));
+                setIsEditing(false);
+              } else if (
+                event.key === "Enter" &&
+                (event.metaKey || event.ctrlKey)
+              ) {
+                event.preventDefault();
+                save();
+              }
+            }}
+            className="block min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          />
+          <CardEditHints className="border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] px-4 py-2.5" />
+        </div>
       ) : (
         <div
           onPointerDownCapture={() => {
@@ -625,6 +661,12 @@ function ContentCardItem({
           />
         </div>
       )}
+
+      {!isEditing && nextStep && card.columnId === CONTENT_COLUMN_INBOX_ID ? (
+        <p className="border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] px-3 pt-2 text-[length:var(--content-planner-font-xs,0.75rem)] leading-snug text-[var(--ink-700)]">
+          {INBOX_ADVANCE_HINT}
+        </p>
+      ) : null}
 
       {!isEditing && nextStep ? (
         <button
@@ -1988,7 +2030,7 @@ export function ContentPlannerView({
             onChange={(event) => setCaptureText(event.target.value)}
             enterKeyHint="done"
             aria-label="Capture an idea to Inbox"
-            placeholder="Dump a thought — it lands in Inbox"
+            placeholder="আমি আসলে কী বলতে চাই? এমনভাবে লিখুন যেন পরে title দেখেই idea-টা মনে পড়ে…"
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[length:var(--content-planner-font-sm,0.875rem)] text-[var(--ink-900)] outline-none placeholder:text-[var(--ink-700)] focus-visible:border-[var(--brand)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] sm:h-10"
           />
           <button
@@ -2381,6 +2423,7 @@ export function ContentPlannerView({
                 </>
               )}
             </div>
+            {isEditingViewingCard ? <CardEditHints className="px-1" /> : null}
             {isEditingViewingCard ? (
               <DialogFooter className="sm:justify-end">
                 <button

@@ -15,6 +15,7 @@ import {
   hasChatGptPrompt,
   hasConveyorSections,
   parseSections,
+  stripSectionHeadings,
 } from "@/lib/content-conveyor";
 
 describe("getStageForColumn", () => {
@@ -89,6 +90,14 @@ describe("parseSections", () => {
       { name: "IDEA NOTE", body: "lower\n\n## Random\n\nkept as body" },
     ]);
   });
+
+  it("parses the legacy RAW IDEA heading as ORIGINAL THOUGHT", () => {
+    const notes = "## RAW IDEA\n\ndump\n\n## IDEA NOTE\n\nangle";
+    expect(parseSections(notes)).toEqual([
+      { name: "ORIGINAL THOUGHT", body: "dump" },
+      { name: "IDEA NOTE", body: "angle" },
+    ]);
+  });
 });
 
 describe("hasConveyorSections / getSectionBody", () => {
@@ -105,25 +114,42 @@ describe("hasConveyorSections / getSectionBody", () => {
 });
 
 describe("appendSection", () => {
-  it("wraps existing unsectioned notes under RAW IDEA before adding", () => {
+  it("wraps existing unsectioned notes under ORIGINAL THOUGHT before adding", () => {
     expect(appendSection("my raw dump", "IDEA NOTE")).toBe(
-      "## RAW IDEA\n\nmy raw dump\n\n## IDEA NOTE\n",
+      "## ORIGINAL THOUGHT\n\nmy raw dump\n\n## IDEA NOTE\n",
     );
   });
 
-  it("adds a section without RAW IDEA when notes are empty", () => {
+  it("adds a section without ORIGINAL THOUGHT when notes are empty", () => {
     expect(appendSection("", "IDEA NOTE")).toBe("## IDEA NOTE\n");
     expect(appendSection(undefined, "SHOOT CARD")).toBe("## SHOOT CARD\n");
   });
 
   it("appends to already-sectioned notes without re-wrapping", () => {
-    const notes = "## RAW IDEA\n\ndump\n\n## IDEA NOTE\n\nangle";
+    const notes = "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle";
     expect(appendSection(notes, "SHOOT CARD")).toBe(`${notes}\n\n## SHOOT CARD\n`);
   });
 
+  it("does not re-wrap legacy RAW IDEA notes (alias is recognized)", () => {
+    const notes = "## RAW IDEA\n\ndump";
+    expect(appendSection(notes, "IDEA NOTE")).toBe(`${notes}\n\n## IDEA NOTE\n`);
+  });
+
   it("is idempotent when the section already exists", () => {
-    const notes = "## RAW IDEA\n\ndump\n\n## IDEA NOTE\n\nangle";
+    const notes = "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle";
     expect(appendSection(notes, "IDEA NOTE")).toBe(notes);
+  });
+});
+
+describe("stripSectionHeadings", () => {
+  it("removes recognized headings (incl. legacy alias) but keeps bodies", () => {
+    const notes = "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle";
+    expect(stripSectionHeadings(notes)).toBe("dump\n\nangle");
+    expect(stripSectionHeadings("## RAW IDEA\n\ndump")).toBe("dump");
+  });
+
+  it("leaves unsectioned notes untouched", () => {
+    expect(stripSectionHeadings("just a raw dump")).toBe("just a raw dump");
   });
 });
 
@@ -141,11 +167,30 @@ describe("buildChatGptClipboard", () => {
   it("builds a Shoot Card prompt from the Idea Note section in develop", () => {
     const result = buildChatGptClipboard(CONTENT_COLUMN_DEVELOP_ID, {
       title: "Remote job websites",
-      notes: "## RAW IDEA\n\ndump\n\n## IDEA NOTE\n\nangle and hook",
+      notes: "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle and hook",
     });
     expect(result).toContain("Turn this Idea Note into my Shoot Card format");
+    expect(result).toContain("Remote job websites");
     expect(result).toContain("angle and hook");
     expect(result).not.toContain("dump");
+  });
+
+  it("never leaks conveyor headings into the payload", () => {
+    const result = buildChatGptClipboard(CONTENT_COLUMN_INBOX_ID, {
+      title: "Remote job websites",
+      notes: "## ORIGINAL THOUGHT\n\npositioning is the bottleneck",
+    });
+    expect(result).not.toContain("##");
+    expect(result).toContain("positioning is the bottleneck");
+  });
+
+  it("falls back to the original-thought body when the Idea Note is still empty", () => {
+    const result = buildChatGptClipboard(CONTENT_COLUMN_DEVELOP_ID, {
+      title: "Remote job websites",
+      notes: "## ORIGINAL THOUGHT\n\nspend 7 days watching randomly\n\n## IDEA NOTE\n",
+    });
+    expect(result).toContain("spend 7 days watching randomly");
+    expect(result).not.toContain("##");
   });
 
   it("returns null when the stage has no prompt", () => {
