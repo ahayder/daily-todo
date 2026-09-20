@@ -5,6 +5,7 @@
   "packageManager": "pnpm@8.7.1",
   "scripts": {
     "dev": "next dev --webpack -p 5005",
+    "dev:test": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false next dev --webpack -p 5005",
     "build": "pnpm version:sync && pnpm build:web",
     "build:web": "next build",
     "start": "pnpm dlx serve out",
@@ -15,6 +16,9 @@
     "version:sync": "node scripts/sync-app-version.mjs",
     "pocketbase:schema:apply": "node scripts/apply-pocketbase-schema.mjs",
     "pocketbase:content-planner:cleanup": "node scripts/cleanup-content-planner.mjs",
+    "pocketbase:local": "cd pocketbase-local && ./pocketbase serve",
+    "pocketbase:schema:apply:local": "node --env-file=.env.test.local scripts/apply-pocketbase-schema.mjs",
+    "pocketbase:seed:local": "node --env-file=.env.test.local scripts/seed-local-pocketbase.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"

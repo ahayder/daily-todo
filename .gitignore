@@ -37,6 +37,9 @@ yarn-error.log*
 # local updater keys
 /.tauri/keys/
 
+# local test PocketBase (binary + its data — never committed)
+/pocketbase-local/
+
 # vercel
 .vercel
 
