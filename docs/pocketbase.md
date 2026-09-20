@@ -64,6 +64,36 @@ Unchanged: app_state_snapshots
 Failed: none
 ```
 
+## Local test database
+
+By default the running app (`pnpm dev`) points `NEXT_PUBLIC_POCKETBASE_URL` at the
+**production** PocketBase, so localhost reads and writes real data — the same as the
+deployed website. For experiments and risky changes (e.g. schema edits), use the
+disposable local PocketBase instead so production is never touched.
+
+Setup (one-time, already done in this repo):
+
+- The `v0.26.6` PocketBase binary lives in `./pocketbase-local/` (git-ignored, along with its `pb_data`).
+- A local superuser and a `.env.test.local` file (git-ignored) hold the local URL (`http://127.0.0.1:8090`) and disposable admin credentials.
+
+Everyday use — three commands:
+
+```bash
+pnpm pocketbase:local            # 1. start the local PocketBase (127.0.0.1:8090)
+pnpm pocketbase:schema:apply:local  # 2. build the schema (matches production)
+pnpm pocketbase:seed:local       # 3. add a test user + sample data (optional)
+pnpm dev:test                    # 4. run the app against the local DB
+```
+
+- `pnpm dev` → production PocketBase (unchanged).
+- `pnpm dev:test` → local PocketBase.
+- Seeded login: `test@local.test` / `testuser1234`.
+- The seed intentionally tries a position-0 content card, which reproduces the
+  known `content_cards` required-field bug (it warns and continues until the
+  `required: false` fix is applied to the local DB).
+- To reset the local DB completely, stop it and delete `pocketbase-local/pb_data`,
+  then re-run steps 2–3.
+
 ## `users` collection
 
 Use PocketBase's built-in auth collection:

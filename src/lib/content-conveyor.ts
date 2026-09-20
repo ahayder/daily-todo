@@ -20,12 +20,21 @@ import type { ContentCard } from "@/lib/types";
 export type ConveyorStage = "inbox" | "develop" | "shoot-next" | "published";
 
 export const CONVEYOR_SECTIONS = [
-  "RAW IDEA",
+  "ORIGINAL THOUGHT",
   "IDEA NOTE",
   "SHOOT CARD",
   "SATELLITES",
 ] as const;
 export type ConveyorSection = (typeof CONVEYOR_SECTIONS)[number];
+
+/**
+ * Legacy section headings that map onto a canonical section. Older cards were
+ * saved with `## RAW IDEA`; they still parse (and label) as ORIGINAL THOUGHT so
+ * no data migration is needed.
+ */
+const SECTION_ALIASES: Record<string, ConveyorSection> = {
+  "RAW IDEA": "ORIGINAL THOUGHT",
+};
 
 const COLUMN_TO_STAGE: Record<string, ConveyorStage> = {
   [CONTENT_COLUMN_INBOX_ID]: "inbox",
@@ -79,9 +88,10 @@ const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/;
 
 function matchSectionName(text: string): ConveyorSection | null {
   const upper = text.trim().toUpperCase();
-  return (CONVEYOR_SECTIONS as readonly string[]).includes(upper)
-    ? (upper as ConveyorSection)
-    : null;
+  if ((CONVEYOR_SECTIONS as readonly string[]).includes(upper)) {
+    return upper as ConveyorSection;
+  }
+  return SECTION_ALIASES[upper] ?? null;
 }
 
 /**
@@ -134,7 +144,8 @@ export function getSectionBody(
  * Append an empty `## SECTION` heading to `notes`, ready to type under.
  * Idempotent: if the section already exists, `notes` is returned unchanged.
  * When `notes` has no recognized sections yet, its existing body is first
- * wrapped under `## RAW IDEA` so the original dump is preserved and labelled.
+ * wrapped under `## ORIGINAL THOUGHT` so the original dump is preserved and
+ * labelled.
  */
 export function appendSection(
   notes: string | undefined,
@@ -148,15 +159,27 @@ export function appendSection(
   const hasSections = sections.some((section) => section.name !== null);
   let base = (notes ?? "").trim();
   if (!hasSections && base) {
-    base = `## RAW IDEA\n\n${base}`;
+    base = `## ORIGINAL THOUGHT\n\n${base}`;
   }
 
   const heading = `## ${name}`;
   return base ? `${base}\n\n${heading}\n` : `${heading}\n`;
 }
 
-function cardFullText(card: Pick<ContentCard, "title" | "notes">): string {
-  return card.notes ? `${card.title}\n\n${card.notes}` : card.title;
+/**
+ * Remove recognized `## SECTION` heading lines (including legacy aliases) while
+ * keeping their body text, then collapse the blank lines left behind. Used to
+ * build a clean idea payload with no conveyor scaffolding for ChatGPT.
+ */
+export function stripSectionHeadings(notes: string | undefined): string {
+  const kept = (notes ?? "")
+    .split(/\r?\n/)
+    .filter((line) => {
+      const headingMatch = line.match(SECTION_HEADING_RE);
+      return !(headingMatch && matchSectionName(headingMatch[1]));
+    })
+    .join("\n");
+  return kept.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 type ChatGptPromptConfig = {
@@ -185,9 +208,11 @@ export function hasChatGptPrompt(columnId: string): boolean {
 }
 
 /**
- * Build the clipboard payload for "Copy for ChatGPT": the stage's hidden prompt
- * followed by the relevant source text. The prompt is never shown on the card.
- * Returns `null` when the stage has no prompt.
+ * Build the clipboard payload for "Copy for ChatGPT": the stage's hidden prompt,
+ * the card title as a headline, then a clean idea body. The body never includes
+ * conveyor `## SECTION` heading scaffolding, so pasting it into ChatGPT reads as
+ * plain intent. The prompt is never shown on the card. Returns `null` when the
+ * stage has no prompt.
  */
 export function buildChatGptClipboard(
   columnId: string,
@@ -199,8 +224,13 @@ export function buildChatGptClipboard(
   if (!config) return null;
 
   const source = config.sourceSection
-    ? getSectionBody(card.notes, config.sourceSection) || cardFullText(card)
-    : cardFullText(card);
+    ? getSectionBody(card.notes, config.sourceSection) ||
+      getSectionBody(card.notes, "ORIGINAL THOUGHT") ||
+      stripSectionHeadings(card.notes)
+    : getSectionBody(card.notes, "ORIGINAL THOUGHT") ||
+      stripSectionHeadings(card.notes);
 
-  return `${config.prompt}\n\n${source}`.trim();
+  const idea = [card.title, source].filter(Boolean).join("\n\n");
+
+  return `${config.prompt}\n\n${idea}`.trim();
 }

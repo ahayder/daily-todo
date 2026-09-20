@@ -204,7 +204,9 @@ function SectionedNotes({
   collapsible: boolean;
 }) {
   const [showOlder, setShowOlder] = useState(false);
-  const sections = parseSections(notes);
+  // Hide empty sections (e.g. the Idea Note stub created when a card is
+  // developed) until they actually hold content, so cards stay uncluttered.
+  const sections = parseSections(notes).filter((section) => section.body !== "");
   const lastIndex = sections.length - 1;
   const older = sections.slice(0, lastIndex);
   const current = sections[lastIndex];

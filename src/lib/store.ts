@@ -45,11 +45,18 @@ export const CONTENT_COLUMN_SHOOT_NEXT_ID = "content-column-shoot-next";
 export const CONTENT_COLUMN_PUBLISHED_ID = "content-column-published";
 export const SHOOT_NEXT_SOFT_CAP = 5;
 
+/**
+ * The Inbox subtitle used before the capture UX was reframed around holding the
+ * specific thought. Existing boards that still carry this exact string are
+ * migrated to the new default (custom subtitles are left untouched).
+ */
+const LEGACY_INBOX_SUBTITLE = "Dump anything, decide later";
+
 export const DEFAULT_CONTENT_COLUMNS: ContentColumn[] = [
   {
     id: CONTENT_COLUMN_INBOX_ID,
     title: "Inbox",
-    subtitle: "Dump anything, decide later",
+    subtitle: "Capture the specific thought, not just the topic.",
   },
   {
     id: CONTENT_COLUMN_DEVELOP_ID,
@@ -1259,6 +1266,16 @@ export function ensureContentPlannerState(state: AppState): AppState {
 
   const columns = baseColumns.map((column) => {
     const defaultSubtitle = defaultSubtitles.get(column.id);
+    // One-time reframe: replace the old Inbox subtitle with the new default so
+    // existing boards pick up the sharper capture nudge. Custom subtitles (any
+    // other text) are preserved.
+    if (
+      column.id === CONTENT_COLUMN_INBOX_ID &&
+      column.subtitle === LEGACY_INBOX_SUBTITLE &&
+      defaultSubtitle
+    ) {
+      return { ...column, subtitle: defaultSubtitle };
+    }
     return !column.subtitle && defaultSubtitle
       ? { ...column, subtitle: defaultSubtitle }
       : column;
