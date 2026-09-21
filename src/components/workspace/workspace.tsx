@@ -140,7 +140,7 @@ export function Workspace({ forcedView }: Props) {
           {activeView === "todos" ? (
             <TodosView state={state} dispatch={dispatch} />
           ) : activeView === "planner" ? (
-            <PlannerView state={state} dispatch={dispatch} />
+            <PlannerView state={state} dispatch={dispatch} fontScale={contentFontScale} />
           ) : isContentPlanner ? (
             <ContentPlannerView
               board={state.contentBoard}
