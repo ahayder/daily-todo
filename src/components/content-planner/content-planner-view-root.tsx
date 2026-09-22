@@ -621,7 +621,30 @@ function ContentCardItem({
             }}
             className="block min-h-28 max-h-[var(--content-planner-card-max-height,10.5rem)] w-full resize-y overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3.5 pr-11 text-[length:var(--content-planner-font-sm,0.875rem)] font-normal leading-[var(--content-planner-leading-6,1.5rem)] text-[var(--ink-900)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           />
-          <CardEditHints className="border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] px-4 py-2.5" />
+          <div className="flex flex-col gap-2 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] px-4 py-2.5">
+            {chatGptAvailable ? (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={copyForChatGpt}
+                data-testid={`content-card-edit-chatgpt-${card.id}`}
+                className={cn(
+                  "inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[length:var(--content-planner-font-xs,0.75rem)] font-medium transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none",
+                  isChatGptCopied
+                    ? "text-[var(--brand)]"
+                    : "text-[var(--ink-700)] hover:text-[var(--ink-900)]",
+                )}
+              >
+                {isChatGptCopied ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Sparkles className="size-3.5" />
+                )}
+                {isChatGptCopied ? "Copied for ChatGPT" : "Copy prompt for ChatGPT"}
+              </button>
+            ) : null}
+            <CardEditHints />
+          </div>
         </div>
       ) : (
         <div
@@ -1911,6 +1934,32 @@ export function ContentPlannerView({
     setIsEditingViewingCard(false);
   };
 
+  const [isViewingChatGptCopied, setIsViewingChatGptCopied] = useState(false);
+  const viewingChatGptAvailable = viewingCard
+    ? hasChatGptPrompt(viewingCard.columnId)
+    : false;
+
+  useEffect(() => {
+    if (!isViewingChatGptCopied) return;
+    const reset = window.setTimeout(() => setIsViewingChatGptCopied(false), 1800);
+    return () => window.clearTimeout(reset);
+  }, [isViewingChatGptCopied]);
+
+  const copyViewingCardForChatGpt = async () => {
+    if (!viewingCard) return;
+    const payload = buildChatGptClipboard(viewingCard.columnId, {
+      title: viewingCardText ? splitContentCardText(viewingCardText)?.title ?? viewingCard.title : viewingCard.title,
+      notes: viewingCardText ? splitContentCardText(viewingCardText)?.notes ?? viewingCard.notes : viewingCard.notes,
+    });
+    if (!payload) return;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setIsViewingChatGptCopied(true);
+    } catch {
+      setIsViewingChatGptCopied(false);
+    }
+  };
+
   const cancelEditingViewingCard = () => {
     setViewingCardText(viewingCard ? getContentCardText(viewingCard) : "");
     setIsEditingViewingCard(false);
@@ -2425,7 +2474,29 @@ export function ContentPlannerView({
             </div>
             {isEditingViewingCard ? <CardEditHints className="px-1" /> : null}
             {isEditingViewingCard ? (
-              <DialogFooter className="sm:justify-end">
+              <DialogFooter className="sm:items-center sm:justify-between">
+                {viewingChatGptAvailable ? (
+                  <button
+                    type="button"
+                    onClick={copyViewingCardForChatGpt}
+                    data-testid={`content-card-preview-chatgpt-${viewingCard.id}`}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-2 text-[length:var(--content-planner-font-sm,0.875rem)] font-medium transition-colors duration-150 hover:bg-[var(--paper)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] motion-reduce:transition-none sm:mr-auto",
+                      isViewingChatGptCopied
+                        ? "text-[var(--brand)]"
+                        : "text-[var(--ink-700)] hover:text-[var(--ink-900)]",
+                    )}
+                  >
+                    {isViewingChatGptCopied ? (
+                      <Check className="size-3.5" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    {isViewingChatGptCopied
+                      ? "Copied for ChatGPT"
+                      : "Copy prompt for ChatGPT"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={cancelEditingViewingCard}
