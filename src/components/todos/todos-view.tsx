@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type Dispatch,
   type HTMLAttributes,
+  type ReactNode,
 } from "react";
 import { triggerCompletionConfettiFromElement } from "@/lib/confetti";
 import { getDayLabel } from "@/lib/date";
@@ -65,10 +66,13 @@ import { getAttentionTodos, getTaskAgeDays, getTaskAgeLabel, needsTaskAttention 
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
@@ -252,6 +256,51 @@ export function getSubtaskDropTargetId({
   }
 
   return targetTodo.id;
+}
+
+const PRIORITY_GROUP_DROP_PREFIX = "priority-group-";
+
+// Prefer the card under the pointer: its closest task, or the card itself when
+// it has no tasks. Outside any card (or with the keyboard) fall back to the
+// closest task anywhere.
+const priorityGroupCollisionDetection: CollisionDetection = (args) => {
+  const isGroup = (id: string | number) => String(id).startsWith(PRIORITY_GROUP_DROP_PREFIX);
+  const taskContainers = args.droppableContainers.filter((container) => !isGroup(container.id));
+  const groupHit = pointerWithin(args).find((collision) => isGroup(collision.id));
+
+  if (!groupHit) {
+    return closestCenter({ ...args, droppableContainers: taskContainers });
+  }
+
+  const groupPriority = args.droppableContainers.find((c) => c.id === groupHit.id)?.data.current
+    ?.priority;
+  const groupTasks = taskContainers.filter((c) => c.data.current?.priority === groupPriority);
+
+  return groupTasks.length > 0
+    ? closestCenter({ ...args, droppableContainers: groupTasks })
+    : [groupHit];
+};
+
+function DroppablePriorityGroup({
+  priority,
+  disabled,
+  children,
+}: {
+  priority: Priority;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: `${PRIORITY_GROUP_DROP_PREFIX}${priority}`,
+    disabled,
+    data: { priority },
+  });
+
+  return (
+    <div ref={setNodeRef} className="priority-group">
+      {children}
+    </div>
+  );
 }
 
 function getPriorityMeta(theme: CategoryTheme, priority: Priority) {
@@ -1318,8 +1367,8 @@ export function TodosView({ state, dispatch }: Props) {
       return;
     }
 
-    if (overId.startsWith("priority-group-")) {
-      const priority = Number.parseInt(overId.replace("priority-group-", ""), 10) as Priority;
+    if (overId.startsWith(PRIORITY_GROUP_DROP_PREFIX)) {
+      const priority = Number.parseInt(overId.replace(PRIORITY_GROUP_DROP_PREFIX, ""), 10) as Priority;
       setDropIndicator({
         overId,
         priority,
@@ -1864,7 +1913,7 @@ export function TodosView({ state, dispatch }: Props) {
         <ScrollArea className="todo-pane-scroll" data-testid="task-pane-scroll">
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={priorityGroupCollisionDetection}
             onDragOver={handleDragOver}
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
@@ -1881,7 +1930,11 @@ export function TodosView({ state, dispatch }: Props) {
                 if (isReviewing && parentTodos.length === 0) return null;
 
                 return (
-                  <div key={priorityLevel} className="priority-group">
+                  <DroppablePriorityGroup
+                    key={priorityLevel}
+                    priority={priorityLevel}
+                    disabled={isReviewing}
+                  >
                   {/* Group header */}
                   <div
                     className="priority-group-header"
@@ -1982,7 +2035,7 @@ export function TodosView({ state, dispatch }: Props) {
                       )}
                     </ul>
                   </SortableContext>
-                </div>
+                </DroppablePriorityGroup>
               );
             })}
             </div>

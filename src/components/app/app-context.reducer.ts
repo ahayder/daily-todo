@@ -1286,9 +1286,9 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
               ...preset.days,
               [action.dayKey]: {
                 ...preset.days[action.dayKey],
-                events: [...preset.days[action.dayKey].events, nextEvent].sort(
-                  (a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes,
-                ),
+                // Append; a new block lands at the bottom by the Add button
+                // rather than jumping into a sorted position.
+                events: [...preset.days[action.dayKey].events, nextEvent],
               },
             },
           },
@@ -1320,20 +1320,21 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
               ...preset.days,
               [action.dayKey]: {
                 ...day,
-                events: day.events
-                  .map((item) =>
-                    item.id === action.eventId
-                      ? {
-                          ...item,
-                          ...action.updates,
-                          title: action.updates.title?.trim() || item.title,
-                          notes: action.updates.notes ?? item.notes,
-                          startMinutes: range.startMinutes,
-                          endMinutes: range.endMinutes,
-                        }
-                      : item,
-                  )
-                  .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes),
+                // Keep the block in place while its time is edited; the Set up
+                // list stays in the order the user built it, and the NOW view
+                // sorts for display on its own.
+                events: day.events.map((item) =>
+                  item.id === action.eventId
+                    ? {
+                        ...item,
+                        ...action.updates,
+                        title: action.updates.title?.trim() || item.title,
+                        notes: action.updates.notes ?? item.notes,
+                        startMinutes: range.startMinutes,
+                        endMinutes: range.endMinutes,
+                      }
+                    : item,
+                ),
               },
             },
           },

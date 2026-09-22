@@ -383,7 +383,9 @@ function SetupView({
 }) {
   const [tab, setTab] = useState<PlannerTemplateKey>("monday");
   const day = days[tab];
-  const events = sortEventsByStart(day.events);
+  // Show blocks in the order the user created them — no auto-sort, so a row
+  // never jumps while its time is being edited.
+  const events = day.events;
   const totalMinutes = events.reduce((sum, e) => sum + Math.max(0, e.endMinutes - e.startMinutes), 0);
 
   return (
