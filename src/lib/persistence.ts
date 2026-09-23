@@ -287,7 +287,7 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
   const normalizedThemeMode =
     themeMode === "light" || themeMode === "dark" || themeMode === "system"
       ? themeMode
-      : "dark";
+      : "system";
 
   const normalizedLastView =
     candidate.uiState.lastView === "todos" ||
@@ -438,7 +438,7 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
             ...validated.data.uiState,
             selectedTodoWorkspaceId:
               validated.data.uiState.selectedTodoWorkspaceId ?? DEFAULT_TODO_WORKSPACE_ID,
-            themeMode: validated.data.uiState.themeMode ?? "dark",
+            themeMode: validated.data.uiState.themeMode ?? "system",
             categoryTheme: validated.data.uiState.categoryTheme ?? "normal",
             isFocusMode: validated.data.uiState.isFocusMode ?? false,
             focusedTodoId: validated.data.uiState.focusedTodoId ?? null,

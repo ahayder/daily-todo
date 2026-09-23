@@ -74,7 +74,7 @@ describe("normalizeAppState", () => {
       new Date("2026-03-11T08:00:00Z"),
     );
 
-    expect(state.uiState.themeMode).toBe("dark");
+    expect(state.uiState.themeMode).toBe("system");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
     expect(state.uiState.hasSeenPlannerTour).toBe(false);
     expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);

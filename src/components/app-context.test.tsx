@@ -129,7 +129,12 @@ function renderWithProviders() {
     isVerified: true,
     accessToken: "token_1",
   });
-  const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+  // New workspaces follow the system theme; these tests start from an explicit dark preference.
+  const initialState = createInitialState("2026-03-11");
+  const persistence = createMockPersistenceRepository({
+    ...initialState,
+    uiState: { ...initialState.uiState, themeMode: "dark" },
+  });
 
   return {
     auth,
@@ -701,7 +706,7 @@ describe("AppProvider theme class behavior", () => {
     await userEvent.type(screen.getByLabelText("Password"), "password123");
     await userEvent.click(screen.getAllByRole("button", { name: "Sign in" })[1]);
 
-    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("dark");
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
     expect(persistence.repository.load).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user_1",
@@ -732,7 +737,7 @@ describe("AppProvider theme class behavior", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("dark");
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
 
     await userEvent.click(screen.getByRole("button", { name: "dark" }));
     expect(screen.getByTestId("theme-mode")).toHaveTextContent("dark");
