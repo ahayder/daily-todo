@@ -520,19 +520,28 @@ export function useAppPersistenceState({
 
   const selectedNoteId = state?.uiState.selectedNoteId ?? null;
   const selectedNote = selectedNoteId ? state?.notesDocs[selectedNoteId] ?? null : null;
+  // The note-body effects key off the note's content, not its object identity:
+  // React can replay queued state updates and hand back an equal-but-new note
+  // object, which must not restart note loading or the body save debounce.
+  const hasSelectedNote = selectedNote !== null;
+  const selectedNoteMarkdown = selectedNote?.markdown;
+  const selectedNoteUpdatedAt = selectedNote?.updatedAt;
+  const hasSelectedNoteBody = typeof selectedNoteMarkdown === "string";
 
+  // Load the body when a note is selected or its body goes missing — not on
+  // every local edit, which would reload the older remote copy over the typing.
   useEffect(() => {
-    if (!session || authStatus !== "authenticated" || !selectedNoteId || !selectedNote) {
+    if (!session || authStatus !== "authenticated" || !selectedNoteId || !hasSelectedNote) {
       setSelectedBodyStatus("idle");
       setSelectedBodyNotice(null);
       setSelectedBodyError(null);
       return;
     }
 
+    const currentMarkdown = latestStateRef.current?.notesDocs[selectedNoteId]?.markdown;
     const lastSnapshotMarkdown = noteBodySnapshotRef.current[selectedNoteId];
     const isCachedBodyUpToDate =
-      typeof selectedNote.markdown === "string" &&
-      lastSnapshotMarkdown === selectedNote.markdown;
+      typeof currentMarkdown === "string" && lastSnapshotMarkdown === currentMarkdown;
 
     if (isCachedBodyUpToDate) {
       setSelectedBodyStatus("ready");
@@ -596,22 +605,23 @@ export function useAppPersistenceState({
     return () => {
       cancelled = true;
     };
-  }, [authStatus, repository, selectedNote, selectedNoteId, session]);
+  }, [authStatus, hasSelectedNote, hasSelectedNoteBody, repository, selectedNoteId, session]);
 
   useEffect(() => {
     if (
       !session ||
       authStatus !== "authenticated" ||
       !selectedNoteId ||
-      !selectedNote ||
-      typeof selectedNote.markdown !== "string"
+      !hasSelectedNote ||
+      typeof selectedNoteMarkdown !== "string" ||
+      selectedNoteUpdatedAt === undefined
     ) {
       clearNoteBodySaveTimer();
       return;
     }
 
     const previousMarkdown = noteBodySnapshotRef.current[selectedNoteId];
-    if (previousMarkdown === selectedNote.markdown) {
+    if (previousMarkdown === selectedNoteMarkdown) {
       return;
     }
 
@@ -620,8 +630,8 @@ export function useAppPersistenceState({
       noteBodies: [
         {
           noteId: selectedNoteId,
-          markdown: selectedNote.markdown,
-          updatedAtClient: selectedNote.updatedAt,
+          markdown: selectedNoteMarkdown,
+          updatedAtClient: selectedNoteUpdatedAt,
         },
       ],
       now: new Date(),
@@ -634,8 +644,8 @@ export function useAppPersistenceState({
         .saveNoteBody({
           userId: session.userId,
           noteId: selectedNoteId,
-          markdown: selectedNote.markdown ?? "",
-          updatedAtClient: selectedNote.updatedAt,
+          markdown: selectedNoteMarkdown ?? "",
+          updatedAtClient: selectedNoteUpdatedAt,
           now: new Date(),
         })
         .then((result) => {
@@ -652,7 +662,16 @@ export function useAppPersistenceState({
     }, NOTE_BODY_REMOTE_SAVE_DEBOUNCE_MS);
 
     return clearNoteBodySaveTimer;
-  }, [authStatus, clearNoteBodySaveTimer, repository, selectedNote, selectedNoteId, session]);
+  }, [
+    authStatus,
+    clearNoteBodySaveTimer,
+    hasSelectedNote,
+    repository,
+    selectedNoteId,
+    selectedNoteMarkdown,
+    selectedNoteUpdatedAt,
+    session,
+  ]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined" || !state) {
@@ -700,6 +719,14 @@ export function useAppPersistenceState({
       return;
     }
 
+    // A new state object with the same content (e.g. React replaying queued
+    // updates) must not re-queue the pending save: re-scheduling here on every
+    // commit restarts the debounce and can keep React re-rendering forever.
+    const saveAlreadyPending = saveTimerRef.current !== null || remoteSaveInFlightRef.current;
+    if (nextSnapshot === dirtySnapshotRef.current && saveAlreadyPending) {
+      return;
+    }
+
     if (isDevelopmentWorkspaceSession(session)) {
       saveDevelopmentWorkspaceState(state);
       dirtySnapshotRef.current = nextSnapshot;
@@ -710,7 +737,7 @@ export function useAppPersistenceState({
         setHasSyncIssue(false);
       });
       queueSave(150);
-      return clearSaveTimer;
+      return;
     }
 
     dirtySnapshotRef.current = nextSnapshot;
@@ -731,8 +758,12 @@ export function useAppPersistenceState({
     });
 
     queueSave(WORKSPACE_REMOTE_SAVE_DEBOUNCE_MS);
-    return clearSaveTimer;
-  }, [authStatus, clearSaveTimer, queueSave, repository, session, state]);
+  }, [authStatus, queueSave, repository, session, state]);
+
+  // The queued save belongs to the current session and repository. It survives
+  // ordinary state changes (the effect above reschedules it when content changes)
+  // but is dropped when the session or repository changes, or on unmount.
+  useEffect(() => clearSaveTimer, [authStatus, clearSaveTimer, repository, session]);
 
   // Advance the daily view to the real "today" whenever the workspace loads or
   // the calendar day rolls over while the app stays open. Without this the app
