@@ -51,11 +51,11 @@ describe("PlannerView (NOW + Setup)", () => {
   test("NOW shows the current block, time left, and the next block", () => {
     setup();
 
-    expect(screen.getByText(/^Now ·/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Now: Deep work" })).toBeInTheDocument();
     expect(screen.getByText("Deep work")).toBeInTheDocument();
     expect(screen.getByText(/left$/)).toBeInTheDocument(); // "2h 30m left" progress readout
     expect(screen.getByText(/Gym/)).toBeInTheDocument();
-    expect(screen.getByText(/· next/)).toBeInTheDocument();
+    expect(screen.getByText("Next")).toBeInTheDocument();
   });
 
   test("the clock icon reveals the read-only bird's-eye pie", async () => {

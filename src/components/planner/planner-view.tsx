@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type Dispatch,
+  type ReactNode,
 } from "react";
 import {
   AlertDialog,
@@ -37,7 +38,7 @@ import {
   type PlannerTemplateKey,
 } from "@/lib/planner-now";
 import type { AppState, PlannerDay, PlannerEvent } from "@/lib/types";
-import { PieChart, Plus, Settings2, Trash2 } from "lucide-react";
+import { Clock, PieChart, Plus, Settings2, Trash2 } from "lucide-react";
 
 type Props = {
   state: AppState;
@@ -86,6 +87,52 @@ function formatLeft(minutes: number): string {
   return `${m} min left`;
 }
 
+const FOCUS_RING =
+  "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]";
+
+/** Segmented control styled like the top-nav pills (soft track, raised active pill). */
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  fill = false,
+}: {
+  options: { key: T; label: string; icon?: ReactNode }[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+  fill?: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={`${fill ? "flex w-full" : "inline-flex"} gap-0.5 rounded-lg bg-[color-mix(in_srgb,var(--ink-700)_10%,transparent)] p-[3px]`}
+    >
+      {options.map((option) => {
+        const active = option.key === value;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onChange(option.key)}
+            aria-pressed={active}
+            className={`${fill ? "flex-1" : ""} flex min-h-11 items-center justify-center gap-1.5 rounded-md px-[1em] py-[0.375em] text-[0.8125em] sm:min-h-0 font-medium transition-colors duration-150 ${FOCUS_RING} ${
+              active
+                ? "bg-[var(--paper)] text-[var(--ink-900)] shadow-[0_1px_3px_rgba(31,36,48,0.08)] dark:bg-[var(--planner-track)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
+                : "text-[var(--ink-700)] hover:bg-[color-mix(in_srgb,var(--ink-700)_10%,transparent)] hover:text-[var(--ink-900)]"
+            }`}
+          >
+            {option.icon}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 type DaySegment =
   | { kind: "block"; event: PlannerEvent }
   | { kind: "free"; startMinutes: number; endMinutes: number };
@@ -106,6 +153,33 @@ function buildDaySegments(events: PlannerEvent[]): DaySegment[] {
     }
   });
   return segments;
+}
+
+const ROW_CLASS = "flex items-baseline gap-3 rounded-lg px-3 py-[0.5em] text-[0.875em]";
+const TIME_CLASS = "w-[7.5em] shrink-0 tabular-nums";
+// Setup fields: 44px / 16px text on phones (tap target, no iOS focus zoom),
+// em-scaled on larger screens so they grow with A-/A+.
+const FIELD_SIZE =
+  "min-h-11 text-[length:max(1rem,0.8125em)] sm:min-h-[2.5em] sm:text-[0.8125em]";
+const WARM_SHADOW = "shadow-[0_1px_3px_rgba(31,36,48,0.06),0_1px_2px_rgba(31,36,48,0.04)]";
+
+type MarkerTone = "past" | "now" | "next" | "later" | "free";
+
+/** A dot on the vertical day timeline. */
+function TimelineMarker({ tone }: { tone: MarkerTone }) {
+  const toneClass: Record<MarkerTone, string> = {
+    past: "h-[9px] w-[9px] bg-[var(--ink-700)] opacity-50",
+    now: "h-[13px] w-[13px] bg-[var(--brand)] ring-4 ring-[var(--brand-soft)]",
+    next: "h-[11px] w-[11px] border-2 border-[var(--brand)] bg-[var(--paper)]",
+    later: "h-[9px] w-[9px] border-2 border-[color-mix(in_srgb,var(--ink-700)_55%,var(--paper))] bg-[var(--paper)]",
+    free: "h-[5px] w-[5px] bg-[color-mix(in_srgb,var(--ink-700)_40%,var(--paper))]",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute left-[12px] top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${toneClass[tone]}`}
+    />
+  );
 }
 
 // ── Read-only 24h clock (bird's-eye) ─────────────────────────────────────────
@@ -143,7 +217,8 @@ function DayClock({
           key={event.id}
           d={getPlannerArcPath(event.startMinutes, event.endMinutes, inner, outer)}
           fill="var(--brand)"
-          opacity={0.9}
+          stroke="var(--paper-strong)"
+          strokeWidth={6}
         />
       ))}
       {marker ? (
@@ -155,7 +230,7 @@ function DayClock({
 
 // ── NOW screen ───────────────────────────────────────────────────────────────
 
-function NowView({ day, now }: { day: PlannerDay; now: Date }) {
+function NowView({ day, now, onSetup }: { day: PlannerDay; now: Date; onSetup: () => void }) {
   const [showClock, setShowClock] = useState(false);
   const minutesNow = minutesOfDay(now);
   const events = day.events;
@@ -164,98 +239,188 @@ function NowView({ day, now }: { day: PlannerDay; now: Date }) {
   const segments = buildDaySegments(events);
   const dayName = DAY_NAMES[now.getDay()];
 
+  const progress = current ? Math.round(progressFraction(current, minutesNow) * 100) : 0;
+  const dateLabel = now.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+
   const nowCard = (
-    <div className="rounded-2xl border border-[var(--brand)] bg-[var(--paper-strong)] p-4">
-      <p className="text-[0.6875em] font-semibold uppercase tracking-wider text-[var(--ink-700)]">
-        Now{current ? ` · ${formatRange(current)}` : ""}
-      </p>
+    <section
+      aria-label={`Now: ${current ? current.title : "free time"}`}
+      className={`my-1 rounded-2xl border border-[color-mix(in_srgb,var(--brand)_55%,var(--line))] bg-[var(--paper-strong)] p-5 ${WARM_SHADOW}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[0.6875em] font-semibold uppercase tracking-wider text-[var(--brand)]">Now</p>
+        {current ? (
+          <p className="text-[0.8125em] tabular-nums text-[var(--ink-700)]">{formatRange(current)}</p>
+        ) : null}
+      </div>
       {current ? (
         <>
-          <p className="mt-1 text-[1.25em] font-semibold text-[var(--ink-900)]">{current.title}</p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
+          <p className="mt-1 text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">
+            {current.title}
+          </p>
+          <div
+            role="progressbar"
+            aria-label="Time through this block"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+            className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--planner-track)]"
+          >
             <div
-              className="h-full rounded-full bg-[var(--brand)]"
-              style={{ width: `${Math.round(progressFraction(current, minutesNow) * 100)}%` }}
+              className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-200 ease-out motion-reduce:transition-none"
+              style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="mt-2 text-[0.875em] text-[var(--ink-700)]">{formatLeft(minutesLeft(current, minutesNow))}</p>
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[0.875em] tabular-nums">
+            <span className="font-medium text-[var(--ink-900)]">{formatLeft(minutesLeft(current, minutesNow))}</span>
+            <span className="text-[var(--ink-700)]">{progress}% through</span>
+          </div>
         </>
       ) : (
         <>
-          <p className="mt-1 text-[1.25em] font-semibold text-[var(--ink-900)]">Free — your call</p>
+          <p className="mt-1 text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">
+            Free — your call
+          </p>
           <p className="mt-2 text-[0.875em] text-[var(--ink-700)]">
-            {next ? `Until ${formatClock(next.startMinutes)}` : "Nothing scheduled"}
+            {next ? `Until ${formatClock(next.startMinutes)}, then ${next.title}` : "Nothing else scheduled today"}
           </p>
         </>
       )}
-    </div>
+    </section>
   );
 
   return (
     <div className="mx-auto w-full max-w-md">
-      <div className="relative mb-5 flex items-center justify-center">
-        <p className="text-[0.875em] text-[var(--ink-700)]">
-          {dayName} · {formatClock(minutesNow)}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3 px-1">
+        <div>
+          <h1 className="text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">{dayName}</h1>
+          <p className="mt-1 text-[0.8125em] tabular-nums text-[var(--ink-700)]">
+            {dateLabel} · {WEEKDAY_LABELS[dayKeyForDate(now)]} plan · {formatClock(minutesNow)}
+          </p>
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               onClick={() => setShowClock((value) => !value)}
-              aria-label="Show whole-day clock"
+              aria-label={showClock ? "Hide whole-day clock" : "Show whole-day clock"}
               aria-pressed={showClock}
-              className="absolute right-0 flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors hover:bg-[var(--paper-strong)]"
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border sm:h-10 sm:w-10 transition-colors duration-150 hover:bg-[var(--paper-strong)] hover:text-[var(--ink-900)] ${FOCUS_RING} ${
+                showClock
+                  ? "border-[var(--line)] bg-[var(--paper-strong)] text-[var(--ink-900)]"
+                  : "border-transparent text-[var(--ink-700)]"
+              }`}
             >
               <PieChart className="h-[18px] w-[18px]" />
             </button>
           </TooltipTrigger>
-          <TooltipContent>Whole day</TooltipContent>
+          <TooltipContent>{showClock ? "Hide whole day" : "See whole day"}</TooltipContent>
         </Tooltip>
       </div>
 
       {showClock ? (
-        <div className="mb-5 flex justify-center">
+        <div className="mb-6 flex justify-center rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-5">
           <DayClock events={events} minutesNow={minutesNow} />
         </div>
       ) : null}
 
       {events.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-6 text-center">
-          <p className="text-[0.875em] text-[var(--ink-700)]">
-            Nothing set for {WEEKDAY_LABELS[dayKeyForDate(now)].toLowerCase()}s yet. Open Set up to shape your day.
-          </p>
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[var(--line)] px-6 py-10 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]">
+            <Clock className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[1em] font-semibold text-[var(--ink-900)]">
+              No plan for {WEEKDAY_LABELS[dayKeyForDate(now)].toLowerCase()}s yet
+            </p>
+            <p className="mt-1 text-[0.875em] text-[var(--ink-700)]">
+              Sketch a few blocks once, and this page will tell you what&apos;s now.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onSetup}
+            className={`mt-1 flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-[1em] py-[0.5em] text-[0.875em] font-medium text-[var(--paper)] transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--brand)_88%,var(--ink-900))] sm:min-h-0 ${FOCUS_RING}`}
+          >
+            <Settings2 className="h-[1.1em] w-[1.1em]" /> Shape your day
+          </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <ol
+          aria-label="Today's blocks"
+          className="relative flex flex-col gap-1 before:absolute before:inset-y-4 before:left-[12px] before:w-px before:bg-[var(--line)]"
+        >
+          {current == null && minutesNow < (sortEventsByStart(events)[0]?.startMinutes ?? 0) ? (
+            <li className="relative pl-8">
+              <TimelineMarker tone="now" />
+              {nowCard}
+            </li>
+          ) : null}
           {segments.map((segment) => {
             if (segment.kind === "free") {
               const isNowGap = current == null && minutesNow >= segment.startMinutes && minutesNow < segment.endMinutes;
-              if (isNowGap) return <div key={`free-${segment.startMinutes}`}>{nowCard}</div>;
+              if (isNowGap) {
+                return (
+                  <li key={`free-${segment.startMinutes}`} className="relative pl-8">
+                    <TimelineMarker tone="now" />
+                    {nowCard}
+                  </li>
+                );
+              }
               return (
-                <p key={`free-${segment.startMinutes}`} className="px-1 text-[0.8125em] italic text-[var(--ink-700)] opacity-70">
-                  {formatClock(segment.startMinutes)}–{formatClock(segment.endMinutes)} · Free — your call
-                </p>
+                <li
+                  key={`free-${segment.startMinutes}`}
+                  className="relative pl-8"
+                >
+                  <TimelineMarker tone="free" />
+                  <div className={`${ROW_CLASS} text-[var(--ink-700)]`}>
+                    <span className={TIME_CLASS}>
+                      {formatClock(segment.startMinutes)}–{formatClock(segment.endMinutes)}
+                    </span>
+                    <span className="italic">Free — your call</span>
+                  </div>
+                </li>
               );
             }
             const event = segment.event;
             if (current && event.id === current.id) {
-              return <div key={event.id}>{nowCard}</div>;
+              return (
+                <li key={event.id} className="relative pl-8">
+                  <TimelineMarker tone="now" />
+                  {nowCard}
+                </li>
+              );
             }
             const isNext = next != null && event.id === next.id;
+            const isPast = event.endMinutes <= minutesNow;
             return (
-              <p
-                key={event.id}
-                className={`px-1 text-[0.8125em] ${isNext ? "text-[var(--ink-900)]" : "text-[var(--ink-700)]"}`}
-              >
-                <span className="tabular-nums">{formatRange(event)}</span> · {event.title}
-                {isNext ? <span className="text-[var(--ink-700)]"> · next</span> : null}
-              </p>
+              <li key={event.id} className="relative pl-8">
+                <TimelineMarker tone={isNext ? "next" : isPast ? "past" : "later"} />
+                <div
+                  className={`${ROW_CLASS} ${
+                    isNext
+                      ? "bg-[var(--paper-strong)] text-[var(--ink-900)]"
+                      : "text-[var(--ink-700)]"
+                  }`}
+                >
+                  <span className={TIME_CLASS}>{formatRange(event)}</span>
+                  <span
+                    className={`min-w-0 flex-1 ${
+                      isNext ? "font-semibold" : isPast ? "" : "text-[var(--ink-900)]"
+                    }`}
+                  >
+                    {event.title}
+                  </span>
+                  {isNext ? (
+                    <span className="shrink-0 rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[0.8em] font-medium text-[var(--ink-900)]">
+                      Next
+                    </span>
+                  ) : null}
+                </div>
+              </li>
             );
           })}
-          {current == null && minutesNow < (sortEventsByStart(events)[0]?.startMinutes ?? 0) ? (
-            <div>{nowCard}</div>
-          ) : null}
-        </div>
+        </ol>
       )}
     </div>
   );
@@ -291,10 +456,10 @@ function EventRow({
   };
 
   const selectClass =
-    "h-9 rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-2 text-[0.8125em] text-[var(--ink-900)] tabular-nums";
+    `${FIELD_SIZE} cursor-pointer rounded-lg border border-[var(--line)] bg-[var(--paper)] px-2 text-[var(--ink-900)] tabular-nums transition-colors duration-150 hover:border-[var(--ink-700)] ${FOCUS_RING}`;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-[var(--line)] p-2 sm:flex-row sm:items-center sm:gap-2 sm:border-0 sm:p-0">
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-[var(--line)] pb-3 last:border-b-0 last:pb-0 sm:flex sm:border-b-0 sm:pb-0">
       <input
         ref={inputRef}
         type="text"
@@ -310,9 +475,9 @@ function EventRow({
         }}
         aria-label="Block name"
         placeholder="Block name"
-        className="order-1 h-9 w-full rounded-lg border border-[var(--line)] bg-[var(--paper-strong)] px-3 text-[0.8125em] text-[var(--ink-900)] sm:order-2 sm:min-w-0 sm:flex-1"
+        className={`${FIELD_SIZE} col-span-2 w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[var(--ink-900)] transition-colors duration-150 placeholder:text-[var(--ink-700)] hover:border-[var(--ink-700)] sm:order-2 sm:min-w-0 sm:flex-1 ${FOCUS_RING}`}
       />
-      <div className="order-2 flex items-center gap-2 sm:order-1 sm:shrink-0">
+      <div className="flex items-center gap-2 sm:order-1 sm:shrink-0">
         <select
           value={event.startMinutes}
           onChange={(e) => {
@@ -342,14 +507,15 @@ function EventRow({
             </option>
           ))}
         </select>
-        <AlertDialog>
+      </div>
+      <AlertDialog>
           <Tooltip>
             <TooltipTrigger asChild>
               <AlertDialogTrigger
                 aria-label="Remove block"
-                className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors hover:bg-[var(--paper-strong)] hover:text-[var(--warn)] sm:ml-0"
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--warn)] sm:order-3 sm:h-[2.25em] sm:w-[2.25em] ${FOCUS_RING}`}
               >
-                <Trash2 className="h-[15px] w-[15px]" />
+                <Trash2 className="h-[1em] w-[1em]" />
               </AlertDialogTrigger>
             </TooltipTrigger>
             <TooltipContent>Remove block</TooltipContent>
@@ -366,8 +532,7 @@ function EventRow({
             <AlertDialogAction onClick={onDelete}>Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      </AlertDialog>
     </div>
   );
 }
@@ -390,37 +555,28 @@ function SetupView({
 
   return (
     <div className="mx-auto w-full max-w-md">
-      <div className="mb-4 flex items-baseline justify-between">
-        <p className="text-[1em] font-semibold text-[var(--ink-900)]">Your ideal days</p>
-        <span className="text-[0.75em] text-[var(--ink-700)]">edit once, rarely</span>
+      <div className="mb-6 px-1">
+        <h1 className="text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">Your ideal days</h1>
+        <p className="mt-1 text-[0.8125em] text-[var(--ink-700)]">
+          Sketch each day once. Changes save on their own.
+        </p>
       </div>
 
-      <div className="mb-4 flex gap-1.5">
-        {PLANNER_TEMPLATE_TABS.map((entry) => {
-          const active = entry.key === tab;
-          return (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => setTab(entry.key)}
-              aria-pressed={active}
-              className={`flex-1 rounded-lg border px-[0.75em] py-[0.5em] text-[0.8125em] font-medium transition-colors ${
-                active
-                  ? "border-transparent bg-[var(--brand)] text-[var(--paper-strong)]"
-                  : "border-[var(--line)] text-[var(--ink-700)] hover:bg-[var(--paper-strong)]"
-              }`}
-            >
-              {entry.label}
-            </button>
-          );
-        })}
+      <div className="mb-4">
+        <Segmented
+          label="Day template"
+          fill
+          options={PLANNER_TEMPLATE_TABS.map((entry) => ({ key: entry.key, label: entry.label }))}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
 
-      <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-4">
+      <div className={`rounded-2xl border border-[var(--line)] bg-[var(--paper-strong)] p-4 ${WARM_SHADOW}`}>
         <div className="mb-4 flex items-center gap-4 border-b border-[var(--line)] pb-4">
           <DayClock events={events} minutesNow={null} size={88} />
           <div className="flex-1">
-            <p className="text-[0.8125em] text-[var(--ink-900)]">
+            <p className="text-[0.875em] font-semibold tabular-nums text-[var(--ink-900)]">
               {events.length} block{events.length === 1 ? "" : "s"} · {Math.round(totalMinutes / 60)}h planned
             </p>
             <p className="mt-1 text-[0.75em] leading-relaxed text-[var(--ink-700)]">
@@ -429,7 +585,7 @@ function SetupView({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3 sm:gap-2">
           {events.map((event) => (
             <EventRow
               key={event.id}
@@ -457,13 +613,12 @@ function SetupView({
               endMinutes: range.endMinutes,
             });
           }}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] py-2 text-[0.8125em] text-[var(--ink-700)] transition-colors hover:bg-[var(--paper)]"
+          className={`mt-3 flex w-full items-center justify-center gap-1.5 min-h-11 rounded-lg border border-dashed border-[var(--line)] py-[0.5em] text-[0.8125em] sm:min-h-0 font-medium text-[var(--brand)] transition-colors duration-150 hover:border-[var(--brand)] hover:bg-[var(--paper)] ${FOCUS_RING}`}
         >
-          <Plus className="h-[15px] w-[15px]" /> Add block
+          <Plus className="h-[1.1em] w-[1.1em]" /> Add block
         </button>
       </div>
 
-      <p className="mt-3 px-1 text-center text-[0.75em] text-[var(--ink-700)]">Changes save on their own.</p>
     </div>
   );
 }
@@ -504,32 +659,19 @@ export function PlannerView({ state, dispatch, fontScale = 1 }: Props) {
     <div className="h-full overflow-y-auto bg-[var(--paper)]" style={rootStyle}>
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
         <div className="mb-6 flex justify-center">
-          <div className="inline-flex rounded-lg border border-[var(--line)] p-0.5">
-            <button
-              type="button"
-              onClick={() => setMode("now")}
-              aria-pressed={mode === "now"}
-              className={`rounded-md px-[1em] py-[0.375em] text-[0.8125em] font-medium transition-colors ${
-                mode === "now" ? "bg-[var(--brand)] text-[var(--paper-strong)]" : "text-[var(--ink-700)]"
-              }`}
-            >
-              Now
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("setup")}
-              aria-pressed={mode === "setup"}
-              className={`flex items-center gap-1.5 rounded-md px-[1em] py-[0.375em] text-[0.8125em] font-medium transition-colors ${
-                mode === "setup" ? "bg-[var(--brand)] text-[var(--paper-strong)]" : "text-[var(--ink-700)]"
-              }`}
-            >
-              <Settings2 className="h-[14px] w-[14px]" /> Set up
-            </button>
-          </div>
+          <Segmented
+            label="Planner mode"
+            options={[
+              { key: "now", label: "Now", icon: <Clock className="h-[1em] w-[1em]" /> },
+              { key: "setup", label: "Set up", icon: <Settings2 className="h-[1em] w-[1em]" /> },
+            ]}
+            value={mode}
+            onChange={setMode}
+          />
         </div>
 
         {mode === "now" ? (
-          <NowView day={preset.days[todayKey]} now={now} />
+          <NowView day={preset.days[todayKey]} now={now} onSetup={() => setMode("setup")} />
         ) : (
           <SetupView presetId={presetId} days={preset.days} dispatch={dispatch} />
         )}

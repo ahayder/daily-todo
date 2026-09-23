@@ -396,7 +396,7 @@ select {
 
 .nav-pill:hover {
   color: var(--ink-900);
-  background: color-mix(in srgb, var(--paper-strong) 60%, transparent);
+  background: color-mix(in srgb, var(--ink-700) 10%, transparent);
 }
 
 .nav-pill--active {
@@ -2511,8 +2511,9 @@ select {
   background: color-mix(in srgb, var(--ink-700) 12%, transparent);
 }
 
-.dark .nav-pill--active {
-  background: var(--paper-strong);
+.dark .nav-pill--active,
+.dark .nav-pill--active:hover {
+  background: var(--planner-track);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
