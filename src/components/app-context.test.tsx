@@ -1063,6 +1063,17 @@ describe("AppProvider save queue", () => {
 });
 
 describe("AppProvider cache-first hydration", () => {
+  beforeEach(() => {
+    // Keep "today" on the fixture day so the load-time day advance does not
+    // create a local change that races the remote hydration being tested.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("keeps a local card drag when a later remote hydration finishes", async () => {
     installMatchMedia(false);
     const auth = createMockAuthRepository({
