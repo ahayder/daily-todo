@@ -1246,21 +1246,30 @@ select {
   font-size: 1.75em;
   font-weight: 700;
   line-height: 1.3;
-  margin-top: 1.5em;
+  margin-top: 0.9em;
 }
 
 .tiptap-editor h2 {
   font-size: 1.35em;
   font-weight: 600;
   line-height: 1.35;
-  margin-top: 1.25em;
+  margin-top: 0.8em;
 }
 
 .tiptap-editor h3 {
   font-size: 1.1em;
   font-weight: 600;
   line-height: 1.4;
-  margin-top: 1em;
+  margin-top: 0.75em;
+}
+
+/* Stacked headings (one per line) read as a list, not separate sections. */
+.tiptap-editor :is(h1, h2, h3) + :is(h1, h2, h3) {
+  margin-top: 0.2em;
+}
+
+.tiptap-editor > :is(h1, h2, h3):first-child {
+  margin-top: 0;
 }
 
 .tiptap-editor p.is-editor-empty:first-child::before {
