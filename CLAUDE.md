@@ -125,23 +125,85 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 
 ---
 
-## Design language
+## Design System: Warm Minimalism
 
-Follow `.design/DESIGN.md` for all UI work (it overrides ui-ux-pro defaults). Progress and decisions: `.design/rollout.md`.
+> **Design style name: Warm Minimalism**
+> **Component library:** shadcn/ui
 
-**Ember Journal** (replaced "Warm Minimalism" in Sept 2026): a warm daily notebook. Cream paper (light) and espresso (dark, never slate), one terracotta "ember" accent (`--primary` / `--brand`) used for actions only, Fraunces soft-serif headings (≥18px only) + Instrument Sans body (Bengali fallbacks: Noto Serif Bengali, Hind Siliguri), JetBrains Mono for code/timers. Signature: the ink-dark **Now** card (`--now*` tokens) and a serif page date with an ember margin line. Theme follows the system by default (`themeMode: "system"`); an inline script in `layout.tsx` paints the system theme before hydration. Legacy custom tokens (`--paper`, `--ink-*`, `--line`, `--brand`, `--brand-soft`) are aliases of the shadcn tokens in `globals.css`; prefer the shadcn names in new code.
+### Why Warm Minimalism
+
+The app was visually analyzed against 20 common UI design styles. The running app demonstrates clear Minimalist UI principles (purposeful whitespace, nothing decorative, clean surfaces), Flat Design component treatment (no heavy shadows, no gradient fills on components), and Swiss/Grid structural discipline (two-column grid, consistent spacing rhythm). What makes it distinctly "warm" is the cream palette instead of cold grays, the earthy teal accent instead of electric blue, and the desaturated priority colors instead of bright primaries. **No serifs** — the typography is a single clean sans-serif stack throughout, with hierarchy built through weight and size alone.
+
+### Core Philosophy: The Five Pillars
+
+1. **Surface Warmth** — Backgrounds use warm off-whites (`#faf8f4`), never pure white or cool gray. Dark mode uses deep blue-gray warm (`#16191f`), never true black.
+2. **Sans-serif System** — One font family (`font-body`, sans-serif: Source Sans 3 / Inter / DM Sans) used across ALL roles. Hierarchy via weight and size only.
+3. **Tonal Color** — One deep accent (`#2f6d62` teal) against a mostly neutral palette. Priority colors are desaturated — dusty red, amber, sage — not bright traffic-light primaries.
+4. **Generous Breathing Room** — Whitespace is structural, not wasted. Cards and sections breathe. When in doubt, add space.
+5. **Soft Structure** — Warm-tinted borders (`--line`), warm-tinted shadows (rgba amber-tinted, never cool gray), `rounded-2xl` cards, `rounded-[10px]` inputs/buttons.
 
 ### Styling Removal Rule
 
 When asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome, etc.), prefer deleting or simplifying the original styling rule instead of adding a new override that turns it off. Only add an override when the original rule must stay because it is still required by another component/state and cannot be cleanly split yet. Default approach: reduce CSS, do not layer more CSS to negate old CSS.
+
+### Design Tokens
+
+```css
+/* Light mode */
+--paper: #faf8f4 /* page background */ --paper-strong: #ffffff /* card/pane surface */ --line: #d9d1c5 /* all borders */ --ink-900: #1f2430 /* primary text */ --ink-700: #40495e /* secondary/muted text */ --brand: #2f6d62 /* accent */
+  --brand-soft: #d9ece8 /* accent bg tint */ --warn: #b8422e /* destructive */ /* Dark mode overrides */ --paper: #16191f --paper-strong: #1e2228 --line: #2d3340 --ink-900: #e8e2d9 --ink-700: #8c95a6 --brand: #3d8c7f --brand-soft: #1e3533
+  --warn: #d45a44 /* Priority system */ --priority-1: #c0392b /* Critical — dusty red */ --priority-1-soft: #f9e8e6 /* (dark: #2a1715) */ --priority-2: #c07c30 /* Important — amber */ --priority-2-soft: #fdf3e3 /* (dark: #271f0d) */
+  --priority-3: #4a7c59 /* Someday — sage */ --priority-3-soft: #e8f4ec /* (dark: #101f15) */;
+```
+
+### Typography
+
+```
+All roles:   font-body — "Source Sans 3", Inter, DM Sans, system-ui, sans-serif
+Monospace:   font-mono — JetBrains Mono, Fira Code, ui-monospace
+```
+
+No serifs anywhere. Hierarchy: `text-2xl font-semibold` (note title) → `text-lg font-semibold` (date header) → `text-sm font-semibold` (section label) → `text-sm font-normal` (body/todos).
+
+### Spacing Scale
+
+Use Tailwind's default scale. Preferred spacings:
+
+- Section padding: `p-4` (16px)
+- Card internal padding: `p-3` to `p-4`
+- Between list items: `gap-2` (8px)
+- Between sections: `gap-4` (16px)
+- Between priority group cards: `gap-3` (12px)
+
+### Border Radius
+
+- Cards / panes: `rounded-2xl` (16px)
+- Inputs / buttons: `rounded-lg` (10px)
+- Badges / pills: `rounded-full`
 
 ### UX & Component Rules
 
 - **Hover states**: Every interactive element must have a clear hover state.
 - **Destructive actions**: Always require an `AlertDialog` confirmation.
 - **Icon buttons**: Must have both an `aria-label` and a `Tooltip` wrapper.
-- **Motion**: 160–220ms ease-out. Never exceed 300ms. Never use bounce or spring animations. Respect `prefers-reduced-motion`.
-- **Accessibility**: WCAG AA contrast; focus ring `outline: 2px solid var(--ring); outline-offset: 2px`; never rely on color alone (priorities use `!!` `!` `~` + a word label); no text below 13px.
+- **Motion**: Duration 150ms-200ms. Never exceed 300ms. Never use bounce or spring animations.
+
+### Accessibility
+
+- Maintain WCAG AA contrast (4.5:1 normal, 3:1 large).
+- Focus indicator: `outline: 2px solid var(--brand); outline-offset: 2px`.
+- Never rely on color alone to convey meaning (e.g. priority colors must have a text label).
+- Respect `prefers-reduced-motion`.
+
+### Shadows
+
+Warm-tinted shadow (not the cool Tailwind default):
+
+```css
+box-shadow:
+  0 1px 3px rgba(31, 36, 48, 0.06),
+  0 1px 2px rgba(31, 36, 48, 0.04);
+```
 
 ---
 

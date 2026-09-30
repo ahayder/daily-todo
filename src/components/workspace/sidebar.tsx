@@ -624,7 +624,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   const plannerPresets = Object.values(state.plannerPresets).sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
   );
-  const themeMode = mounted ? state.uiState.themeMode : "system";
+  const themeMode = mounted ? state.uiState.themeMode : "dark";
   const ThemeIcon = THEME_ICONS[themeMode];
   const nextThemeMode = THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
 
