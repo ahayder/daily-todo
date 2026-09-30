@@ -34,10 +34,9 @@ describe("normalizeAppState", () => {
     expect(Object.keys(state.notesDocs).length).toBeGreaterThan(0);
     expect(Object.keys(state.plannerPresets).length).toBeGreaterThan(0);
     expect(state.contentBoard.columns.map((column) => column.title)).toEqual([
-      "Ideas",
-      "Planned",
-      "In Progress",
-      "Ready",
+      "Inbox",
+      "Develop",
+      "Shoot next",
       "Published",
     ]);
     expect(state.contentCards).toEqual({});
@@ -75,14 +74,14 @@ describe("normalizeAppState", () => {
       new Date("2026-03-11T08:00:00Z"),
     );
 
-    expect(state.uiState.themeMode).toBe("dark");
+    expect(state.uiState.themeMode).toBe("system");
     expect(state.uiState.isSidebarCollapsed).toBe(false);
     expect(state.uiState.hasSeenPlannerTour).toBe(false);
     expect(state.uiState.contentFontScale).toBe(CONTENT_FONT_SCALE_DEFAULT);
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
     expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
-    expect(state.contentBoard.columns).toHaveLength(5);
+    expect(state.contentBoard.columns).toHaveLength(4);
     expect(state.todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID].name).toBe("Main");
   });
 
@@ -224,7 +223,7 @@ describe("normalizeAppState", () => {
       status: "finished",
       estimatedMinutes: null,
     });
-    expect(state.contentBoard.columns).toHaveLength(5);
+    expect(state.contentBoard.columns).toHaveLength(4);
   });
 
   test("rejects fractional card positions in persisted state", () => {
@@ -268,11 +267,10 @@ describe("normalizeAppState", () => {
     );
 
     expect(state.contentBoard.columns.map((column) => column.subtitle)).toEqual([
-      "Capture raw concepts",
-      "Ready to work on",
-      "Currently being created",
-      "Prepared to publish",
-      "Live and complete",
+      "Capture the specific thought, not just the topic.",
+      "Ideas worth keeping",
+      "Ready to record — max 5",
+      "Done and live",
     ]);
   });
 });
@@ -676,7 +674,7 @@ describe("SplitPersistenceRepository", () => {
   test("preserves remote content card moves when local state was not mutated for that card", async () => {
     const base = createInitialState("2026-03-11");
     const ideasCol = base.contentBoard.columns[0].id;
-    const publishedCol = base.contentBoard.columns[4].id;
+    const publishedCol = base.contentBoard.columns[3].id;
 
     const card = createContentCard({
       columnId: ideasCol,

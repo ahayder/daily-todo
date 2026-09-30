@@ -207,7 +207,7 @@ describe("ContentPlannerView", () => {
       "sm:w-[300px]",
       "sm:snap-none",
     );
-    expect(screen.getByText("Dump anything, decide later")).toBeInTheDocument();
+    expect(screen.getByText("Capture the specific thought, not just the topic.")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Edit card Draft launch story" }),
     ).toBeInTheDocument();
@@ -254,7 +254,7 @@ describe("ContentPlannerView", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  test("opens desktop in a wider Pinterest-like gallery", async () => {
+  test("opens desktop on Board and switches to a wider Pinterest-like gallery", async () => {
     setDesktopLayout();
     const user = userEvent.setup();
     const props = createProps();
@@ -272,6 +272,15 @@ describe("ContentPlannerView", () => {
     const viewControl = screen.getByRole("group", {
       name: "Content planner view",
     });
+    expect(
+      within(viewControl).getByRole("button", { name: "Board" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
+      "data-layout",
+      "board",
+    );
+
+    await user.click(within(viewControl).getByRole("button", { name: "Gallery" }));
     expect(
       within(viewControl).getByRole("button", { name: "Gallery" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -885,7 +894,7 @@ describe("ContentPlannerView", () => {
     expect(props.onUpdateCard).toHaveBeenCalledWith(
       "card-1",
       "Draft launch story",
-      expect.stringContaining("## RAW IDEA"),
+      expect.stringContaining("## ORIGINAL THOUGHT"),
     );
     expect(props.onMoveCard).toHaveBeenCalledWith("card-1", props.board.columns[1].id, 0);
   });

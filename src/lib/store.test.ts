@@ -556,7 +556,7 @@ describe("planner state", () => {
     const repairedCustom = repaired.contentBoard.columns.find(
       (column) => column.id === customColumn.id,
     )!;
-    expect(repairedInbox.subtitle).toBe("Dump anything, decide later");
+    expect(repairedInbox.subtitle).toBe("Capture the specific thought, not just the topic.");
     expect(repairedCustom.subtitle).toBe("");
   });
 

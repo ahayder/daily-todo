@@ -129,7 +129,12 @@ function renderWithProviders() {
     isVerified: true,
     accessToken: "token_1",
   });
-  const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+  // New workspaces follow the system theme; these tests start from an explicit dark preference.
+  const initialState = createInitialState("2026-03-11");
+  const persistence = createMockPersistenceRepository({
+    ...initialState,
+    uiState: { ...initialState.uiState, themeMode: "dark" },
+  });
 
   return {
     auth,
@@ -358,7 +363,7 @@ describe("appReducer theme mode", () => {
         type: "delete-content-column",
         columnId: column.id,
       }).contentBoard.columns,
-    ).toHaveLength(5);
+    ).toHaveLength(4);
 
     const singleColumn = {
       ...initial,
@@ -701,7 +706,7 @@ describe("AppProvider theme class behavior", () => {
     await userEvent.type(screen.getByLabelText("Password"), "password123");
     await userEvent.click(screen.getAllByRole("button", { name: "Sign in" })[1]);
 
-    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("dark");
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
     expect(persistence.repository.load).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user_1",
@@ -732,7 +737,7 @@ describe("AppProvider theme class behavior", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("dark");
+    expect(await screen.findByTestId("theme-mode")).toHaveTextContent("system");
 
     await userEvent.click(screen.getByRole("button", { name: "dark" }));
     expect(screen.getByTestId("theme-mode")).toHaveTextContent("dark");
@@ -742,6 +747,8 @@ describe("AppProvider theme class behavior", () => {
 describe("AppProvider save queue", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Keep "today" on the fixture day so the load-time day advance does not queue its own save.
+    vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
     window.localStorage.clear();
     document.documentElement.classList.remove("dark");
     Object.defineProperty(document, "visibilityState", {
@@ -1061,6 +1068,17 @@ describe("AppProvider save queue", () => {
 });
 
 describe("AppProvider cache-first hydration", () => {
+  beforeEach(() => {
+    // Keep "today" on the fixture day so the load-time day advance does not
+    // create a local change that races the remote hydration being tested.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("keeps a local card drag when a later remote hydration finishes", async () => {
     installMatchMedia(false);
     const auth = createMockAuthRepository({
@@ -1071,7 +1089,7 @@ describe("AppProvider cache-first hydration", () => {
     });
     const cachedState = appReducer(createInitialState("2026-03-11"), {
       type: "create-content-card",
-      columnId: "content-column-ideas",
+      columnId: "content-column-inbox",
       title: "Move this card",
     });
     const persistence = createMockPersistenceRepository(cachedState);
@@ -1105,19 +1123,19 @@ describe("AppProvider cache-first hydration", () => {
     );
 
     expect(await screen.findByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-ideas",
+      "content-column-inbox",
     );
     await userEvent.click(screen.getByRole("button", { name: "move planner card" }));
     expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-planned",
+      "content-column-develop",
     );
 
     const remoteState = {
       ...cachedState,
       contentBoard: renameContentColumn(
         cachedState.contentBoard,
-        "content-column-ideas",
-        "Inbox",
+        "content-column-inbox",
+        "Capture",
       ),
     };
     await act(async () => {
@@ -1137,9 +1155,9 @@ describe("AppProvider cache-first hydration", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Inbox");
+    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Capture");
     expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-planned",
+      "content-column-develop",
     );
   });
 
@@ -1156,8 +1174,8 @@ describe("AppProvider cache-first hydration", () => {
       ...initialState,
       contentBoard: renameContentColumn(
         initialState.contentBoard,
-        "content-column-ideas",
-        "Inbox",
+        "content-column-inbox",
+        "Capture",
       ),
     };
     const persistence = createMockPersistenceRepository(initialState);
@@ -1197,7 +1215,7 @@ describe("AppProvider cache-first hydration", () => {
     );
 
     expect(await screen.findByTestId("hydrated-column-title")).toHaveTextContent(
-      "Ideas",
+      "Inbox",
     );
 
     await act(async () => {
@@ -1207,6 +1225,6 @@ describe("AppProvider cache-first hydration", () => {
     });
 
     expect(persistence.repository.load).toHaveBeenCalledTimes(2);
-    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Inbox");
+    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Capture");
   });
 });
