@@ -1,0 +1,1129 @@
+<!doctype html>
+<!--
+  ui-ux-pro design direction preview.
+  To make a direction: copy this file to .design/directions/<letter>-<slug>.html, then edit ONLY
+    1. the DIRECTION config in <script id="direction"> (tokens can come from `palette.mjs --json`), and
+    2. the <template id="app-screen"> markup: a mock of the product's real key screen with real copy.
+  Everything else (hero, palette, type, components, wordmarks, voice) renders from the config.
+  URL params: ?theme=dark · ?embed=1 (hides the toolbar, used by compare.html)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Direction preview</title>
+
+<script id="direction">
+window.DIRECTION = {
+  "id": "A",
+  "name": "Night Lagoon",
+  "oneLiner": "Deep ink-teal water at night with one mint light: the calmest page to start from, evolved from today's teal.",
+  "language": "Soft modern (restrained) + a ruled notebook page and the 'tide' Now card",
+  "product": {
+    "name": "DailyTodo",
+    "tagline": "One calm place for today"
+  },
+  "defaultTheme": "dark",
+  "tokens": {
+    "light": {
+      "background": "oklch(0.982 0.008 222)",
+      "foreground": "oklch(0.2 0.031 222)",
+      "card": "oklch(0.997 0.002 222)",
+      "card-foreground": "oklch(0.2 0.031 222)",
+      "popover": "oklch(0.997 0.002 222)",
+      "popover-foreground": "oklch(0.2 0.031 222)",
+      "primary": "oklch(0.53 0.1 172)",
+      "primary-foreground": "oklch(0.99 0 0)",
+      "secondary": "oklch(0.947 0.011 222)",
+      "secondary-foreground": "oklch(0.2 0.031 222)",
+      "muted": "oklch(0.947 0.011 222)",
+      "muted-foreground": "oklch(0.5 0.034 222)",
+      "accent": "oklch(0.947 0.011 222)",
+      "accent-foreground": "oklch(0.2 0.031 222)",
+      "destructive": "oklch(0.56 0.22 27)",
+      "destructive-foreground": "oklch(0.99 0 0)",
+      "success": "oklch(0.542 0.107 170)",
+      "success-foreground": "oklch(0.99 0 0)",
+      "warning": "oklch(0.78 0.16 75)",
+      "warning-foreground": "oklch(0.16 0.028 172)",
+      "info": "oklch(0.55 0.15 250)",
+      "info-foreground": "oklch(0.99 0 0)",
+      "border": "oklch(0.907 0.013 222)",
+      "input": "oklch(0.655 0.013 222)",
+      "ring": "oklch(0.62 0.105 172)",
+      "brand-subtle": "oklch(0.975 0.013 165.8)",
+      "brand-subtle-foreground": "oklch(0.39 0.073 175.7)",
+      "chart-1": "oklch(0.62 0.12 172)",
+      "chart-2": "oklch(0.62 0.15 322)",
+      "chart-3": "oklch(0.62 0.127 232)",
+      "chart-4": "oklch(0.62 0.15 22)",
+      "chart-5": "oklch(0.62 0.13 102)",
+      "p1": "oklch(0.56 0.15 25)",
+      "p1-on": "oklch(0.99 0 0)",
+      "p1-soft": "oklch(0.955 0.022 25)",
+      "p1-ink": "oklch(0.46 0.13 25)",
+      "p2": "oklch(0.62 0.13 65)",
+      "p2-on": "oklch(0.2 0.03 65)",
+      "p2-soft": "oklch(0.96 0.035 85)",
+      "p2-ink": "oklch(0.45 0.09 65)",
+      "p3": "oklch(0.54 0.11 240)",
+      "p3-on": "oklch(0.99 0 0)",
+      "p3-soft": "oklch(0.955 0.022 240)",
+      "p3-ink": "oklch(0.44 0.1 245)",
+      "now-bg": "oklch(0.93 0.035 188)",
+      "now-fill": "oklch(0.875 0.06 180)",
+      "now-fg": "oklch(0.22 0.03 205)",
+      "now-muted": "oklch(0.36 0.045 200)",
+      "now-bar": "oklch(0.53 0.1 172)",
+      "margin-ink": "oklch(0.46 0.085 172)",
+      "rule": "oklch(0.55 0.05 222 / 13%)"
+    },
+    "dark": {
+      "background": "oklch(0.185 0.026 222)",
+      "foreground": "oklch(0.96 0.01 222)",
+      "card": "oklch(0.22 0.026 222)",
+      "card-foreground": "oklch(0.96 0.01 222)",
+      "popover": "oklch(0.245 0.026 222)",
+      "popover-foreground": "oklch(0.96 0.01 222)",
+      "primary": "oklch(0.8 0.12 170)",
+      "primary-foreground": "oklch(0.19 0.029 222)",
+      "secondary": "oklch(0.26 0.026 222)",
+      "secondary-foreground": "oklch(0.96 0.01 222)",
+      "muted": "oklch(0.26 0.026 222)",
+      "muted-foreground": "oklch(0.74 0.023 222)",
+      "accent": "oklch(0.26 0.026 222)",
+      "accent-foreground": "oklch(0.96 0.01 222)",
+      "destructive": "oklch(0.56 0.19 27)",
+      "destructive-foreground": "oklch(0.99 0 0)",
+      "success": "oklch(0.52 0.103 170)",
+      "success-foreground": "oklch(0.99 0 0)",
+      "warning": "oklch(0.8 0.14 75)",
+      "warning-foreground": "oklch(0.18 0.028 170)",
+      "info": "oklch(0.52 0.13 250)",
+      "info-foreground": "oklch(0.99 0 0)",
+      "border": "oklch(0.295 0.023 222)",
+      "input": "oklch(0.491 0.023 222)",
+      "ring": "oklch(0.72 0.113 168.7)",
+      "brand-subtle": "oklch(0.25 0.035 175.1)",
+      "brand-subtle-foreground": "oklch(0.89 0.057 166)",
+      "chart-1": "oklch(0.72 0.12 170)",
+      "chart-2": "oklch(0.72 0.15 320)",
+      "chart-3": "oklch(0.72 0.144 230)",
+      "chart-4": "oklch(0.72 0.15 20)",
+      "chart-5": "oklch(0.72 0.15 100)",
+      "p1": "oklch(0.74 0.13 25)",
+      "p1-on": "oklch(0.2 0.03 25)",
+      "p1-soft": "oklch(0.265 0.045 25)",
+      "p1-ink": "oklch(0.87 0.069 25)",
+      "p2": "oklch(0.83 0.12 80)",
+      "p2-on": "oklch(0.2 0.03 80)",
+      "p2-soft": "oklch(0.27 0.04 80)",
+      "p2-ink": "oklch(0.89 0.08 85)",
+      "p3": "oklch(0.77 0.1 235)",
+      "p3-on": "oklch(0.2 0.03 235)",
+      "p3-soft": "oklch(0.265 0.04 235)",
+      "p3-ink": "oklch(0.87 0.06 235)",
+      "now-bg": "oklch(0.285 0.049 195)",
+      "now-fill": "oklch(0.345 0.062 182)",
+      "now-fg": "oklch(0.97 0.012 180)",
+      "now-muted": "oklch(0.86 0.04 180)",
+      "now-bar": "oklch(0.8 0.12 170)",
+      "margin-ink": "oklch(0.82 0.08 170)",
+      "rule": "oklch(0.9 0.03 222 / 7%)"
+    },
+    "ramp": {
+      "50": "oklch(0.975 0.015 164)",
+      "100": "oklch(0.94 0.032 164.7)",
+      "200": "oklch(0.89 0.057 166)",
+      "300": "oklch(0.82 0.088 167.3)",
+      "400": "oklch(0.72 0.113 168.7)",
+      "500": "oklch(0.62 0.123 170)",
+      "600": "oklch(0.54 0.106 171.3)",
+      "700": "oklch(0.47 0.091 172.5)",
+      "800": "oklch(0.39 0.074 173.8)",
+      "900": "oklch(0.31 0.059 175.1)",
+      "950": "oklch(0.22 0.042 175.7)"
+    }
+  },
+  "fonts": {
+    "heading": {
+      "family": "Figtree",
+      "weights": "500;600;700",
+      "fallback": "\"Hind Siliguri\", ui-sans-serif, system-ui, sans-serif"
+    },
+    "body": {
+      "family": "Figtree",
+      "weights": "400;500;600",
+      "fallback": "\"Hind Siliguri\", ui-sans-serif, system-ui, sans-serif"
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "weights": "400;500;600",
+      "fallback": "ui-monospace, monospace"
+    }
+  },
+  "type": {
+    "base": 16,
+    "ratio": 1.25,
+    "headingWeight": 600,
+    "headingTracking": "-0.015em",
+    "headingTransform": "none",
+    "headingStyle": "normal",
+    "bodyLineHeight": 1.6
+  },
+  "shape": {
+    "radius": "0.75rem",
+    "borderWidth": "1px",
+    "cardShadow": "0 1px 2px oklch(0 0 0 / 0.12)",
+    "buttonShadow": "none",
+    "buttonShadowActive": "none",
+    "buttonTransform": "none",
+    "density": "comfortable"
+  },
+  "motion": {
+    "duration": "200ms",
+    "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "description": "Unhurried and smooth: 200ms ease-out fades and short slides. The tide in the Now card moves continuously; a checked task settles into place. Nothing bounces."
+  },
+  "hero": {
+    "eyebrow": "Your desk notebook for today",
+    "headline": "One calm page for today",
+    "subhead": "Yesterday's unfinished tasks and notes are already here. The Now card tells you what this minute is for.",
+    "primaryCta": "Open today",
+    "secondaryCta": "See the planner",
+    "proof": "",
+    "background": "plain"
+  },
+  "wordmark": {
+    "variants": [
+      {
+        "label": "Lowercase, soft bold",
+        "text": "dailytodo",
+        "font": "heading",
+        "weight": 700,
+        "tracking": "-0.035em",
+        "transform": "none",
+        "detail": ""
+      },
+      {
+        "label": "Title case with a mint dot",
+        "text": "DailyTodo",
+        "font": "heading",
+        "weight": 600,
+        "tracking": "-0.02em",
+        "transform": "none",
+        "detail": "dot"
+      },
+      {
+        "label": "Uppercase tracked",
+        "text": "DailyTodo",
+        "font": "heading",
+        "weight": 600,
+        "tracking": "0.14em",
+        "transform": "uppercase",
+        "detail": ""
+      }
+    ],
+    "markSvg": "<svg viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" width=\"100%\" height=\"100%\"><rect x=\"5\" y=\"4\" width=\"22\" height=\"24\" rx=\"6\"/><path d=\"M11 14.5l3.5 3.5 6.5-7\"/><path d=\"M10.5 22.5c1.8-1.3 3.7-1.3 5.5 0s3.7 1.3 5.5 0\"/></svg>"
+  },
+  "voice": {
+    "traits": [
+      "Calm, not flat",
+      "Clear, not bossy",
+      "Kind, not cheerleading"
+    ],
+    "examples": [
+      {
+        "moment": "Empty state",
+        "text": "Nothing here yet. Add one small thing to start."
+      },
+      {
+        "moment": "Task done",
+        "text": "Done. One less thing to hold in your head."
+      },
+      {
+        "moment": "Sync issue",
+        "text": "Couldn't sync just now. Your changes are safe on this device; we'll try again."
+      },
+      {
+        "moment": "Carryover",
+        "text": "From yesterday"
+      },
+      {
+        "moment": "Button",
+        "text": "Start focus"
+      }
+    ]
+  },
+  "rationale": [
+    "Dark-first without cold slate: the ink-teal night background is tinted and deep, so long evening sessions stay restful for tired ADHD eyes.",
+    "One mint accent, used only for actions and the Now card, keeps the answer to 'what do I do next?' visually obvious (isolation effect) — and it grows out of the teal app icon you already have.",
+    "Figtree is friendly and very readable; Hind Siliguri is the most familiar, legible Bengali sans, so mixed Bangla/English notes read as one voice."
+  ],
+  "risks": [
+    "Closest to a 'normal' dark app, so it may feel less personal. Mitigation: the ruled page and the tide Now card carry the notebook identity.",
+    "Hind Siliguri looks slightly smaller than Figtree at the same size. Mitigation: set a size-adjust on the Bengali face in next/font and give Bengali lines 1.75 line-height."
+  ]
+};
+// Token commands: node palette.mjs "oklch(0.80 0.12 170)" --keep-seed --tint 0.02 --json  # dark accent/status | node palette.mjs "oklch(0.53 0.10 172)" --tint 0.02 --json  # light accent/status
+</script>
+
+<style>
+  :root { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--background); color: var(--foreground);
+    font-family: var(--font-body); font-size: var(--size-base); line-height: var(--body-lh);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4, .display {
+    font-family: var(--font-heading); font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking);
+    text-transform: var(--heading-transform); font-style: var(--heading-style); line-height: 1.15; margin: 0; text-wrap: balance;
+  }
+  p { margin: 0; text-wrap: pretty; }
+  a { color: inherit; }
+  code, .mono { font-family: var(--font-mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- toolbar (preview chrome) ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 24px; background: color-mix(in oklch, var(--background) 88%, transparent);
+    backdrop-filter: blur(12px); border-bottom: var(--border-w) solid var(--border); font-size: 13px;
+  }
+  .toolbar .tag { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+  .toolbar strong { font-weight: 600; }
+  .toolbar .spacer { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; }
+  .seg button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 999px; color: var(--muted-foreground); }
+  .seg button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+  .seg button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  body.embed .toolbar { display: none; }
+
+  /* ---------- layout ---------- */
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  section.block { padding: 72px 0; border-bottom: 1px solid var(--border); }
+  .section-label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 24px; }
+  .stack { display: flex; flex-direction: column; gap: var(--gap); }
+  .row { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; }
+  .between { justify-content: space-between; }
+  .grid { display: grid; gap: var(--gap); }
+  .muted { color: var(--muted-foreground); }
+  .small { font-size: 0.875em; }
+  .xs { font-size: 0.75em; }
+
+  /* ---------- components (shared by hero, app screen, specimen) ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+    font: inherit; font-weight: 500; font-size: 0.9375em; line-height: 1; text-transform: var(--btn-transform);
+    height: var(--control-h); padding: 0 calc(var(--control-h) * 0.45); border-radius: var(--radius);
+    border: var(--border-w) solid transparent; box-shadow: var(--btn-shadow);
+    transition: transform var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .btn:active { box-shadow: var(--btn-shadow-active); transform: var(--btn-press); }
+  .btn:focus-visible, .input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { background: color-mix(in oklch, var(--primary) 88%, var(--foreground)); }
+  .btn-secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn-outline { background: var(--background); color: var(--foreground); border-color: var(--input); }
+  .btn-ghost { background: transparent; color: var(--foreground); box-shadow: none; }
+  .btn-ghost:hover, .btn-outline:hover { background: var(--accent); }
+  .btn-destructive { background: var(--destructive); color: var(--destructive-foreground); }
+  .btn-lg { height: calc(var(--control-h) * 1.2); font-size: 1em; }
+  .btn-sm { height: calc(var(--control-h) * 0.8); font-size: 0.8125em; }
+  .card {
+    background: var(--card); color: var(--card-foreground); border: var(--border-w) solid var(--border);
+    border-radius: calc(var(--radius) * 1.5); box-shadow: var(--card-shadow); padding: var(--pad);
+  }
+  .input {
+    width: 100%; height: var(--control-h); padding: 0 12px; font: inherit; font-size: 0.9375em; color: var(--foreground);
+    background: var(--background); border: var(--border-w) solid var(--input); border-radius: var(--radius);
+  }
+  .input.error { border-color: var(--destructive); }
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 0.875em; font-weight: 500; }
+  .help { font-weight: 400; color: var(--muted-foreground); font-size: 0.8125rem; }
+  .err { font-weight: 400; color: var(--destructive); font-size: 0.8125rem; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; font-size: 12px; font-weight: 500;
+    border-radius: 999px; border: var(--border-w) solid var(--border); background: var(--muted); color: var(--foreground);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.success { background: color-mix(in oklch, var(--success) 14%, var(--background)); color: color-mix(in oklch, var(--success) 70%, var(--foreground)); border-color: transparent; }
+  .badge.warning { background: color-mix(in oklch, var(--warning) 22%, var(--background)); color: color-mix(in oklch, var(--warning) 45%, var(--foreground)); border-color: transparent; }
+  .badge.danger { background: color-mix(in oklch, var(--destructive) 12%, var(--background)); color: color-mix(in oklch, var(--destructive) 75%, var(--foreground)); border-color: transparent; }
+  .badge.brand { background: var(--brand-subtle); color: var(--brand-subtle-foreground); border-color: transparent; }
+  .alert { display: flex; gap: 12px; padding: 14px 16px; border-radius: var(--radius); border: var(--border-w) solid var(--border); background: var(--brand-subtle); color: var(--brand-subtle-foreground); font-size: 0.9em; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--brand-subtle); color: var(--brand-subtle-foreground); flex: none; }
+  .divider { height: 1px; background: var(--border); border: 0; margin: 0; }
+  .table { width: 100%; border-collapse: collapse; font-size: 0.875em; }
+  .table th { text-align: left; font-weight: 500; color: var(--muted-foreground); padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .table td { padding: 12px; border-bottom: 1px solid var(--border); }
+  .table .right { text-align: right; }
+  .switch { width: 36px; height: 20px; border-radius: 999px; background: var(--primary); position: relative; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 50%; background: var(--primary-foreground); }
+  .switch.off { background: var(--input); }
+  .switch.off::after { left: 2px; background: var(--background); }
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--muted); border-radius: calc(var(--radius) + 2px); }
+  .tabs span { padding: 6px 12px; border-radius: var(--radius); font-size: 0.875em; color: var(--muted-foreground); }
+  .tabs span.on { background: var(--background); color: var(--foreground); box-shadow: var(--card-shadow); font-weight: 500; }
+  .stat .value { font-family: var(--font-heading); font-size: 1.75em; font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking); font-variant-numeric: tabular-nums; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); font-size: 0.875em; color: var(--muted-foreground); }
+  .nav-item.on { background: var(--accent); color: var(--foreground); font-weight: 500; }
+  .icon { width: 16px; height: 16px; flex: none; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 24px 0 88px; }
+  .hero.tint { background: var(--brand-subtle); }
+  .hero.inverse { background: var(--foreground); color: var(--background); }
+  .hero.inverse .muted { color: color-mix(in oklch, var(--background) 70%, var(--foreground)); }
+  .hero.primary { background: var(--primary); color: var(--primary-foreground); }
+  .hero.primary .muted { color: color-mix(in oklch, var(--primary-foreground) 80%, var(--primary)); }
+  .hero nav { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 64px; }
+  .hero nav .links { display: flex; gap: 28px; font-size: 0.9em; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+  .hero h1 { font-size: clamp(2.5rem, 10vw, var(--size-5)); line-height: 1.04; }
+  .hero .eyebrow { font-size: 0.875em; font-weight: 500; margin-bottom: 20px; }
+  .hero .sub { font-size: 1.15em; margin-top: 20px; max-width: 34ch; }
+  .hero .ctas { margin-top: 32px; }
+  .hero .proof { margin-top: 28px; font-size: 0.875em; }
+  .hero-visual { border-radius: calc(var(--radius) * 2); overflow: hidden; border: var(--border-w) solid var(--border); box-shadow: 0 24px 60px -20px oklch(0 0 0 / 0.25); background: var(--background); color: var(--foreground); }
+  .hero-visual .screen { zoom: 0.62; }
+
+  /* ---------- app screen frame ---------- */
+  .frame-wrap { display: flex; justify-content: center; }
+  .frame { width: 100%; border: 1px solid var(--border); border-radius: calc(var(--radius) * 2); overflow: hidden; background: var(--background); transition: width 300ms var(--ease); }
+  .frame.mobile { width: 390px; }
+  .frame .chrome { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--muted); }
+  .frame .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--input); }
+  .screen { container-type: inline-size; }
+  /* The sample screen collapses its sidebar in narrow frames; reuse .app-shell / .app-sidebar in custom screens. */
+  @container (max-width: 640px) {
+    .app-shell { grid-template-columns: 1fr !important; }
+    .app-sidebar { display: none !important; }
+  }
+
+  /* ---------- palette ---------- */
+  .ramp { display: grid; grid-template-columns: repeat(11, 1fr); border-radius: var(--radius); overflow: hidden; }
+  .ramp div { height: 64px; display: flex; align-items: flex-end; padding: 6px; font-family: var(--font-mono); font-size: 10px; }
+  .swatches { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .swatch { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: 12px; }
+  .swatch .chip { height: 72px; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; }
+  .swatch .meta { padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; }
+  .swatch .meta code { font-size: 11px; color: var(--muted-foreground); }
+
+  /* ---------- type ---------- */
+  .type-row { display: grid; grid-template-columns: 90px 1fr; gap: 24px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .type-row .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+  .fonts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: 40px; }
+  .font-card .aa { font-size: 72px; line-height: 1; margin: 16px 0; }
+
+  /* ---------- wordmarks ---------- */
+  .marks { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .mark-tile { border-radius: calc(var(--radius) * 1.5); padding: 40px 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; border: 1px solid var(--border); }
+  .mark-tile.inv { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+  .wm { font-size: 40px; line-height: 1; white-space: nowrap; }
+  .wm .dot { color: var(--primary); }
+  .mark-tile.inv .wm .dot { color: var(--ring); }
+  .monogram { display: grid; place-items: center; background: var(--primary); color: var(--primary-foreground); font-family: var(--font-heading); font-weight: 700; border-radius: 22%; }
+
+  /* ---------- density ---------- */
+  :root { --gap: 12px; --pad: 20px; --control-h: 40px; }
+  :root[data-density="compact"] { --gap: 8px; --pad: 14px; --control-h: 34px; }
+  :root[data-density="airy"] { --gap: 16px; --pad: 28px; --control-h: 46px; }
+
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .hero nav .links { display: none; }
+    .toolbar { padding: 8px 16px; }
+    .toolbar [data-bind="language"] { display: none; }
+    .wrap { padding: 0 16px; }
+    .type-row { grid-template-columns: 1fr; gap: 4px; }
+    .ramp div { height: 44px; font-size: 0; }
+    section.block { padding: 48px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="toolbar" role="toolbar" aria-label="Preview controls">
+  <span class="tag" data-bind="id"></span>
+  <strong data-bind="name"></strong>
+  <span class="muted" data-bind="language"></span>
+  <span class="spacer"></span>
+  <div class="seg" id="theme-seg" aria-label="Theme">
+    <button type="button" data-theme-btn="light">Light</button>
+    <button type="button" data-theme-btn="dark">Dark</button>
+  </div>
+  <div class="seg" id="width-seg" aria-label="App screen width">
+    <button type="button" data-width-btn="desktop">Desktop</button>
+    <button type="button" data-width-btn="mobile">Mobile</button>
+  </div>
+</div>
+
+<!-- ============ 1. Hero (marketing) ============ -->
+<header class="hero" id="hero">
+  <div class="wrap">
+    <nav aria-label="Marketing">
+      <span id="nav-wordmark"></span>
+      <div class="links muted"><span>Todos</span><span>Notes</span><span>Planner</span></div>
+      <div class="row"><span class="btn btn-ghost btn-sm">Sign in</span><span class="btn btn-primary btn-sm" data-bind="hero.primaryCta"></span></div>
+    </nav>
+    <div class="hero-grid">
+      <div>
+        <p class="eyebrow muted" data-bind="hero.eyebrow"></p>
+        <h1 class="display" data-bind="hero.headline"></h1>
+        <p class="sub muted" data-bind="hero.subhead"></p>
+        <div class="row ctas">
+          <span class="btn btn-primary btn-lg" data-bind="hero.primaryCta"></span>
+          <span class="btn btn-outline btn-lg" data-bind="hero.secondaryCta"></span>
+        </div>
+        <p class="proof muted" data-bind="hero.proof"></p>
+      </div>
+      <div class="hero-visual" aria-hidden="true"><div class="screen" id="hero-screen"></div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ 2. Real app screen ============ -->
+  <section class="block">
+    <div class="wrap">
+      <p class="section-label">Key screen</p>
+      <div class="frame-wrap"><div class="frame" id="frame"><div class="chrome"><i></i><i></i><i></i></div><div class="screen" id="app-screen-slot"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ 3. Why this direction ============ -->
+  <section class="block">
+    <div class="wrap grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 48px;">
+      <div class="stack" style="gap:16px">
+        <p class="section-label" style="margin:0">The idea</p>
+        <h2 style="font-size: var(--size-3)" data-bind="oneLiner"></h2>
+        <p class="muted" data-bind="motion.description"></p>
+      </div>
+      <div class="stack" style="gap:16px">
+        <p class="section-label" style="margin:0">Why it works</p>
+        <ul id="rationale" class="stack" style="margin:0; padding-left: 18px; gap: 10px"></ul>
+        <p class="section-label" style="margin:16px 0 0">Risks</p>
+        <ul id="risks" class="stack muted" style="margin:0; padding-left: 18px; gap: 10px"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. Color ============ -->
+  <section class="block">
+    <div class="wrap stack" style="gap: 28px">
+      <p class="section-label" style="margin:0">Color</p>
+      <div class="ramp" id="ramp"></div>
+      <div class="grid swatches" id="swatches"></div>
+    </div>
+  </section>
+
+  <!-- ============ 5. Type ============ -->
+  <section class="block">
+    <div class="wrap">
+      <p class="section-label">Typography</p>
+      <div class="grid fonts" id="fonts"></div>
+      <div id="scale"></div>
+    </div>
+  </section>
+
+  <!-- ============ 6. Components ============ -->
+  <section class="block">
+    <div class="wrap grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+      <div class="card stack" style="gap: 18px">
+        <p class="section-label" style="margin:0">Buttons</p>
+        <div class="row"><span class="btn btn-primary">Save changes</span><span class="btn btn-secondary">Preview</span><span class="btn btn-outline">Export</span></div>
+        <div class="row"><span class="btn btn-ghost">Cancel</span><span class="btn btn-destructive">Delete project</span><span class="btn btn-primary btn-sm">Small</span></div>
+        <div class="row"><span class="badge brand">New</span><span class="badge success"><span class="dot"></span>Paid</span><span class="badge warning"><span class="dot"></span>Due soon</span><span class="badge danger"><span class="dot"></span>Overdue</span><span class="badge">Draft</span></div>
+        <div class="row"><div class="tabs"><span class="on">Overview</span><span>Activity</span><span>Settings</span></div></div>
+        <div class="row"><span class="switch"></span><span class="small">Email reminders</span><span class="switch off"></span><span class="small muted">SMS</span></div>
+      </div>
+      <div class="card stack" style="gap: 16px">
+        <p class="section-label" style="margin:0">Forms</p>
+        <label class="field">Work email<input class="input" value="maya@studio.co" aria-label="Work email" /><span class="help">We'll send receipts here.</span></label>
+        <label class="field">Amount<input class="input error num" value="12,00" aria-label="Amount" /><span class="err">Use a dot for decimals, like 12.00</span></label>
+        <div class="alert"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span id="alert-copy"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7. Wordmark ============ -->
+  <section class="block">
+    <div class="wrap">
+      <p class="section-label">Wordmark</p>
+      <div class="grid marks" id="marks"></div>
+      <div class="row" id="mark-sizes" style="margin-top: 28px; gap: 24px; align-items: flex-end"></div>
+    </div>
+  </section>
+
+  <!-- ============ 8. Voice ============ -->
+  <section class="block" style="border-bottom: 0">
+    <div class="wrap">
+      <p class="section-label">Voice</p>
+      <div class="row" id="traits" style="margin-bottom: 24px"></div>
+      <table class="table" id="voice"><thead><tr><th scope="col">Moment</th><th scope="col">Copy</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+</main>
+
+<!--
+  Replace this with a mock of the product's most important screen, using the product's real
+  navigation, data shapes, and copy. Use the component classes above (.card .btn .badge .table
+  .stat .nav-item .avatar .input .tabs .switch …) and CSS variables (var(--primary) etc.).
+  It is rendered in the "Key screen" frame and, scaled down, in the hero.
+-->
+<template id="app-screen">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600&display=swap');
+
+.dt, .dt-extras { font-size: 15px; line-height: 1.5; color: var(--foreground); }
+.dt { background: var(--background); display: flex; flex-direction: column; min-height: 700px; }
+.dt p, .dt h2, .dt h3, .dt h4, .dt-extras p { margin: 0; }
+.dt ul, .dt ol, .dt-extras ul, .dt-extras ol { list-style: none; margin: 0; padding: 0; }
+.dt .i, .dt-extras .i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dt [lang="bn"], .dt-extras [lang="bn"] { line-height: 1.75; }
+.dt .mono, .dt-extras .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.dt-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--background); }
+.dt-iconbtn { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius); color: var(--muted-foreground); cursor: pointer; flex: none; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
+.dt-iconbtn:hover { background: var(--accent); color: var(--foreground); }
+.dt-pills { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--muted); overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.dt-pills a { padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; cursor: pointer; text-decoration: none; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
+.dt-pills a:hover { color: var(--foreground); }
+.dt-pills a.on { background: var(--card); color: var(--foreground); }
+.dt-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+.dt-sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.dt-side { border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--card); }
+.dt-side [data-wordmark] { padding: 2px 10px 16px; }
+.dt-wsbtn { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border); font-size: 14px; font-weight: 500; margin-bottom: 12px; cursor: pointer; }
+.dt-wsbtn .i { margin-left: auto; color: var(--muted-foreground); }
+.dt-ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.dt-side-label { font-size: 13px; font-weight: 600; color: var(--muted-foreground); padding: 10px 10px 4px; }
+.dt-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: var(--radius); font-size: 14px; color: var(--muted-foreground); cursor: pointer; transition: background var(--dur) var(--ease); }
+.dt-day:hover { background: var(--accent); color: var(--foreground); }
+.dt-day.on { background: var(--brand-subtle); color: var(--brand-subtle-foreground); font-weight: 600; }
+.dt-day small { font-size: 13px; font-weight: 500; }
+.dt-profile { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 18px 8px 4px; font-size: 14px; }
+.dt-profile small { display: block; font-size: 13px; color: var(--muted-foreground); }
+.dt-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 452px); min-width: 0; }
+.dt-switch { display: none; }
+.dt-note { padding: 28px 36px 40px; border-right: 1px solid var(--border); min-width: 0; }
+.dt-note-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.dt-date { font-size: 30px; line-height: 1.15; }
+.dt-wschip { font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted-foreground); }
+.dt-page { font-size: 16px; line-height: 1.75; max-width: 62ch; }
+.dt-page h4 { font-size: 16px; font-weight: 600; line-height: 1.75; margin-top: 1.75em; }
+.dt-page h4:first-child { margin-top: 0; }
+.dt-page ul { list-style: disc; padding-left: 1.2em; }
+.dt-page li::marker { color: var(--muted-foreground); }
+.dt-todos { padding: 22px 22px 28px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.dt-todos-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dt-todos-h h2 { font-size: 22px; }
+.dt-sub { font-size: 13px; color: var(--muted-foreground); margin-top: 2px; }
+.dt-actions { display: flex; gap: 2px; }
+.dt-now { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 14px; align-items: center; padding: 16px 18px; border-radius: calc(var(--radius) * 1.4); background: var(--now-bg); color: var(--now-fg); }
+.dt-now-tide, .dt-now-ring, .dt-now-bar { display: none; }
+.dt-now-body { position: relative; min-width: 0; }
+.dt-now-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--now-muted); }
+.dt-now-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--now-bar); }
+.dt-now-title { font-family: var(--font-heading); font-size: 19px; font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking); line-height: 1.3; margin-top: 4px; }
+.dt-now-meta { font-size: 13px; color: var(--now-muted); margin-top: 6px; }
+.dt-now-actions { position: relative; display: flex; gap: 6px; }
+.dt-now-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--radius); font-size: 13px; font-weight: 600; border: 1px solid color-mix(in oklch, var(--now-fg) 30%, transparent); cursor: pointer; transition: background var(--dur) var(--ease); }
+.dt-now-btn:hover { background: color-mix(in oklch, var(--now-fg) 10%, transparent); }
+.dt-now-btn .i { width: 14px; height: 14px; }
+.dt-now-btn.solid { background: var(--now-fg); color: var(--now-bg); border-color: transparent; }
+.dt-now-bar { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--now-fg) 16%, transparent); position: relative; }
+.dt-now-bar i { position: absolute; inset: 0 auto 0 0; width: 60%; border-radius: inherit; background: var(--now-bar); }
+.dt-now-ring .trk { fill: none; stroke: color-mix(in oklch, var(--now-fg) 18%, transparent); stroke-width: 5; }
+.dt-now-ring .val { fill: none; stroke: var(--now-bar); stroke-width: 5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 28px 28px; }
+.dt-now-ring text { font-family: var(--font-mono); font-size: 13px; font-weight: 600; fill: currentColor; }
+.dt-attn { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted-foreground); padding: 0 4px; }
+.dt-attn > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.dt-link { font-weight: 600; color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ring); cursor: pointer; }
+.dt-group { --pc: var(--p1); --pc-on: var(--p1-on); --pc-soft: var(--p1-soft); --pc-ink: var(--p1-ink); }
+.dt-group.g2 { --pc: var(--p2); --pc-on: var(--p2-on); --pc-soft: var(--p2-soft); --pc-ink: var(--p2-ink); }
+.dt-group.g3 { --pc: var(--p3); --pc-on: var(--p3-on); --pc-soft: var(--p3-soft); --pc-ink: var(--p3-ink); }
+.dt-group-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 6px; }
+.dt-tab { display: inline-flex; align-items: center; gap: 6px; }
+.dt-sig { font-family: var(--font-mono); font-weight: 600; font-size: 13px; color: var(--pc-ink); }
+.dt-group-h h3 { font-family: var(--font-body); font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.dt-count { font-size: 13px; color: var(--muted-foreground); }
+.dt-task { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 0 12px; align-items: start; padding: 9px 8px; border-radius: var(--radius); transition: background var(--dur) var(--ease); }
+.dt-task:hover { background: var(--accent); }
+.dt-check { width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--input); display: grid; place-items: center; cursor: pointer; color: var(--primary-foreground); transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.dt-check:hover { border-color: var(--ring); }
+.dt-task.done .dt-check { background: var(--primary); border-color: var(--primary); }
+.dt-check .i { width: 13px; height: 13px; stroke-width: 3; }
+.dt-task-text { font-size: 15px; line-height: 1.45; }
+.dt-task-text[lang="bn"] { line-height: 1.6; }
+.dt-task.done > .dt-task-main .dt-task-text { color: var(--muted-foreground); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.dt-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 13px; color: var(--muted-foreground); }
+.dt-meta:empty { display: none; }
+.dt-est { font-size: 13px; }
+.dt-status { font-size: 13px; font-weight: 600; color: var(--brand-subtle-foreground); background: var(--brand-subtle); padding: 0 8px; border-radius: 999px; line-height: 22px; }
+.dt-nowtag { display: none; }
+.dt-age { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--margin-ink); white-space: nowrap; margin-top: 2px; }
+.dt-age .i { width: 14px; height: 14px; }
+.dt-sub-list { grid-column: 2 / -1; margin-top: 6px; display: flex; flex-direction: column; }
+.dt-sub-list .dt-task { padding: 5px 6px; margin-left: -6px; }
+.dt-add { display: flex; align-items: center; gap: 12px; padding: 8px; font-size: 14px; color: var(--muted-foreground); border-radius: var(--radius); cursor: text; transition: background var(--dur) var(--ease); }
+.dt-add .i { width: 20px; }
+.dt-add:hover { background: var(--accent); color: var(--foreground); }
+.dt-toast { align-self: center; display: inline-flex; align-items: center; gap: 14px; padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--foreground); color: var(--background); font-size: 14px; box-shadow: 0 12px 32px -12px oklch(0 0 0 / 0.45); }
+.dt-toast-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 600; background: color-mix(in oklch, var(--background) 18%, var(--foreground)); cursor: pointer; }
+.dt-toast-btn .i { width: 14px; height: 14px; }
+.dt-extras { padding: 28px; border-top: 1px solid var(--border); background: var(--background); }
+.hero-visual .dt-extras { display: none; }
+.dt-x-label { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 16px !important; }
+.dt-x-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+.dt-x { border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.4); padding: 18px; background: var(--card); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dt-x-t { font-weight: 600; font-size: 14px; }
+.dt-x-n { font-size: 13px; color: var(--muted-foreground); }
+.dt-x .dt-now { grid-template-columns: minmax(0, 1fr); }
+.dt-strip li { display: grid; grid-template-columns: 100px 1fr; gap: 10px; font-size: 14px; padding: 8px 0; border-top: 1px dashed var(--border); }
+.dt-strip .mono { font-size: 13px; color: var(--muted-foreground); }
+.dt-strip em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--brand-subtle-foreground); background: var(--brand-subtle); border-radius: 999px; padding: 0 8px; margin-left: 6px; }
+.dt-strip .free { color: var(--muted-foreground); }
+.dt-mini { display: flex; flex-direction: column; }
+.dt-stage { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; font-size: 13px; font-weight: 600; }
+.dt-stage li { display: inline-flex; align-items: center; gap: 4px; }
+.dt-stage li:not(:last-child)::after { content: "›"; color: var(--muted-foreground); margin-left: 2px; }
+.dt-stage .st { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; color: var(--muted-foreground); border: 1px dashed var(--input); }
+.dt-stage .st.past { color: var(--foreground); border-style: solid; border-color: var(--border); }
+.dt-stage .st.cur { background: var(--primary); color: var(--primary-foreground); border: 1px solid transparent; }
+.dt-cap { font-size: 13px; padding: 0 6px; border-radius: 999px; background: var(--muted); color: var(--foreground); }
+.dt-card-mini { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--background); }
+.dt-card-mini b { font-weight: 600; font-family: var(--font-heading); }
+.dt-next { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: var(--radius); background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+@container (max-width: 900px) {
+  .dt-main { grid-template-columns: minmax(0, 1fr); }
+  .dt-note { display: none; }
+  .dt-switch { display: flex; gap: 4px; margin: 14px 16px 0; padding: 3px; border-radius: 999px; background: var(--muted); }
+  .dt-switch span { flex: 1; text-align: center; padding: 7px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .dt-switch span.on { background: var(--card); color: var(--foreground); }
+  .dt-todos { padding: 16px; }
+}
+@container (max-width: 640px) {
+  .dt-top { gap: 4px; padding: 8px; }
+  .dt-sync span, .dt-pills .lg { display: none; }
+  .dt-pills a { padding: 6px 11px; }
+  .dt-now { grid-template-columns: minmax(0, 1fr); }
+  .dt-extras { padding: 16px; }
+  .dt-task { grid-template-columns: 22px minmax(0, 1fr); }
+  .dt-task > .dt-age { grid-column: 2; justify-self: start; margin-top: 4px; }
+  .dt-task > .dt-age-empty { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .dt *, .dt-extras * { transition: none !important; animation: none !important; } }
+
+.dt-note { background: var(--background); }
+.dt-todos { background: var(--card); }
+.dt [lang="bn"], .dt-extras [lang="bn"] { font-size: 1.06em; }
+.dt-date { display: flex; flex-direction: column; gap: 2px; font-size: 30px; }
+.dt-date-day { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--margin-ink); letter-spacing: 0.01em; }
+.dt-page { background-image: linear-gradient(to bottom, transparent calc(1.75em - 1px), var(--rule) calc(1.75em - 1px)); background-size: 100% 1.75em; }
+.dt-now { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--now-bar) 35%, transparent); }
+.dt-now-tide { display: block; position: absolute; inset: 0 auto 0 0; width: 60%; background: var(--now-fill); border-right: 2px solid var(--now-bar); transition: width 600ms linear; }
+.dt-group-h .dt-tab::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc); margin-right: 2px; }
+.dt-task.is-now { background: color-mix(in oklch, var(--now-bg) 70%, transparent); }
+.dt-nowtag { display: inline; font-size: 13px; font-weight: 600; color: var(--margin-ink); }
+.dt-age[data-days="3"] { font-weight: 600; }
+.dt-age[data-days="6"] { font-weight: 700; }
+
+</style>
+<div class="dt">
+  <header class="dt-top">
+    <span class="dt-iconbtn" aria-label="Collapse sidebar"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg></span>
+    <div class="dt-pills" role="navigation" aria-label="Main navigation">
+      <a class="on" aria-current="page">Todos</a><a>Notes</a><a><span class="lg">Daily </span>Planner</a><a>Content<span class="lg"> Planner</span></a>
+    </div>
+    <span class="dt-sync" role="status"><i></i><span>Saved · 2 min ago</span></span>
+    <span class="dt-iconbtn" aria-label="Switch to light mode"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+  </header>
+  <div class="dt-body app-shell" style="display:grid; grid-template-columns: 228px minmax(0, 1fr);">
+    <aside class="app-sidebar dt-side">
+      <div data-wordmark="0" style="font-size: 20px"></div>
+      <span class="dt-wsbtn"><span class="dt-ws-dot"></span>Main<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+      <p class="dt-side-label">Today</p>
+      <span class="dt-day on"><span>Thu, Oct 1</span><small>4 left</small></span>
+      <p class="dt-side-label">Earlier</p>
+      <span class="dt-day"><span>Wed, Sep 30</span></span>
+      <span class="dt-day"><span>Tue, Sep 29</span></span>
+      <span class="dt-day"><span>Mon, Sep 28</span></span>
+      <span class="dt-day"><span>Sun, Sep 27</span></span>
+      <div class="dt-profile"><span class="avatar">A</span><span><b>Ali</b><small>Open account menu</small></span></div>
+    </aside>
+    <main class="dt-main">
+      <div class="dt-switch" role="tablist" aria-label="Todos page sections"><span class="on" role="tab" aria-selected="true">Todos</span><span role="tab" aria-selected="false">Daily note</span></div>
+      <section class="dt-note" aria-label="Daily note">
+        <header class="dt-note-h">
+          <h2 class="dt-date"><span class="dt-date-day">Thursday</span> <span class="dt-date-d">Oct 1</span></h2>
+          <span class="dt-wschip">Main</span>
+        </header>
+        <div class="dt-page">
+          <h4>Morning brain dump</h4>
+          <p lang="bn">আজকে মাথাটা একটু ভারী, তাই ছোট কাজ দিয়ে শুরু করবো।</p>
+          <ul>
+            <li>Video idea: film the real messy desk, not the pretty one.</li>
+            <li>Lunch at 1:30 — no screens.</li>
+          </ul>
+          <h4>Shoot notes</h4>
+          <ul>
+            <li>B-roll: <span lang="bn">হাতে লেখা প্ল্যানার, কফি, জানালার আলো</span></li>
+            <li>Hook: “I forget things, so my notebook remembers for me.”</li>
+          </ul>
+          <p lang="bn">কালকের জন্য: স্ক্রিপ্টের শেষ অংশটা আবার পড়তে হবে।</p>
+        </div>
+      </section>
+      <section class="dt-todos" aria-label="Todos">
+        <header class="dt-todos-h">
+          <div><h2>Todos</h2><p class="dt-sub">Plan the day from here.</p></div>
+          <div class="dt-actions"><span class="dt-iconbtn" aria-label="Enter focus mode"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><span class="dt-iconbtn" aria-label="Labels: Must, Should, Could"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13"/></svg></span></div>
+        </header>
+        <div class="dt-now" role="region" aria-label="Now">
+          <div class="dt-now-tide" aria-hidden="true"></div>
+          <svg class="dt-now-ring" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="23" class="trk"/><circle cx="28" cy="28" r="23" class="val" pathLength="100" stroke-dasharray="40 100"/><text x="28" y="33" text-anchor="middle">18m</text></svg>
+          <div class="dt-now-body">
+            <p class="dt-now-label"><span class="dt-now-dot"></span>Now</p>
+            <p class="dt-now-title">Fix sync bug on content cards</p>
+            <p class="dt-now-meta"><span class="mono">18 min</span> left of 45 · Next: <span lang="bn">আম্মুকে ফোন করা</span></p>
+          </div>
+          <div class="dt-now-actions"><span class="dt-now-btn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>Pause</span><span class="dt-now-btn solid"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Done</span></div>
+          <div class="dt-now-bar" aria-hidden="true"><i></i></div>
+        </div>
+        <div class="dt-attn"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>2 tasks worth a look</span><span class="dt-link">Review</span></div>
+        
+  <section class="dt-group g1">
+    <header class="dt-group-h"><span class="dt-tab"><span class="dt-sig" aria-hidden="true">!!</span><h3>Must do</h3></span><span class="dt-count">3 left</span></header>
+    <ul>
+  <li class="dt-task is-now">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Fix sync bug on content cards</p>
+      <p class="dt-meta"><span class="dt-est mono">45m</span><span class="dt-status">Ongoing</span><span class="dt-nowtag">Now</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    <ul class="dt-sub-list">
+  <li class="dt-task done">
+    <span class="dt-check" role="checkbox" aria-checked="true" aria-label="Mark done"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Reproduce on localhost</p>
+      <p class="dt-meta"><span class="dt-est mono">10m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Write a failing test</p>
+      <p class="dt-meta"><span class="dt-est mono">15m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li></ul>
+  </li>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Record the intro for the planner video</p>
+      <p class="dt-meta"><span class="dt-est mono">30m</span></p>
+    </div>
+    <span class="dt-age" data-days="1"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>From yesterday</span>
+    
+  </li>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text" lang="bn">আম্মুকে ফোন করা</p>
+      <p class="dt-meta"><span class="dt-est mono">10m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li></ul>
+    <div class="dt-add"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg><span>Add a must-do task…</span></div>
+  </section>
+        
+  <section class="dt-group g2">
+    <header class="dt-group-h"><span class="dt-tab"><span class="dt-sig" aria-hidden="true">!</span><h3>Should do</h3></span><span class="dt-count">2 left</span></header>
+    <ul>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Draft shoot card: why I plan in Bangla</p>
+      <p class="dt-meta"><span class="dt-est mono">20m</span></p>
+    </div>
+    <span class="dt-age" data-days="3"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>3 days waiting</span>
+    
+  </li>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text" lang="bn">বাজারের লিস্ট বানানো</p>
+      <p class="dt-meta"><span class="dt-est mono">5m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li>
+  <li class="dt-task done">
+    <span class="dt-check" role="checkbox" aria-checked="true" aria-label="Mark done"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Reply to Rafi about the thumbnail</p>
+      <p class="dt-meta"><span class="dt-est mono">10m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li></ul>
+    <div class="dt-add"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg><span>Add a should-do task…</span></div>
+  </section>
+        
+  <section class="dt-group g3">
+    <header class="dt-group-h"><span class="dt-tab"><span class="dt-sig" aria-hidden="true">~</span><h3>Could do</h3></span><span class="dt-count">1 left</span></header>
+    <ul>
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Clean up the Downloads folder</p>
+      <p class="dt-meta"><span class="dt-est mono">10m</span></p>
+    </div>
+    <span class="dt-age-empty"></span>
+    
+  </li></ul>
+    <div class="dt-add"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg><span>Add a task for later…</span></div>
+  </section>
+        <div class="dt-toast" role="status"><span>Task deleted</span><span class="dt-toast-btn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Undo</span></div>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="dt-extras">
+  <p class="dt-x-label">Signature details</p>
+  <div class="dt-x-grid">
+    <div class="dt-x">
+      <p class="dt-x-t">1 · Now card, Daily Planner variant</p>
+      <div class="dt-now dt-now--plan" role="region" aria-label="Now">
+        <div class="dt-now-tide" aria-hidden="true" style="width: 62%"></div>
+        <svg class="dt-now-ring" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="23" class="trk"/><circle cx="28" cy="28" r="23" class="val" pathLength="100" stroke-dasharray="38 100"/><text x="28" y="33" text-anchor="middle">48m</text></svg>
+        <div class="dt-now-body">
+          <p class="dt-now-label"><span class="dt-now-dot"></span>Now · 10:00–12:30</p>
+          <p class="dt-now-title">Deep work</p>
+          <p class="dt-now-meta"><span class="mono">48 min</span> left</p>
+        </div>
+        <div class="dt-now-bar" aria-hidden="true"><i style="width: 62%"></i></div>
+      </div>
+      <ol class="dt-strip">
+        <li><span class="mono">12:30–13:30</span><span>Lunch, no screens <em>Next</em></span></li>
+        <li class="free"><span class="mono">13:30–14:00</span><span>Free — your call</span></li>
+        <li><span class="mono">14:00–16:00</span><span lang="bn">ভিডিও এডিট</span></li>
+      </ol>
+    </div>
+    <div class="dt-x">
+      <p class="dt-x-t">2 · Carryover margin note</p>
+      <ul class="dt-mini">
+        
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Renew the domain</p>
+      <p class="dt-meta"><span class="dt-est mono">5m</span></p>
+    </div>
+    <span class="dt-age" data-days="1"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>From yesterday</span>
+    
+  </li>
+        
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text">Draft shoot card: why I plan in Bangla</p>
+      <p class="dt-meta"><span class="dt-est mono">20m</span></p>
+    </div>
+    <span class="dt-age" data-days="3"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>3 days waiting</span>
+    
+  </li>
+        
+  <li class="dt-task">
+    <span class="dt-check" role="checkbox" aria-checked="false" aria-label="Mark done"></span>
+    <div class="dt-task-main">
+      <p class="dt-task-text" lang="bn">ব্যাংকে ফোন করা</p>
+      <p class="dt-meta"><span class="dt-est mono">10m</span></p>
+    </div>
+    <span class="dt-age" data-days="6"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>6 days waiting</span>
+    
+  </li>
+      </ul>
+      <p class="dt-x-n">The note grows in weight, never in color. No red, no guilt — it just says how long a task has been riding along.</p>
+    </div>
+    <div class="dt-x">
+      <p class="dt-x-t">3 · Content stage track</p>
+      <ol class="dt-stage" aria-label="Stage: Develop">
+        <li><span class="st past">Inbox</span></li><li><span class="st cur" aria-current="step">Develop</span></li><li><span class="st">Shoot next <span class="dt-cap mono">4/5</span></span></li><li><span class="st">Published</span></li>
+      </ol>
+      <div class="dt-card-mini">
+        <b>Why I plan in Bangla</b>
+        <p class="dt-x-n">Problem: English planners feel like homework. Method: show my real page.</p>
+        <p lang="bn">নিজের ভাষায় প্ল্যান করলে মাথাটা হালকা লাগে।</p>
+        <span class="dt-next">Ready to shoot <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+
+<script>
+(() => {
+  const D = window.DIRECTION || {};
+  const root = document.documentElement;
+  const params = new URLSearchParams(location.search);
+  const get = (path) => path.split(".").reduce((o, k) => (o == null ? o : o[k]), D);
+  const val = (v) => (v && typeof v === "object" ? v.oklch || v.hex : v);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  // ---- tokens ----
+  const T = D.tokens || {};
+  const block = (sel, obj) => `${sel}{${Object.entries(obj || {}).map(([k, v]) => `--${k}:${val(v)};`).join("")}}`;
+  const ramp = T.ramp || {};
+  const rampVars = Object.fromEntries(Object.entries(ramp).map(([k, v]) => [`brand-${k}`, v]));
+  const type = { base: 16, ratio: 1.25, headingWeight: 600, headingTracking: "-0.02em", headingTransform: "none", headingStyle: "normal", bodyLineHeight: 1.55, ...(D.type || {}) };
+  const shape = { radius: "0.5rem", borderWidth: "1px", cardShadow: "none", buttonShadow: "none", buttonShadowActive: "none", buttonTransform: "none", density: "comfortable", ...(D.shape || {}) };
+  const motion = { duration: "180ms", easing: "ease-out", ...(D.motion || {}) };
+  const F = D.fonts || {};
+  const fam = (f, fb) => (f && f.family ? `"${f.family}", ${f.fallback || fb}` : fb);
+  const sizes = {};
+  for (let i = -1; i <= 6; i++) sizes[`size-${i}`] = `${Math.round(type.base * type.ratio ** i)}px`;
+  const shared = {
+    "font-heading": fam(F.heading, "ui-sans-serif, system-ui, sans-serif"),
+    "font-body": fam(F.body, "ui-sans-serif, system-ui, sans-serif"),
+    "font-mono": fam(F.mono, "ui-monospace, monospace"),
+    "size-base": `${type.base}px`, ...sizes,
+    "body-lh": type.bodyLineHeight, "heading-weight": type.headingWeight, "heading-tracking": type.headingTracking,
+    "heading-transform": type.headingTransform, "heading-style": type.headingStyle,
+    radius: shape.radius, "border-w": shape.borderWidth, "card-shadow": shape.cardShadow,
+    "btn-shadow": shape.buttonShadow, "btn-shadow-active": shape.buttonShadowActive, "btn-transform": shape.buttonTransform,
+    "btn-press": shape.buttonShadow !== "none" && shape.buttonShadowActive === "none" ? "translate(2px, 2px)" : "scale(0.98)",
+    dur: motion.duration, ease: motion.easing, ...rampVars,
+  };
+  const style = document.createElement("style");
+  style.textContent = block(":root", { ...shared, ...T.light }) + block(':root[data-theme="dark"]', T.dark);
+  document.head.appendChild(style);
+  root.dataset.density = shape.density;
+
+  // ---- fonts ----
+  const fams = new Map();
+  for (const f of [F.heading, F.body, F.mono]) {
+    if (!f || !f.family || f.google === false) continue;
+    const w = f.weights || "400;600";
+    fams.set(f.family, `family=${f.family.trim().replace(/ /g, "+")}:${f.italic ? "ital," : ""}wght@${f.italic ? w.split(";").flatMap((x) => [`0,${x}`, `1,${x}`]).join(";") : w}`);
+  }
+  if (fams.size) {
+    const pre = document.createElement("link");
+    pre.rel = "preconnect"; pre.href = "https://fonts.gstatic.com"; pre.crossOrigin = "";
+    const link = document.createElement("link");
+    link.rel = "stylesheet"; link.href = `https://fonts.googleapis.com/css2?${[...fams.values()].join("&")}&display=swap`;
+    document.head.append(pre, link);
+  }
+
+  // ---- theme + width controls ----
+  const setTheme = (t) => {
+    root.dataset.theme = t;
+    document.querySelectorAll("[data-theme-btn]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeBtn === t)));
+  };
+  const setWidth = (w) => {
+    document.getElementById("frame").classList.toggle("mobile", w === "mobile");
+    document.querySelectorAll("[data-width-btn]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.widthBtn === w)));
+  };
+  document.querySelectorAll("[data-theme-btn]").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.themeBtn)));
+  document.querySelectorAll("[data-width-btn]").forEach((b) => b.addEventListener("click", () => setWidth(b.dataset.widthBtn)));
+  setTheme(params.get("theme") === "light" ? "light" : params.get("theme") === "dark" ? "dark" : (D.defaultTheme || "light"));
+  setWidth(params.get("width") === "mobile" ? "mobile" : "desktop");
+  if (params.get("embed")) document.body.classList.add("embed");
+  window.addEventListener("message", (e) => { if (e.data && e.data.theme) setTheme(e.data.theme); });
+
+  // ---- text bindings ----
+  document.title = `${D.id ? D.id + " · " : ""}${D.name || "Direction"} — ${get("product.name") || "preview"}`;
+  document.querySelectorAll("[data-bind]").forEach((el) => {
+    const v = get(el.dataset.bind);
+    if (v == null || v === "") el.remove(); else el.textContent = v;
+  });
+  const hero = document.getElementById("hero");
+  if (get("hero.background") && get("hero.background") !== "plain") hero.classList.add(get("hero.background"));
+  const list = (id, items) => { document.getElementById(id).innerHTML = (items || []).map((t) => `<li>${esc(t)}</li>`).join(""); };
+  list("rationale", D.rationale);
+  list("risks", D.risks);
+  const firstVoice = (get("voice.examples") || [])[0];
+  document.getElementById("alert-copy").textContent = firstVoice ? firstVoice.text : "Changes are saved automatically.";
+
+  // ---- wordmarks ----
+  const variants = get("wordmark.variants") || [{ text: get("product.name") || "Brand", font: "heading", weight: 700 }];
+  const wordmark = (v, size = "") => {
+    const text = v.text || get("product.name") || "Brand";
+    const inner = v.detail === "dot" ? `${esc(text)}<span class="dot">.</span>` : esc(text);
+    return `<span class="wm" style="font-family: var(--font-${v.font === "body" ? "body" : "heading"}); font-weight:${v.weight || 700}; letter-spacing:${v.tracking || "-0.02em"}; text-transform:${v.transform || "none"}; font-style:${v.style || "normal"};${size ? ` font-size:${size};` : ""}">${inner}</span>`;
+  };
+  document.getElementById("nav-wordmark").innerHTML = wordmark(variants[0], "22px");
+  document.getElementById("marks").innerHTML = variants.map((v) => `
+    <div class="stack" style="gap:10px">
+      <div class="mark-tile">${wordmark(v)}</div>
+      <div class="mark-tile inv">${wordmark(v)}</div>
+      <p class="small muted">${esc(v.label || "")}</p>
+    </div>`).join("");
+  const markSvg = get("wordmark.markSvg");
+  const initial = (get("product.name") || "B").trim()[0];
+  document.getElementById("mark-sizes").innerHTML = [64, 32, 16].map((s) => markSvg
+    ? `<div class="stack" style="gap:6px;align-items:center"><div style="width:${s}px;height:${s}px;color:var(--primary)">${markSvg}</div><span class="xs muted mono">${s}px</span></div>`
+    : `<div class="stack" style="gap:6px;align-items:center"><div class="monogram" style="width:${s}px;height:${s}px;font-size:${s * 0.55}px">${esc(initial)}</div><span class="xs muted mono">${s}px</span></div>`).join("");
+
+  // ---- app screen ----
+  const tpl = document.getElementById("app-screen");
+  // <div data-wordmark="0" style="font-size: 18px"></div> inside the screen renders wordmark variant 0.
+  const fillWordmarks = (scope) => scope.querySelectorAll("[data-wordmark]").forEach((el) => {
+    el.classList.remove("wm");
+    el.innerHTML = wordmark(variants[Number(el.dataset.wordmark) || 0], el.style.fontSize || "20px");
+  });
+  for (const id of ["app-screen-slot", "hero-screen"]) {
+    const slot = document.getElementById(id);
+    slot.appendChild(tpl.content.cloneNode(true));
+    fillWordmarks(slot);
+  }
+
+  // ---- palette ----
+  const rampEl = document.getElementById("ramp");
+  const steps = Object.keys(ramp);
+  if (steps.length) {
+    rampEl.innerHTML = steps.map((s) => `<div style="background: var(--brand-${s}); color: ${Number(s) >= 500 ? "white" : "black"}">${s}</div>`).join("");
+  } else rampEl.remove();
+  const PAIRS = [
+    ["background", "foreground", "Background"], ["card", "card-foreground", "Card"], ["muted", "muted-foreground", "Muted"],
+    ["primary", "primary-foreground", "Primary"], ["secondary", "secondary-foreground", "Secondary"], ["brand-subtle", "brand-subtle-foreground", "Brand tint"],
+    ["destructive", "destructive-foreground", "Destructive"], ["success", "success-foreground", "Success"], ["warning", "warning-foreground", "Warning"],
+  ].filter(([bg]) => T.light && T.light[bg]);
+  document.getElementById("swatches").innerHTML = PAIRS.map(([bg, fg, label]) => `
+    <div class="swatch"><div class="chip" style="background: var(--${bg}); color: var(--${fg})">Aa</div>
+    <div class="meta"><span>${label}</span><code>--${bg}</code></div></div>`).join("");
+
+  // ---- type ----
+  const fontCard = (role, f) => f && f.family ? `
+    <div class="card font-card"><p class="small muted">${role}</p>
+    <p class="aa" style="font-family: var(--font-${role.toLowerCase()}); font-weight: ${role === "Heading" ? type.headingWeight : 400}">Aa</p>
+    <p style="font-weight:600">${esc(f.family)}</p><p class="small muted mono">${esc(f.weights || "")}</p></div>` : "";
+  document.getElementById("fonts").innerHTML = fontCard("Heading", F.heading) + fontCard("Body", F.body) + fontCard("Mono", F.mono);
+  const sample = get("hero.headline") || "The quick brown fox";
+  const rows = [
+    [5, "Display", sample, "heading"], [4, "H1", get("product.tagline") || sample, "heading"], [3, "H2", "Section heading", "heading"],
+    [2, "H3", "Card title and dialog heading", "heading"], [1, "Large", "Emphasized body and lead paragraphs", "body"],
+    [0, "Body", get("hero.subhead") || "Body copy reads comfortably at this size and line height.", "body"],
+    [-1, "Small", "Labels, table cells, helper text, and metadata", "body"],
+  ];
+  document.getElementById("scale").innerHTML = rows.map(([i, name, text, role]) => `
+    <div class="type-row"><div class="meta">${name}<br>${Math.round(type.base * type.ratio ** i)}px</div>
+    <div class="${role === "heading" ? "display" : ""}" style="font-size: var(--size-${i}); ${role === "body" ? `line-height: var(--body-lh)` : "line-height: 1.12"}">${esc(text)}</div></div>`).join("");
+
+  // ---- voice ----
+  document.getElementById("traits").innerHTML = (get("voice.traits") || []).map((t) => `<span class="badge brand">${esc(t)}</span>`).join("");
+  document.querySelector("#voice tbody").innerHTML = (get("voice.examples") || []).map((e) => `<tr><td class="muted" style="white-space:nowrap">${esc(e.moment)}</td><td>${esc(e.text)}</td></tr>`).join("");
+})();
+</script>
+</body>
+</html>

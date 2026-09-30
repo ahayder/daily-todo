@@ -27,7 +27,7 @@ Any new extension or feature must be placed in `src/components/editor/`.
 ### Toolbars and Menus
 - Use `src/components/editor/slash-command.tsx` for block-level insertions.
 - Use `src/components/editor/bubble-menu.tsx` for inline formatting (bold, italic, links).
-- Always use the design system's warm, soft UI patterns (using `var(--paper-strong)` and `var(--line)`) for floating editor menus.
+- Style floating editor menus with the design system tokens (`bg-popover`, `border-border`, `shadow-card`) — see `.design/DESIGN.md` and the `ui-system` skill.
 
 ### Custom Node Views
 When embedding interactive React components inside the editor (like the drawing integration):
@@ -52,5 +52,5 @@ These are strictly considered **read-only migration-era content**. DO NOT attemp
 Before merging editor changes:
 - [ ] The `immediatelyRender: false` property was maintained on the `useEditor` hook.
 - [ ] New nodes/marks successfully serialize back to plain markdown text.
-- [ ] The slash command or bubble menu matches the Warm Minimalism design system.
+- [ ] The slash command or bubble menu matches `.design/DESIGN.md`.
 - [ ] The toolbar remains hidden when not actively selecting text or typing `/`.

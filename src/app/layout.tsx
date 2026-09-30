@@ -1,11 +1,26 @@
 import type { Metadata } from "next";
-import { Source_Sans_3 } from "next/font/google";
+import { Baloo_Da_2, DM_Mono, Nunito } from "next/font/google";
 import { Providers } from "@/components/workspace/providers";
+import { THEME_HINT_SCRIPT } from "@/lib/theme-hint";
 import "./globals.css";
 
-const body = Source_Sans_3({
+// Headings + Bengali: one family covers both scripts evenly.
+const display = Baloo_Da_2({
+  subsets: ["latin", "bengali"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
+
+const body = Nunito({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-latin-body",
+});
+
+// Times, estimates, counts.
+const numeric = DM_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-numeric",
 });
 
 export const metadata: Metadata = {
@@ -21,11 +36,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="dark font-sans"
+      className={`dark font-sans ${display.variable} ${body.variable} ${numeric.variable}`}
       style={{ colorScheme: "dark" }}
       suppressHydrationWarning
     >
-      <body className={body.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_HINT_SCRIPT }} />
+      </head>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

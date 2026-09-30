@@ -20,6 +20,7 @@ import {
   type PersistenceStatus,
 } from "@/lib/persistence";
 import { isDevelopmentWorkspaceSession } from "@/lib/dev-mode";
+import { THEME_HINT_STORAGE_KEY } from "@/lib/theme-hint";
 import { toISODate } from "@/lib/date";
 import { mergeHydratedAppState, repairMisSourcedTodayCarryover } from "@/lib/store";
 import type { AppState, NoteBodyStatus } from "@/lib/types";
@@ -684,6 +685,12 @@ export function useAppPersistenceState({
     const applyDarkState = (isDark: boolean) => {
       root.classList.toggle("dark", isDark);
       root.style.colorScheme = isDark ? "dark" : "light";
+      // Read by the pre-hydration script in app/layout.tsx so the first paint matches.
+      try {
+        window.localStorage.setItem(THEME_HINT_STORAGE_KEY, isDark ? "dark" : "light");
+      } catch {
+        // Storage can be unavailable (private mode); the theme still applies after hydration.
+      }
     };
 
     if (state.uiState.themeMode === "dark") {

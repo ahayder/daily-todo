@@ -1,7 +1,9 @@
 # DailyTodo — Claude Brain File
 
-> This file is the single source of truth for AI-assisted development on DailyTodoApp.
-> Read this before making any UI, architectural, or design decisions.
+@AGENTS.md
+
+> This file is the single source of truth for AI-assisted development on DailyTodoApp (architecture, conventions, workflow).
+> UI look, feel and UX rules live in `.design/DESIGN.md`, applied through the UI/UX block in `AGENTS.md` (imported above).
 >
 > **IMPORTANT REVISION RULE:** When a structural change or big change is made to the codebase, this "brain" of the application (`CLAUDE.md`) MUST be updated immediately to reflect the new architecture, dependencies, or patterns.
 
@@ -57,7 +59,11 @@ src/
 │   ├── planner/            # Daily planner: NOW screen + Setup editor, read-only 24h clock geometry
 │   ├── content-planner-view.tsx # Public compatibility export for the content planner board
 │   ├── content-planner/         # Content Conveyor board (Inbox→Develop→Shoot next→Published): capture box, growing cards, inbox review, drag-and-drop
-│   └── editor/             # Markdown editor wrapper, Tiptap extensions, toolbar, bubble menu, Excalidraw node views
+│   ├── editor/             # Markdown editor wrapper, Tiptap extensions, toolbar, bubble menu, Excalidraw node views
+│   ├── ui/                 # shadcn (Base UI) primitives + IconButton, Toast
+│   ├── blocks/             # Shared UI blocks: ConfirmDialog, EmptyState, InlineComposer, SegmentedControl, PageHeader, InlineAlert
+│   └── signature/          # Product design elements: NowCard, PriorityTab, WashiTag, StageTrack/SoftCapBadge
+├── hooks/                  # useMediaQuery + named MEDIA_QUERIES
 └── lib/
     ├── types.ts            # All TypeScript types (Todo, DailyPage, NoteDoc, etc.)
     ├── store.ts            # Pure state factories + selectors (groupTodosByPriority, content board defaults + migration, etc.)
@@ -69,6 +75,7 @@ src/
     ├── pocketbase/         # PocketBase auth + persistence repositories
     ├── split-persistence-repository.ts # cache-first repository wrapper for split sync
     ├── date.ts             # Date formatting helpers
+    ├── theme-hint.ts       # Pre-hydration theme script + storage key (no dark/light flash)
     ├── super-admin.ts      # Owner email allowlist gating super-admin UI
     └── schema.ts           # Zod validation for persisted state
 ```
@@ -125,85 +132,14 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 
 ---
 
-## Design System: Warm Minimalism
+## Design System
 
-> **Design style name: Warm Minimalism**
-> **Component library:** shadcn/ui
+UI look, feel and UX rules live in `.design/DESIGN.md` (B2 "Pocket Stickers — Deep"); how agents apply them is in the `AGENTS.md` UI/UX block (imported below) and the `.claude/skills/ui-*` / `ux-patterns` skills. Don't restate token values here.
 
-### Why Warm Minimalism
+Still-binding engineering rules:
 
-The app was visually analyzed against 20 common UI design styles. The running app demonstrates clear Minimalist UI principles (purposeful whitespace, nothing decorative, clean surfaces), Flat Design component treatment (no heavy shadows, no gradient fills on components), and Swiss/Grid structural discipline (two-column grid, consistent spacing rhythm). What makes it distinctly "warm" is the cream palette instead of cold grays, the earthy teal accent instead of electric blue, and the desaturated priority colors instead of bright primaries. **No serifs** — the typography is a single clean sans-serif stack throughout, with hierarchy built through weight and size alone.
-
-### Core Philosophy: The Five Pillars
-
-1. **Surface Warmth** — Backgrounds use warm off-whites (`#faf8f4`), never pure white or cool gray. Dark mode uses deep blue-gray warm (`#16191f`), never true black.
-2. **Sans-serif System** — One font family (`font-body`, sans-serif: Source Sans 3 / Inter / DM Sans) used across ALL roles. Hierarchy via weight and size only.
-3. **Tonal Color** — One deep accent (`#2f6d62` teal) against a mostly neutral palette. Priority colors are desaturated — dusty red, amber, sage — not bright traffic-light primaries.
-4. **Generous Breathing Room** — Whitespace is structural, not wasted. Cards and sections breathe. When in doubt, add space.
-5. **Soft Structure** — Warm-tinted borders (`--line`), warm-tinted shadows (rgba amber-tinted, never cool gray), `rounded-2xl` cards, `rounded-[10px]` inputs/buttons.
-
-### Styling Removal Rule
-
-When asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome, etc.), prefer deleting or simplifying the original styling rule instead of adding a new override that turns it off. Only add an override when the original rule must stay because it is still required by another component/state and cannot be cleanly split yet. Default approach: reduce CSS, do not layer more CSS to negate old CSS.
-
-### Design Tokens
-
-```css
-/* Light mode */
---paper: #faf8f4 /* page background */ --paper-strong: #ffffff /* card/pane surface */ --line: #d9d1c5 /* all borders */ --ink-900: #1f2430 /* primary text */ --ink-700: #40495e /* secondary/muted text */ --brand: #2f6d62 /* accent */
-  --brand-soft: #d9ece8 /* accent bg tint */ --warn: #b8422e /* destructive */ /* Dark mode overrides */ --paper: #16191f --paper-strong: #1e2228 --line: #2d3340 --ink-900: #e8e2d9 --ink-700: #8c95a6 --brand: #3d8c7f --brand-soft: #1e3533
-  --warn: #d45a44 /* Priority system */ --priority-1: #c0392b /* Critical — dusty red */ --priority-1-soft: #f9e8e6 /* (dark: #2a1715) */ --priority-2: #c07c30 /* Important — amber */ --priority-2-soft: #fdf3e3 /* (dark: #271f0d) */
-  --priority-3: #4a7c59 /* Someday — sage */ --priority-3-soft: #e8f4ec /* (dark: #101f15) */;
-```
-
-### Typography
-
-```
-All roles:   font-body — "Source Sans 3", Inter, DM Sans, system-ui, sans-serif
-Monospace:   font-mono — JetBrains Mono, Fira Code, ui-monospace
-```
-
-No serifs anywhere. Hierarchy: `text-2xl font-semibold` (note title) → `text-lg font-semibold` (date header) → `text-sm font-semibold` (section label) → `text-sm font-normal` (body/todos).
-
-### Spacing Scale
-
-Use Tailwind's default scale. Preferred spacings:
-
-- Section padding: `p-4` (16px)
-- Card internal padding: `p-3` to `p-4`
-- Between list items: `gap-2` (8px)
-- Between sections: `gap-4` (16px)
-- Between priority group cards: `gap-3` (12px)
-
-### Border Radius
-
-- Cards / panes: `rounded-2xl` (16px)
-- Inputs / buttons: `rounded-lg` (10px)
-- Badges / pills: `rounded-full`
-
-### UX & Component Rules
-
-- **Hover states**: Every interactive element must have a clear hover state.
-- **Destructive actions**: Always require an `AlertDialog` confirmation.
-- **Icon buttons**: Must have both an `aria-label` and a `Tooltip` wrapper.
-- **Motion**: Duration 150ms-200ms. Never exceed 300ms. Never use bounce or spring animations.
-
-### Accessibility
-
-- Maintain WCAG AA contrast (4.5:1 normal, 3:1 large).
-- Focus indicator: `outline: 2px solid var(--brand); outline-offset: 2px`.
-- Never rely on color alone to convey meaning (e.g. priority colors must have a text label).
-- Respect `prefers-reduced-motion`.
-
-### Shadows
-
-Warm-tinted shadow (not the cool Tailwind default):
-
-```css
-box-shadow:
-  0 1px 3px rgba(31, 36, 48, 0.06),
-  0 1px 2px rgba(31, 36, 48, 0.04);
-```
+- **Styling Removal Rule:** when asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome…), delete or simplify the original rule instead of layering an override that cancels it. Only override when the original must stay for another component/state and can't be split yet.
+- **Tailwind v4 layers:** custom CSS in `globals.css` goes inside `@layer base | components | utilities`. Unlayered rules beat every utility (see Known Technical Notes).
 
 ---
 
