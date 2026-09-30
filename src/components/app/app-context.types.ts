@@ -9,6 +9,7 @@ import type {
   PlannerPurposeRole,
   Priority,
   TaskStatus,
+  Todo,
   ThemeMode,
   ViewMode,
 } from "@/lib/types";
@@ -43,6 +44,7 @@ export type AppAction =
   | { type: "set-todo-status"; date: string; todoId: string; status: TaskStatus }
   | { type: "set-todo-estimated-minutes"; date: string; todoId: string; estimatedMinutes: number | null }
   | { type: "delete-todo"; date: string; todoId: string }
+  | { type: "restore-todo"; workspaceId: string; date: string; todo: Todo; index: number }
   | { type: "create-note"; title?: string }
   | { type: "create-note-folder"; name?: string; parentFolderId?: string | null }
   | { type: "rename-note-folder"; folderId: string; name: string }

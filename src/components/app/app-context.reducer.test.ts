@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { createInitialState } from "@/lib/store";
+import { createInitialState, getActiveTodoWorkspaceId } from "@/lib/store";
 import { appReducer } from "./app-context.reducer";
 
 describe("dev-advance-day", () => {
@@ -167,5 +167,49 @@ describe("ensure-daily-today", () => {
     ]);
     // The carried todo has a fresh id (not the Aug 26 id) so the two days never alias.
     expect(carriedId).not.toBe("keep-open");
+  });
+});
+
+describe("restore-todo", () => {
+  const makeTodo = (id: string) => ({
+    id,
+    text: `Task ${id}`,
+    priority: 1 as const,
+    status: "pending" as const,
+    estimatedMinutes: null,
+    createdAt: "2026-03-10T10:00:00.000Z",
+  });
+
+  test("undoes delete-todo, putting the task back in its original position", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [makeTodo("a"), makeTodo("b"), makeTodo("c")];
+    const workspaceId = getActiveTodoWorkspaceId(state);
+
+    const deleted = appReducer(state, { type: "delete-todo", date: "2026-03-10", todoId: "b" });
+    expect(deleted.dailyPages["2026-03-10"].todos.map((t) => t.id)).toEqual(["a", "c"]);
+
+    const restored = appReducer(deleted, {
+      type: "restore-todo",
+      workspaceId,
+      date: "2026-03-10",
+      todo: makeTodo("b"),
+      index: 1,
+    });
+    expect(restored.dailyPages["2026-03-10"].todos.map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  test("is a no-op when the task already exists (double undo)", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [makeTodo("a")];
+    const workspaceId = getActiveTodoWorkspaceId(state);
+
+    const next = appReducer(state, {
+      type: "restore-todo",
+      workspaceId,
+      date: "2026-03-10",
+      todo: makeTodo("a"),
+      index: 0,
+    });
+    expect(next).toBe(state);
   });
 });
