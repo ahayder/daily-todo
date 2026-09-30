@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { AuthProvider } from "@/components/auth/auth-context";
 import { AppProvider } from "@/components/app/app-context";
 import { DesktopUpdateProvider } from "@/components/workspace/desktop-update-provider";
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { AuthRepository } from "@/lib/auth";
 import type { PersistenceRepository } from "@/lib/persistence";
@@ -30,11 +31,13 @@ export function Providers({
 
   return (
     <TooltipProvider>
-      <DesktopUpdateProvider>
-        <AuthProvider repository={resolvedAuthRepository}>
-          <AppProvider repository={resolvedPersistenceRepository}>{children}</AppProvider>
-        </AuthProvider>
-      </DesktopUpdateProvider>
+      <Toaster>
+        <DesktopUpdateProvider>
+          <AuthProvider repository={resolvedAuthRepository}>
+            <AppProvider repository={resolvedPersistenceRepository}>{children}</AppProvider>
+          </AuthProvider>
+        </DesktopUpdateProvider>
+      </Toaster>
     </TooltipProvider>
   );
 }

@@ -1,7 +1,9 @@
 # DailyTodo — Claude Brain File
 
-> This file is the single source of truth for AI-assisted development on DailyTodoApp.
-> Read this before making any UI, architectural, or design decisions.
+@AGENTS.md
+
+> This file is the single source of truth for AI-assisted development on DailyTodoApp (architecture, conventions, workflow).
+> UI look, feel and UX rules live in `.design/DESIGN.md`, applied through the UI/UX block in `AGENTS.md` (imported above).
 >
 > **IMPORTANT REVISION RULE:** When a structural change or big change is made to the codebase, this "brain" of the application (`CLAUDE.md`) MUST be updated immediately to reflect the new architecture, dependencies, or patterns.
 
@@ -57,7 +59,11 @@ src/
 │   ├── planner/            # Daily planner: NOW screen + Setup editor, read-only 24h clock geometry
 │   ├── content-planner-view.tsx # Public compatibility export for the content planner board
 │   ├── content-planner/         # Content Conveyor board (Inbox→Develop→Shoot next→Published): capture box, growing cards, inbox review, drag-and-drop
-│   └── editor/             # Markdown editor wrapper, Tiptap extensions, toolbar, bubble menu, Excalidraw node views
+│   ├── editor/             # Markdown editor wrapper, Tiptap extensions, toolbar, bubble menu, Excalidraw node views
+│   ├── ui/                 # shadcn (Base UI) primitives + IconButton, Toast
+│   ├── blocks/             # Shared UI blocks: ConfirmDialog, EmptyState, InlineComposer, SegmentedControl, PageHeader, InlineAlert
+│   └── signature/          # Product design elements: NowCard, PriorityTab, WashiTag, StageTrack/SoftCapBadge
+├── hooks/                  # useMediaQuery + named MEDIA_QUERIES
 └── lib/
     ├── types.ts            # All TypeScript types (Todo, DailyPage, NoteDoc, etc.)
     ├── store.ts            # Pure state factories + selectors (groupTodosByPriority, content board defaults + migration, etc.)
@@ -69,6 +75,7 @@ src/
     ├── pocketbase/         # PocketBase auth + persistence repositories
     ├── split-persistence-repository.ts # cache-first repository wrapper for split sync
     ├── date.ts             # Date formatting helpers
+    ├── theme-hint.ts       # Pre-hydration theme script + storage key (no dark/light flash)
     ├── super-admin.ts      # Owner email allowlist gating super-admin UI
     └── schema.ts           # Zod validation for persisted state
 ```
@@ -117,6 +124,7 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 - **Content Planner**: `/content-planner` is a full-width, single-board workspace whose default view is the Kanban Board on every viewport. Desktop users can switch to the Pinterest-like masonry Gallery; smaller viewports always retain the Board. On phone-sized viewports, the page heading condenses to one row without the descriptive sentence, cards start collapsed, and each column moves its closed Add Card trigger into the header while keeping the composer in the column when opened. Gallery shows the same cards across workflow columns with stage labels, uses wider two-, three-, and four-column layouts across desktop breakpoints, preserves preview, edit, copy, collapse, and guarded deletion, and uses the explicit move dialog instead of drag-and-drop. New boards seed the four fixed **Content Conveyor** states — `Inbox` → `Develop` → `Shoot next` → `Published` — with editable titles and subtitles (identified by stable column ids `content-column-{inbox,develop,shoot-next,published}`, so conveyor behaviour never depends on the editable titles). Legacy 5-column boards are migrated non-destructively: `ensureContentPlannerState` only *ensures the canonical columns exist* (prepends the three new ones, keeps `published`) and never moves cards or deletes the old Ideas/Planned/In Progress/Ready columns — the user relocates cards and removes the old columns themselves. An always-visible, mobile-first **capture box** at the top adds a zero-field card straight to Inbox (first line = title, rest = notes); its placeholder and the Inbox subtitle nudge the user to capture the *specific thought* (problem + method), not just a broad topic — the sharper Inbox subtitle is migrated onto existing boards in `ensureContentPlannerState` (only when it still carries the old default). Each card carries the conveyor model: a single prominent **next-step button** (`Develop this` / `Ready to shoot` / `Mark published`) that in one press appends the next markdown section (`## IDEA NOTE`, `## SHOOT CARD`) and auto-moves the card to the next column; a **Copy for ChatGPT** action that copies the stage's hidden prompt **plus a clean `title + idea` body** (`buildChatGptClipboard` strips conveyor `##` heading scaffolding via `stripSectionHeadings` so pasted text reads as plain intent), never showing the prompt on the card; and, on Inbox/Develop cards, a labelled/collapsible section renderer that groups notes under `ORIGINAL THOUGHT`/`IDEA NOTE`/`SHOOT CARD`/`SATELLITES` headings (the first section was renamed from the legacy `RAW IDEA`, which is still recognized as an alias so old cards render unchanged; empty sections are hidden until they hold content; older sections collapse behind a tap-to-expand summary; cards without recognized headings render as plain Markdown, unchanged). Editing a card (inline or in the preview) shows three **optional, non-inserted hint prompts** (Trigger / Point / Anchor) beside the box, and Inbox cards show a small "Ready when you know your point + one concrete example/method" hint above `Develop this` — all guidance only, no data-model or workflow change and no AI. The `Shoot next` header shows an `N/5` soft-cap badge that tints (never blocks) past five. A **Review inbox** button opens a mobile-first triage overlay that shows one Inbox card at a time with Develop / Promote to shoot / Keep / Delete (tap-again confirm) actions. When a **pristine** board (exactly the four canonical columns) has zero cards, a self-teaching **empty state** replaces the board: capture invites around the box, a `Inbox › Develop › Shoot next › Published` flow breadcrumb, one illustrative (non-interactive, never persisted) example card demonstrating the `Develop this →` step, and dimmed later-stage rows. Boards with custom/legacy columns keep the normal view even when empty so their columns stay manageable; the empty state disappears the instant a real card exists. All conveyor logic lives in the pure, unit-tested `src/lib/content-conveyor.ts`; the card sections are just markdown inside the existing `notes` field, so persistence, copy, and gallery are unaffected. Column titles act as both the rename control and the drag surface, without a separate drag icon; confirmation-gated column deletion lives in each column’s top-right three-dot menu, including an explanation when deletion is unavailable. Cards present one multiline Markdown surface. Fine-pointer users can open the preview from the card surface or eye action; on coarse-pointer devices the card surface is inert and the eye action is the explicit preview control. The preview’s existing content surface switches into direct Markdown editing from its top-right pencil action without opening or presenting a separate modal. The card’s pencil action remains the entry point for inline editing, which automatically expands a collapsed card. The first line is emphasized as the card title, expanded desktop board card bodies scroll at an approximately seven-line maximum height, and each card has its own ephemeral expand/collapse control. A compact bottom toolbar keeps preview, copy, edit, and expand/collapse actions separate without narrowing the title, while a far-left three-dot menu contains the confirmation-gated delete action. Copy always writes the complete title-first Markdown source, including notes hidden by card collapse, and briefly confirms success in place. On fine-pointer devices, the board card surface provides pointer and keyboard dragging with a grab cursor; drag collision candidates are scoped by item type, and cards show an edge-aware insertion marker so the final position is predictable. On coarse-pointer devices, drag is disabled so vertical card scrolling and horizontal snap-scrolling do not compete with taps; card moves use a destination-and-placement dialog, while column menus provide explicit left/right moves. The shared A-/A+ reading controls scale Content Planner chrome, cards, Markdown, forms, and dialogs within the existing device-local font-size preference. Saved cards render safe GitHub-flavored Markdown, while the first line and remaining text continue syncing through the existing `title` and `notes` fields for compatibility.
 - **Drawing**: Drawings are stored as embedded Excalidraw node data inside the Tiptap document. Legacy tldraw content is preserved as a non-editable fallback with a path to create a fresh Excalidraw board.
 - **Markdown editor**: Tiptap (ProseMirror-based). Uses `tiptap-markdown` extension for markdown serialization, plus a toolbar, bubble menu, slash command, and embedded drawing nodes.
+- **Delete task**: Deleting a todo is instant and shows an 8-second Undo toast (`showUndoToast`); Undo dispatches `restore-todo`, which puts the snapshot back at its original index in the same workspace/date. Stopping the focus timer on delete is not undone.
 - **Add task**: Inline inputs at the bottom of each priority group (Apple Reminders style). No separate form.
 - **Todos on smaller screens**: The desktop note/task split becomes a single-pane `Todos` / `Daily note` switcher. Todos open by default, the resize rail is desktop-only, task text wraps, and touch-first devices keep row actions visible while vertical scrolling takes precedence over drag gestures.
 - **Navigation**: Top navbar with Todos/Notes/Daily Planner/Content Planner pills, sync status, desktop updater, theme toggle.
@@ -125,23 +133,14 @@ Todo      { id, text, status, priority, estimatedMinutes, parentId }
 
 ---
 
-## Design language
+## Design System
 
-Follow `.design/DESIGN.md` for all UI work (it overrides ui-ux-pro defaults). Progress and decisions: `.design/rollout.md`.
+UI look, feel and UX rules live in `.design/DESIGN.md` (B2 "Pocket Stickers — Deep"); how agents apply them is in the `AGENTS.md` UI/UX block (imported below) and the `.claude/skills/ui-*` / `ux-patterns` skills. Don't restate token values here.
 
-**Ember Journal** (replaced "Warm Minimalism" in Sept 2026): a warm daily notebook. Cream paper (light) and espresso (dark, never slate), one terracotta "ember" accent (`--primary` / `--brand`) used for actions only, Fraunces soft-serif headings (≥18px only) + Instrument Sans body (Bengali fallbacks: Noto Serif Bengali, Hind Siliguri), JetBrains Mono for code/timers. Signature: the ink-dark **Now** card (`--now*` tokens) and a serif page date with an ember margin line. Theme follows the system by default (`themeMode: "system"`); an inline script in `layout.tsx` paints the system theme before hydration. Legacy custom tokens (`--paper`, `--ink-*`, `--line`, `--brand`, `--brand-soft`) are aliases of the shadcn tokens in `globals.css`; prefer the shadcn names in new code.
+Still-binding engineering rules:
 
-### Styling Removal Rule
-
-When asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome, etc.), prefer deleting or simplifying the original styling rule instead of adding a new override that turns it off. Only add an override when the original rule must stay because it is still required by another component/state and cannot be cleanly split yet. Default approach: reduce CSS, do not layer more CSS to negate old CSS.
-
-### UX & Component Rules
-
-- **Hover states**: Every interactive element must have a clear hover state.
-- **Destructive actions**: Always require an `AlertDialog` confirmation.
-- **Icon buttons**: Must have both an `aria-label` and a `Tooltip` wrapper.
-- **Motion**: 160–220ms ease-out. Never exceed 300ms. Never use bounce or spring animations. Respect `prefers-reduced-motion`.
-- **Accessibility**: WCAG AA contrast; focus ring `outline: 2px solid var(--ring); outline-offset: 2px`; never rely on color alone (priorities use `!!` `!` `~` + a word label); no text below 13px.
+- **Styling Removal Rule:** when asked to remove a visual treatment (border, shadow, radius, background, divider, spacing, chrome…), delete or simplify the original rule instead of layering an override that cancels it. Only override when the original must stay for another component/state and can't be split yet.
+- **Tailwind v4 layers:** custom CSS in `globals.css` goes inside `@layer base | components | utilities`. Unlayered rules beat every utility (see Known Technical Notes).
 
 ---
 

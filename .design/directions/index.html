@@ -10,22 +10,28 @@
 <script>
 window.DIRECTIONS = [
   {
-    "file": "A-quiet-desk.html",
+    "file": "A-night-lagoon.html",
     "id": "A",
-    "name": "Quiet Desk",
-    "oneLiner": "A calm, well-made paper desk that hands you today already sorted — and one clear thing to do now."
+    "name": "Night Lagoon",
+    "oneLiner": "Deep ink-teal water at night with one mint light: the calmest page to start from, evolved from today's teal."
   },
   {
-    "file": "B-soft-day.html",
+    "file": "B-pocket-stickers.html",
     "id": "B",
-    "name": "Soft Day",
-    "oneLiner": "The gentlest room in your day: soft lilac, round pebbles of tasks, and a friendly voice that never nags."
+    "name": "Pocket Stickers",
+    "oneLiner": "A plum night notebook with pastel sticker tabs: Tiimo-friendly color that makes today feel light and doable."
   },
   {
-    "file": "C-ember-journal.html",
+    "file": "B2-pocket-stickers-deep.html",
+    "id": "B2",
+    "name": "Pocket Stickers — Deep",
+    "oneLiner": "B after feedback: the same pastel stickers, washi tape and ring timer on a near-black plum page — A's depth, B's friendliness."
+  },
+  {
+    "file": "C-highlighter.html",
     "id": "C",
-    "name": "Ember Journal",
-    "oneLiner": "A beautiful daily journal with a warm ember glow — soft serif headings, ink-dark ‘Now’, and bullet-journal signs."
+    "name": "Highlighter",
+    "oneLiner": "A graphite dot-grid journal and a pack of highlighters: the most notebook, the most focused — one lime stroke marks what matters now."
   }
 ];
 window.PRODUCT = "DailyTodo";
@@ -63,11 +69,11 @@ window.PRODUCT = "DailyTodo";
 <body>
 <header>
   <h1 id="title">Design directions</h1>
-  <p>Pick one, or mix: “A's colors with B's type”.</p>
+  <p>Dark-first. Pick one, or mix: “A's colors with C's type”.</p>
   <span class="spacer"></span>
   <div class="seg" aria-label="Theme">
-    <button type="button" data-theme="light" aria-pressed="true">Light</button>
-    <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+    <button type="button" data-theme="light" aria-pressed="false">Light</button>
+    <button type="button" data-theme="dark" aria-pressed="true">Dark</button>
   </div>
 </header>
 <main id="cols"></main>

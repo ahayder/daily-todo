@@ -408,7 +408,7 @@ describe("Sidebar", () => {
       expect(within(accountMenu).getByText("test@example.com")).toBeInTheDocument();
     });
     expect(screen.getByRole("menuitem", { name: /Log out/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Switch to light mode from system theme/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Switch to system theme from dark mode/i })).toBeInTheDocument();
   });
 
   test("cycles the theme from the sidebar footer icon", async () => {
@@ -439,10 +439,10 @@ describe("Sidebar", () => {
 
     render(<ThemeHarness />);
 
-    expect(screen.getByTestId("theme-mode")).toHaveTextContent("system");
-    await userEvent.click(screen.getByRole("button", { name: /Switch to light mode from system theme/i }));
+    expect(screen.getByTestId("theme-mode")).toHaveTextContent("dark");
+    await userEvent.click(screen.getByRole("button", { name: /Switch to system theme from dark mode/i }));
 
-    expect(screen.getByTestId("theme-mode")).toHaveTextContent("light");
+    expect(screen.getByTestId("theme-mode")).toHaveTextContent("system");
   });
 
   test("signs out from the sidebar account menu", async () => {

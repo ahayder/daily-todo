@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { showUndoToast } from "@/components/ui/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
@@ -371,6 +372,7 @@ function EditableTaskItem({
   dispatch,
   onCelebrate,
   onRequestFocus,
+  onDelete,
   dragSurfaceProps,
   dropIndicatorPosition,
   isSubtaskDropTarget = false,
@@ -381,6 +383,7 @@ function EditableTaskItem({
   dispatch: Dispatch<AppAction>;
   onCelebrate?: (target: HTMLElement) => void;
   onRequestFocus?: (todoId: string) => void;
+  onDelete?: (todoId: string) => void;
   dragSurfaceProps?: HTMLAttributes<HTMLDivElement>;
   dropIndicatorPosition?: DropIndicatorPosition | null;
   isSubtaskDropTarget?: boolean;
@@ -734,7 +737,7 @@ function EditableTaskItem({
                 <button
                   type="button"
                   className="task-row-action-btn task-row-action-btn--delete"
-                  onClick={() => dispatch({ type: "delete-todo", date, todoId: todo.id })}
+                  onClick={() => onDelete?.(todo.id)}
                   aria-label="Delete task"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -872,6 +875,7 @@ function EditableTaskItem({
               dispatch={dispatch}
               onCelebrate={onCelebrate}
               onRequestFocus={onRequestFocus}
+              onDelete={onDelete}
             />
           ))}
         </ul>
@@ -925,6 +929,7 @@ function SortableTaskItem({
   dispatch,
   onCelebrate,
   onRequestFocus,
+  onDelete,
   dropIndicatorPosition,
   isSubtaskDropTarget,
   disableDrag = false,
@@ -935,6 +940,7 @@ function SortableTaskItem({
   dispatch: Dispatch<AppAction>;
   onCelebrate?: (target: HTMLElement) => void;
   onRequestFocus?: (todoId: string) => void;
+  onDelete?: (todoId: string) => void;
   dropIndicatorPosition?: DropIndicatorPosition | null;
   isSubtaskDropTarget?: boolean;
   disableDrag?: boolean;
@@ -967,6 +973,7 @@ function SortableTaskItem({
         dispatch={dispatch}
         onCelebrate={onCelebrate}
         onRequestFocus={onRequestFocus}
+        onDelete={onDelete}
         dragSurfaceProps={disableDrag ? undefined : { ...attributes, ...listeners }}
         dropIndicatorPosition={dropIndicatorPosition}
         isSubtaskDropTarget={isSubtaskDropTarget}
@@ -1464,6 +1471,21 @@ export function TodosView({ state, dispatch }: Props) {
     clearDropIndicator();
   };
 
+  // Small, recoverable delete: act instantly, then offer Undo (see ux-patterns).
+  const deleteTodoWithUndo = (todoId: string) => {
+    if (!date || !page) return;
+    const index = page.todos.findIndex((todo) => todo.id === todoId);
+    if (index === -1) return;
+    const snapshot = page.todos[index];
+    const workspaceId = activeWorkspaceId;
+
+    dispatch({ type: "delete-todo", date, todoId });
+    showUndoToast({
+      title: "Task deleted",
+      onUndo: () => dispatch({ type: "restore-todo", workspaceId, date, todo: snapshot, index }),
+    });
+  };
+
   const requestFocusForTodo = (todoId: string) => {
     if (
       state.uiState.focusTimerStatus === "running" &&
@@ -1730,6 +1752,7 @@ export function TodosView({ state, dispatch }: Props) {
                     dispatch={dispatch}
                     onCelebrate={triggerCompletionConfettiFromElement}
                     onRequestFocus={requestFocusForTodo}
+                    onDelete={deleteTodoWithUndo}
                   />
                 ))
               )}
@@ -2008,6 +2031,7 @@ export function TodosView({ state, dispatch }: Props) {
                             dispatch={dispatch}
                             onCelebrate={triggerCompletionConfettiFromElement}
                             onRequestFocus={requestFocusForTodo}
+                            onDelete={deleteTodoWithUndo}
                             dropIndicatorPosition={
                               dropIndicator?.overId === parentTodo.id
                                 ? dropIndicator.position

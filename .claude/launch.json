@@ -4,22 +4,8 @@
     {
       "name": "dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "dev"
-      ],
+      "runtimeArgs": ["dev"],
       "port": 5005
-    },
-    {
-      "name": "design-directions",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "5077",
-        "--directory",
-        ".design/directions"
-      ],
-      "port": 5077
     }
   ]
 }

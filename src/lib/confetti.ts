@@ -2,14 +2,30 @@
 
 import confetti from "canvas-confetti";
 
-const COMPLETION_CONFETTI_COLORS = [
-  "#2f6d62",
-  "#c0392b",
-  "#c07c30",
-  "#4a7c59",
-  "#d6b98b",
-  "#f4e7c8",
-];
+// Design tokens (see .design/DESIGN.md): accent + the three priority stickers.
+const CONFETTI_TOKENS = ["--primary", "--p1", "--p2", "--p3", "--now-bar"];
+
+/** canvas-confetti only understands hex, so resolve token colors (oklch) through a 1px canvas. */
+function resolveTokenColors(): string[] {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const styles = getComputedStyle(document.documentElement);
+  const colors: string[] = [];
+
+  for (const token of CONFETTI_TOKENS) {
+    const value = styles.getPropertyValue(token).trim();
+    if (!context || !value) continue;
+    context.clearRect(0, 0, 1, 1);
+    context.fillStyle = value;
+    context.fillRect(0, 0, 1, 1);
+    const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+    colors.push(`#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`);
+  }
+
+  return colors.length > 0 ? colors : ["#b9a4f0"];
+}
 
 export function triggerCompletionConfettiFromElement(target: HTMLElement) {
   const rect = target.getBoundingClientRect();
@@ -21,7 +37,7 @@ export function triggerCompletionConfettiFromElement(target: HTMLElement) {
   const shared = {
     disableForReducedMotion: true,
     ticks: 260,
-    colors: COMPLETION_CONFETTI_COLORS,
+    colors: resolveTokenColors(),
     zIndex: 1000,
   };
 
