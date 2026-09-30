@@ -1710,7 +1710,7 @@ export function ContentPlannerView({
   const [moveTargetColumnId, setMoveTargetColumnId] = useState("");
   const [movePlacement, setMovePlacement] = useState<MovePlacement>("bottom");
   const [preferredLayout, setPreferredLayout] =
-    useState<ContentPlannerLayout>("gallery");
+    useState<ContentPlannerLayout>("board");
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
   const [cardDropHighlight, setCardDropHighlight] = useState<CardDropHighlight | null>(null);
   const isTouchFirstInput = useTouchFirstInput();
