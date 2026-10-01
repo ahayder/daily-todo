@@ -21,6 +21,9 @@ import {
   createTodoWorkspaceInState,
   deleteTodoWorkspaceFromState,
   deleteContentColumn,
+  deleteContentCard,
+  getContentCardsForColumn,
+  restoreContentCard,
   duplicatePlannerPreset,
   ensureDailyPageForDate,
   ensureContentPlannerState,
@@ -536,7 +539,7 @@ describe("planner state", () => {
     });
   });
 
-  test("backfills subtitles on canonical columns without changing custom columns", () => {
+  test("backfills subtitles on canonical columns and drops custom columns", () => {
     const state = createInitialState("2026-03-11");
     const inbox = state.contentBoard.columns.find(
       (column) => column.id === CONTENT_COLUMN_INBOX_ID,
@@ -553,11 +556,9 @@ describe("planner state", () => {
     const repairedInbox = repaired.contentBoard.columns.find(
       (column) => column.id === CONTENT_COLUMN_INBOX_ID,
     )!;
-    const repairedCustom = repaired.contentBoard.columns.find(
-      (column) => column.id === customColumn.id,
-    )!;
     expect(repairedInbox.subtitle).toBe("Capture the specific thought, not just the topic.");
-    expect(repairedCustom.subtitle).toBe("");
+    expect(repaired.contentBoard.columns.some((column) => column.id === customColumn.id)).toBe(false);
+    expect(repaired.contentBoard.columns).toHaveLength(4);
   });
 
   test("leaves a fresh canonical board untouched", () => {
@@ -567,40 +568,70 @@ describe("planner state", () => {
     expect(repaired.contentBoard.columns).toHaveLength(4);
   });
 
-  test("adds canonical conveyor columns to a legacy board without touching legacy cards", () => {
+  test("folds a legacy board into the four stages, moving legacy cards to the end of Inbox", () => {
     const state = createInitialState("2026-03-11");
     const legacyColumns = [
       { id: "content-column-ideas", title: "Ideas", subtitle: "Capture raw concepts" },
       { id: "content-column-planned", title: "Planned", subtitle: "Ready to work on" },
-      {
-        id: "content-column-in-progress",
-        title: "In Progress",
-        subtitle: "Currently being created",
-      },
+      { id: CONTENT_COLUMN_INBOX_ID, title: "Inbox", subtitle: "" },
       { id: "content-column-ready", title: "Ready", subtitle: "Prepared to publish" },
       { id: CONTENT_COLUMN_PUBLISHED_ID, title: "Published", subtitle: "Live and complete" },
     ];
-    const legacyCard = createContentCard({
-      columnId: "content-column-ideas",
-      title: "Legacy idea",
-      order: 0,
-    })!;
+    const inboxCard = createContentCard({ columnId: CONTENT_COLUMN_INBOX_ID, title: "Already inbox", order: 0 })!;
+    const ideaA = createContentCard({ columnId: "content-column-ideas", title: "Idea A", order: 0 })!;
+    const ideaB = createContentCard({ columnId: "content-column-ideas", title: "Idea B", order: 1 })!;
+    const ready = createContentCard({ columnId: "content-column-ready", title: "Ready one", order: 0 })!;
+    const published = createContentCard({ columnId: CONTENT_COLUMN_PUBLISHED_ID, title: "Live", order: 0 })!;
     const repaired = ensureContentPlannerState({
       ...state,
       contentBoard: { columns: legacyColumns, updatedAt: state.contentBoard.updatedAt },
-      contentCards: { [legacyCard.id]: legacyCard },
+      contentCards: Object.fromEntries(
+        [ready, ideaB, inboxCard, published, ideaA].map((card) => [card.id, card]),
+      ),
     });
 
-    const ids = repaired.contentBoard.columns.map((column) => column.id);
-    expect(ids.slice(0, 3)).toEqual([
+    expect(repaired.contentBoard.columns.map((column) => column.id)).toEqual([
       CONTENT_COLUMN_INBOX_ID,
       CONTENT_COLUMN_DEVELOP_ID,
       CONTENT_COLUMN_SHOOT_NEXT_ID,
+      CONTENT_COLUMN_PUBLISHED_ID,
     ]);
-    expect(ids).toContain("content-column-ideas");
-    expect(ids).toContain("content-column-ready");
-    expect(ids.filter((id) => id === CONTENT_COLUMN_PUBLISHED_ID)).toHaveLength(1);
-    expect(repaired.contentCards[legacyCard.id].columnId).toBe("content-column-ideas");
+    // Existing custom subtitle on a canonical column is kept.
+    expect(repaired.contentBoard.columns[3].subtitle).toBe("Live and complete");
+    expect(
+      getContentCardsForColumn(repaired.contentCards, CONTENT_COLUMN_INBOX_ID).map((card) => card.title),
+    ).toEqual(["Already inbox", "Idea A", "Idea B", "Ready one"]);
+    expect(repaired.contentCards[published.id].columnId).toBe(CONTENT_COLUMN_PUBLISHED_ID);
+
+    // Idempotent: a folded board is returned unchanged.
+    expect(ensureContentPlannerState(repaired)).toBe(repaired);
+  });
+
+  test("stamps publishedAt when a card enters Published and clears it when it leaves", () => {
+    const card = createContentCard({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, title: "Ship me", order: 0 })!;
+    const published = moveContentCard({ [card.id]: card }, card.id, CONTENT_COLUMN_PUBLISHED_ID, 0);
+    expect(published[card.id].publishedAt).toEqual(expect.any(String));
+
+    const reordered = moveContentCard(published, card.id, CONTENT_COLUMN_PUBLISHED_ID, 0);
+    expect(reordered[card.id].publishedAt).toBe(published[card.id].publishedAt);
+
+    const unpublished = moveContentCard(published, card.id, CONTENT_COLUMN_DEVELOP_ID, 0);
+    expect(unpublished[card.id].publishedAt).toBeNull();
+  });
+
+  test("restoreContentCard puts a deleted card back at its index", () => {
+    const state = createInitialState("2026-03-11");
+    const first = createContentCard({ columnId: CONTENT_COLUMN_INBOX_ID, title: "First", order: 0 })!;
+    const second = createContentCard({ columnId: CONTENT_COLUMN_INBOX_ID, title: "Second", order: 1 })!;
+    const third = createContentCard({ columnId: CONTENT_COLUMN_INBOX_ID, title: "Third", order: 2 })!;
+    const cards = { [first.id]: first, [second.id]: second, [third.id]: third };
+    const afterDelete = deleteContentCard(cards, second.id);
+    const restored = restoreContentCard(afterDelete, state.contentBoard, second, 1);
+
+    expect(
+      getContentCardsForColumn(restored, CONTENT_COLUMN_INBOX_ID).map((card) => card.title),
+    ).toEqual(["First", "Second", "Third"]);
+    expect(restoreContentCard(restored, state.contentBoard, second, 1)).toBe(restored);
   });
 
   test("merges remote hydration without discarding a local card drag", () => {

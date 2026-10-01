@@ -3,7 +3,7 @@ import type { ConveyorStage } from "@/lib/content-conveyor";
 import { cn } from "@/lib/utils";
 
 const STAGES: { id: ConveyorStage; label: string }[] = [
-  { id: "inbox", label: "Inbox" },
+  { id: "inbox", label: "Ideas" },
   { id: "develop", label: "Develop" },
   { id: "shoot-next", label: "Shoot next" },
   { id: "published", label: "Published" },

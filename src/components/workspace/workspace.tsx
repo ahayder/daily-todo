@@ -152,27 +152,13 @@ export function Workspace({ forcedView }: Props) {
               onIncreaseFontScale={() =>
                 dispatch({ type: "increase-content-font-scale" })
               }
-              onAddColumn={(title, subtitle) =>
-                dispatch({ type: "add-content-column", title, subtitle })
-              }
-              onRenameColumn={(columnId, title) =>
-                dispatch({ type: "rename-content-column", columnId, title })
-              }
-              onUpdateColumnSubtitle={(columnId, subtitle) =>
-                dispatch({ type: "update-content-column-subtitle", columnId, subtitle })
-              }
-              onReorderColumns={(activeColumnId, overColumnId) =>
-                dispatch({ type: "reorder-content-columns", activeColumnId, overColumnId })
-              }
-              onDeleteColumn={(columnId) =>
-                dispatch({ type: "delete-content-column", columnId })
-              }
-              onAddCard={(columnId, title, cardNotes) =>
+              onAddCard={(columnId, title, cardNotes, options) =>
                 dispatch({
                   type: "create-content-card",
                   columnId,
                   title,
                   notes: cardNotes,
+                  atTop: options?.atTop,
                 })
               }
               onUpdateCard={(cardId, title, cardNotes) =>
@@ -192,6 +178,9 @@ export function Workspace({ forcedView }: Props) {
                 })
               }
               onDeleteCard={(cardId) => dispatch({ type: "delete-content-card", cardId })}
+              onRestoreCard={(card, index) =>
+                dispatch({ type: "restore-content-card", card, index })
+              }
             />
           ) : (
             <NotesView state={state} dispatch={dispatch} notes={notes} />

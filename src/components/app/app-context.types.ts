@@ -2,6 +2,7 @@ import type { Dispatch, ReactNode } from "react";
 import type {
   AppState,
   CategoryTheme,
+  ContentCard,
   NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
@@ -61,10 +62,18 @@ export type AppAction =
   | { type: "update-content-column-subtitle"; columnId: string; subtitle: string }
   | { type: "reorder-content-columns"; activeColumnId: string; overColumnId: string }
   | { type: "delete-content-column"; columnId: string }
-  | { type: "create-content-card"; columnId: string; title: string; notes?: string }
+  | {
+      type: "create-content-card";
+      columnId: string;
+      title: string;
+      notes?: string;
+      /** Insert at the top of the column instead of the bottom. */
+      atTop?: boolean;
+    }
   | { type: "update-content-card"; cardId: string; title: string; notes: string }
   | { type: "move-content-card"; cardId: string; targetColumnId: string; targetIndex: number }
   | { type: "delete-content-card"; cardId: string }
+  | { type: "restore-content-card"; card: ContentCard; index: number }
   | { type: "create-planner-preset"; name?: string }
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }

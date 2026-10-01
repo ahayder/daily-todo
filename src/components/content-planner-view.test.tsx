@@ -1,57 +1,38 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { ContentPlannerView, type ContentPlannerViewProps } from "@/components/content-planner-view";
 import {
-  ContentPlannerView,
-  resolveContentBoardDragHighlight,
-  resolveContentBoardDrop,
-  type ContentPlannerViewProps,
-} from "@/components/content-planner-view";
-import { createDefaultContentBoard } from "@/lib/store";
+  CONTENT_COLUMN_DEVELOP_ID,
+  CONTENT_COLUMN_INBOX_ID,
+  CONTENT_COLUMN_PUBLISHED_ID,
+  CONTENT_COLUMN_SHOOT_NEXT_ID,
+  createDefaultContentBoard,
+} from "@/lib/store";
 import type { ContentCard } from "@/lib/types";
+
+const toastMocks = vi.hoisted(() => ({
+  showUndoToast: vi.fn(),
+  add: vi.fn(),
+}));
+
+vi.mock("@/components/ui/toast", () => ({
+  showUndoToast: toastMocks.showUndoToast,
+  toast: { add: toastMocks.add, close: vi.fn() },
+}));
 
 const originalMatchMedia = window.matchMedia;
 
-function setTouchFirstInput(matches: boolean) {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(hover: none), (pointer: coarse)" ? matches : false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
-}
-
-function setDesktopLayout() {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: query === "(min-width: 768px)",
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
-}
-
-function setCompactMobileLayout() {
+/** `split` = wide screen (list + detail side by side); otherwise phone. */
+function setLayout(layout: "split" | "phone") {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockImplementation((query: string) => ({
       matches:
-        query === "(max-width: 639px)" ||
-        query === "(hover: none), (pointer: coarse)",
+        layout === "split"
+          ? query === "(min-width: 1024px)" || query === "(min-width: 768px)"
+          : query === "(hover: none), (pointer: coarse)" || query === "(max-width: 639px)",
       media: query,
       onchange: null,
       addEventListener: vi.fn(),
@@ -63,906 +44,226 @@ function setCompactMobileLayout() {
   });
 }
 
-afterEach(() => {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: originalMatchMedia,
-  });
+beforeEach(() => {
+  setLayout("split");
+  toastMocks.showUndoToast.mockReset();
+  toastMocks.add.mockReset();
 });
 
-function createProps(
-  overrides: Partial<ContentPlannerViewProps> = {},
-): ContentPlannerViewProps {
-  const board = createDefaultContentBoard(new Date("2026-07-29T00:00:00.000Z"));
-  const card: ContentCard = {
-    id: "card-1",
-    columnId: board.columns[0].id,
-    title: "Draft launch story",
-    notes:
-      "Explain **what changed** and why it matters.\n\n- [x] Outline the story\n- [ ] Add proof\n\n[Reference](https://example.com)\n\n<script>unsafe</script>",
+afterEach(() => {
+  Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+});
+
+function makeCard(id: string, columnId: string, overrides: Partial<ContentCard> = {}): ContentCard {
+  return {
+    id,
+    columnId,
+    title: id,
+    notes: "",
     order: 0,
     updatedAt: "2026-07-29T00:00:00.000Z",
-  };
-
-  return {
-    board,
-    cards: { [card.id]: card },
-    onDecreaseFontScale: vi.fn(),
-    onIncreaseFontScale: vi.fn(),
-    onAddColumn: vi.fn(),
-    onRenameColumn: vi.fn(),
-    onUpdateColumnSubtitle: vi.fn(),
-    onReorderColumns: vi.fn(),
-    onDeleteColumn: vi.fn(),
-    onAddCard: vi.fn(),
-    onUpdateCard: vi.fn(),
-    onMoveCard: vi.fn(),
-    onDeleteCard: vi.fn(),
     ...overrides,
   };
 }
 
-describe("ContentPlannerView", () => {
-  test("resolves card and column drag-end destinations", () => {
-    const props = createProps();
-    const card = props.cards["card-1"];
-
-    expect(
-      resolveContentBoardDrop(
-        { type: "column", columnId: props.board.columns[1].id },
-        { type: "column", columnId: props.board.columns[0].id },
-        {},
-      ),
-    ).toEqual({
-      type: "column",
-      activeColumnId: props.board.columns[1].id,
-      overColumnId: props.board.columns[0].id,
-    });
-
-    expect(
-      resolveContentBoardDrop(
-        { type: "card", cardId: card.id, columnId: card.columnId },
-        { type: "column", columnId: props.board.columns[1].id },
-        { [props.board.columns[1].id]: [] },
-      ),
-    ).toEqual({
-      type: "card",
-      cardId: card.id,
-      targetColumnId: props.board.columns[1].id,
-      targetIndex: 0,
-    });
-
-    const sameColumnCards = [
-      { ...card, id: "card-a", order: 0 },
-      { ...card, id: "card-b", order: 1 },
-      { ...card, id: "card-c", order: 2 },
-    ];
-    const cardsByColumn = { [card.columnId]: sameColumnCards };
-
-    expect(
-      resolveContentBoardDrop(
-        { type: "card", cardId: "card-a", columnId: card.columnId },
-        { type: "card", cardId: "card-c", columnId: card.columnId },
-        cardsByColumn,
-        "before",
-      ),
-    ).toMatchObject({ targetIndex: 1 });
-    expect(
-      resolveContentBoardDrop(
-        { type: "card", cardId: "card-a", columnId: card.columnId },
-        { type: "card", cardId: "card-c", columnId: card.columnId },
-        cardsByColumn,
-        "after",
-      ),
-    ).toMatchObject({ targetIndex: 2 });
-  });
-
-  test("resolves the destination column and insertion card highlight", () => {
-    expect(
-      resolveContentBoardDragHighlight(
-        { type: "card", cardId: "card-1", columnId: "ideas" },
-        { type: "card", cardId: "card-2", columnId: "planned" },
-        "after",
-      ),
-    ).toEqual({ columnId: "planned", cardId: "card-2", edge: "after" });
-
-    expect(
-      resolveContentBoardDragHighlight(
-        { type: "card", cardId: "card-1", columnId: "ideas" },
-        { type: "column", columnId: "ready" },
-      ),
-    ).toEqual({ columnId: "ready", cardId: null, edge: null });
-
-    expect(
-      resolveContentBoardDragHighlight(
-        { type: "column", columnId: "ideas" },
-        { type: "card", cardId: "card-2", columnId: "planned" },
-      ),
-    ).toBeNull();
-  });
-
-  test("renders the default workflow and persisted cards as safe Markdown", () => {
-    const props = createProps();
-    const { container } = render(<ContentPlannerView {...props} />);
-
-    expect(screen.getByRole("heading", { name: "Content Planner" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Content workflow board" })).toHaveClass(
-      "snap-x",
-      "snap-mandatory",
-      "sm:snap-none",
-      "overscroll-x-contain",
-    );
-    for (const title of ["Inbox", "Develop", "Shoot next", "Published"]) {
-      expect(screen.getByRole("button", { name: `Rename column ${title}` })).toHaveClass(
-        "cursor-grab",
-        "active:cursor-grabbing",
-      );
-      expect(
-        screen.queryByRole("button", { name: `Move column ${title}` }),
-      ).not.toBeInTheDocument();
-    }
-    expect(screen.getByTestId(`content-column-${props.board.columns[0].id}`)).toHaveClass(
-      "w-[calc(100vw-1.5rem)]",
-      "snap-center",
-      "sm:w-[300px]",
-      "sm:snap-none",
-    );
-    expect(screen.getByText("Capture the specific thought, not just the topic.")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Edit card Draft launch story" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "View card Draft launch story" }),
-    ).toBeInTheDocument();
-    const card = screen.getByTestId("content-card-card-1");
-    const cardBody = screen.getByTestId("content-card-body-card-1");
-    const toolbar = screen.getByTestId("content-card-toolbar-card-1");
-    expect(toolbar).toHaveAttribute(
-      "aria-label",
-      "Card toolbar for Draft launch story",
-    );
-    expect(card).not.toHaveClass("max-h-[var(--content-planner-card-max-height,10.5rem)]");
-    expect(cardBody).toHaveClass(
-      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
-    );
-    expect(within(toolbar).getByRole("button", {
-      name: "More actions for card Draft launch story",
-    })).toHaveClass("size-9", "sm:size-7");
-    expect(
-      within(toolbar).queryByRole("button", {
-        name: "Move card Draft launch story",
-      }),
-    ).not.toBeInTheDocument();
-    expect(within(card).getByText("Draft launch story")).toHaveClass(
-      "text-[length:var(--content-planner-font-base,1rem)]",
-      "font-semibold",
-    );
-    expect(
-      within(card).getByText("Draft launch story").closest('[data-card-section="header"]'),
-    ).toHaveClass(
-      "border-b",
-      "border-[var(--line)]",
-      "bg-[color:color-mix(in_srgb,var(--brand-soft)_62%,var(--paper-strong))]",
-    );
-    expect(screen.getByText("what changed").tagName).toBe("STRONG");
-    expect(screen.getByRole("link", { name: "Reference" })).toHaveAttribute(
-      "href",
-      "https://example.com",
-    );
-    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
-    expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
-    expect(container.querySelector("script")).toBeNull();
-  });
-
-  test("opens desktop on Board and switches to a wider Pinterest-like gallery", async () => {
-    setDesktopLayout();
-    const user = userEvent.setup();
-    const props = createProps();
-    const plannedColumn = props.board.columns[1];
-    props.cards["card-2"] = {
-      id: "card-2",
-      columnId: plannedColumn.id,
-      title: "Visual campaign references",
-      notes: "Collect layout inspiration and supporting screenshots.",
-      order: 0,
-      updatedAt: "2026-07-29T01:00:00.000Z",
-    };
-    render(<ContentPlannerView {...props} />);
-
-    const viewControl = screen.getByRole("group", {
-      name: "Content planner view",
-    });
-    expect(
-      within(viewControl).getByRole("button", { name: "Board" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
-      "data-layout",
-      "board",
-    );
-
-    await user.click(within(viewControl).getByRole("button", { name: "Gallery" }));
-    expect(
-      within(viewControl).getByRole("button", { name: "Gallery" }),
-    ).toHaveAttribute("aria-pressed", "true");
-
-    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
-      "data-layout",
-      "gallery",
-    );
-    expect(screen.queryByRole("region", { name: "Content workflow board" })).toBeNull();
-    const gallery = screen.getByRole("region", { name: "Content gallery" });
-    expect(gallery.firstElementChild).toHaveClass(
-      "columns-2",
-      "xl:columns-3",
-      "2xl:columns-4",
-    );
-    expect(gallery.firstElementChild).not.toHaveClass(
-      "lg:columns-3",
-      "xl:columns-4",
-      "2xl:columns-5",
-    );
-    expect(
-      within(screen.getByTestId("content-gallery-card-card-1")).getByText("Inbox"),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("content-gallery-card-card-2")).getByText("Develop"),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("content-card-body-card-1")).toHaveClass(
-      "cursor-pointer",
-      "overflow-visible",
-    );
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "More actions for card Draft launch story",
-      }),
-    );
-    const menu = await screen.findByRole("menu", {
-      name: "Card actions for Draft launch story",
-    });
-    expect(within(menu).getByRole("menuitem", { name: "Move card…" })).toBeInTheDocument();
-
-    await user.click(within(viewControl).getByRole("button", { name: "Board" }));
-    expect(screen.getByRole("region", { name: "Content workflow board" })).toBeInTheDocument();
-  });
-
-  test("keeps the Board move action inside the card menu when dragging is enabled", async () => {
-    setTouchFirstInput(false);
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    const toolbar = screen.getByTestId("content-card-toolbar-card-1");
-    expect(
-      within(toolbar).queryByRole("button", {
-        name: "Move card Draft launch story",
-      }),
-    ).not.toBeInTheDocument();
-
-    await user.click(
-      within(toolbar).getByRole("button", {
-        name: "More actions for card Draft launch story",
-      }),
-    );
-    const menu = await screen.findByRole("menu", {
-      name: "Card actions for Draft launch story",
-    });
-    expect(
-      within(menu).getByRole("menuitem", { name: "Move card…" }),
-    ).toBeInTheDocument();
-  });
-
-  test("applies the shared font scale to board and Markdown typography", () => {
-    const props = createProps({ fontScale: 1.25 });
-    render(<ContentPlannerView {...props} />);
-
-    const planner = screen.getByTestId("content-planner-view");
-    expect(planner).toHaveStyle({ fontSize: "1.25rem" });
-    expect(planner.style.getPropertyValue("--content-planner-font-sm")).toBe(
-      "1.09375rem",
-    );
-    expect(planner.style.getPropertyValue("--content-planner-font-base")).toBe(
-      "1.25rem",
-    );
-    expect(
-      planner.style.getPropertyValue("--content-planner-card-max-height"),
-    ).toBe("13.125rem");
-    expect(screen.getByText("Draft launch story")).toHaveClass(
-      "text-[length:var(--content-planner-font-base,1rem)]",
-    );
-  });
-
-  test("exposes mobile font controls and respects the scale bounds", async () => {
-    const user = userEvent.setup();
-    const minProps = createProps({ fontScale: 0.85 });
-    const { rerender } = render(<ContentPlannerView {...minProps} />);
-
-    const decrease = screen.getByRole("button", {
-      name: "Decrease content planner font size",
-    });
-    const increase = screen.getByRole("button", {
-      name: "Increase content planner font size",
-    });
-
-    expect(decrease).toBeDisabled();
-    await user.click(increase);
-    expect(minProps.onIncreaseFontScale).toHaveBeenCalledOnce();
-
-    const maxProps = createProps({ fontScale: 1.25 });
-    rerender(<ContentPlannerView {...maxProps} />);
-
-    expect(
-      screen.getByRole("button", {
-        name: "Increase content planner font size",
-      }),
-    ).toBeDisabled();
-  });
-
-  test("uses compact phone chrome, collapsed cards, and a header Add Card trigger", async () => {
-    setCompactMobileLayout();
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    expect(
-      screen.getByText("Shape ideas into published work, one calm step at a time."),
-    ).toHaveClass("hidden", "sm:block");
-    expect(screen.getByText("Draft launch story")).toBeInTheDocument();
-    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Expand card Draft launch story" }),
-    ).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "Add card" })).not.toBeInTheDocument();
-
-    const addCardToInbox = screen.getByRole("button", {
-      name: "Add card to Inbox",
-    });
-    expect(addCardToInbox).toHaveClass("size-9");
-    await user.click(addCardToInbox);
-
-    expect(
-      screen.queryByRole("button", { name: "Add card to Inbox" }),
-    ).not.toBeInTheDocument();
-    const textBox = screen.getByRole("textbox", { name: "New card in Inbox" });
-    await user.type(
-      textBox,
-      "Record product walkthrough{Enter}{Enter}Outline the main steps.",
-    );
-    await user.click(screen.getByRole("button", { name: "Add card" }));
-    expect(props.onAddCard).toHaveBeenCalledWith(
-      props.board.columns[0].id,
-      "Record product walkthrough",
-      "Outline the main steps.",
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: "Expand card Draft launch story" }),
-    );
-    expect(screen.getByText("what changed")).toBeInTheDocument();
-  });
-
-  test("uses touch-first scrolling and an explicit move action on coarse pointers", async () => {
-    setTouchFirstInput(true);
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    expect(screen.getByTestId("content-planner-view")).toHaveAttribute(
-      "data-touch-first-input",
-      "true",
-    );
-    expect(screen.getByTestId("content-card-body-card-1")).toHaveClass(
-      "cursor-default",
-      "overflow-visible",
-    );
-    expect(screen.getByTestId("content-card-body-card-1")).not.toHaveClass(
-      "cursor-grab",
-      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
-    );
-    await user.click(screen.getByTestId("content-card-body-card-1"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rename column Inbox" })).toHaveClass(
-      "cursor-pointer",
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: "More actions for column Inbox" }),
-    );
-    const columnMenu = await screen.findByRole("menu", {
-      name: "Column actions for Inbox",
-    });
-    expect(within(columnMenu).getByRole("menuitem", { name: "Move left" })).toBeDisabled();
-    await user.click(within(columnMenu).getByRole("menuitem", { name: "Move right" }));
-    expect(props.onReorderColumns).toHaveBeenCalledWith(
-      props.board.columns[0].id,
-      props.board.columns[1].id,
-    );
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "More actions for card Draft launch story",
-      }),
-    );
-    const menu = await screen.findByRole("menu", {
-      name: "Card actions for Draft launch story",
-    });
-    await user.click(within(menu).getByRole("menuitem", { name: "Move card…" }));
-
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByRole("heading", { name: "Move card" })).toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: /top/i }));
-    await user.click(within(dialog).getByRole("button", { name: "Move card" }));
-
-    expect(props.onMoveCard).toHaveBeenCalledWith(
-      "card-1",
-      props.board.columns[0].id,
-      0,
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: "View card Draft launch story" }),
-    );
-    expect(screen.getByRole("heading", { name: "Card preview" })).toBeInTheDocument();
-  });
-
-  test("opens the complete Markdown card and edits it from the preview dialog", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    const cardBody = screen.getByTestId("content-card-body-card-1");
-    expect(cardBody).toHaveClass("cursor-grab", "active:cursor-grabbing");
-    expect(cardBody).not.toHaveClass("pr-20");
-    expect(cardBody.querySelector(".pr-16")).toBeNull();
-    await user.click(cardBody);
-
-    let dialog = screen.getByRole("dialog");
-    expect(
-      within(dialog).getByRole("heading", { name: "Card preview" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-
-    await user.click(
-      screen.getByRole("button", { name: "View card Draft launch story" }),
-    );
-
-    dialog = screen.getByRole("dialog");
-    expect(
-      within(dialog).getByRole("heading", { name: "Card preview" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText("what changed").tagName).toBe("STRONG");
-    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
-
-    const previewSurface = within(dialog).getByTestId("content-card-preview-surface");
-    const previewEditButton = within(previewSurface).getByRole("button", {
-      name: "Edit card Draft launch story from preview",
-    });
-    expect(previewEditButton).toHaveClass("absolute", "top-2.5", "right-2.5");
-    await user.click(previewEditButton);
-    expect(
-      within(dialog).getByRole("heading", { name: "Card preview" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).queryByRole("heading", { name: "Edit card" })).toBeNull();
-    const previewEditor = within(previewSurface).getByRole("textbox", {
-      name: "Edit card Draft launch story in preview",
-    });
-    await user.clear(previewEditor);
-    await user.type(
-      previewEditor,
-      "Publish launch story{Enter}{Enter}Keep the preview edit concise.",
-    );
-    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
-
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "Publish launch story",
-      "Keep the preview edit concise.",
-    );
-    expect(
-      within(dialog).getByRole("heading", { name: "Card preview" }),
-    ).toBeInTheDocument();
-    expect(
-      within(previewSurface).getByRole("button", {
-        name: "Edit card Draft launch story from preview",
-      }),
-    ).toBeInTheDocument();
-  }, 10_000);
-
-  test("collapses and expands a card without changing card data", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    const collapseButton = screen.getByRole("button", {
-      name: "Collapse card Draft launch story",
-    });
-    expect(collapseButton).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("what changed")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Collapse column Ideas" }),
-    ).not.toBeInTheDocument();
-
-    await user.click(collapseButton);
-    const card = screen.getByTestId("content-card-card-1");
-    const cardBody = screen.getByTestId("content-card-body-card-1");
-    const expandButton = screen.getByRole("button", {
-      name: "Expand card Draft launch story",
-    });
-    expect(expandButton).toHaveAttribute("aria-expanded", "false");
-    expect(card).toHaveClass("min-h-20");
-    expect(cardBody).not.toHaveClass("min-h-20");
-    expect(cardBody).not.toHaveClass("min-h-24");
-    expect(cardBody).not.toHaveClass("min-h-28");
-    expect(cardBody).not.toHaveClass(
-      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
-    );
-    expect(screen.getByText("Draft launch story")).toBeInTheDocument();
-    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
-    expect(props.onUpdateCard).not.toHaveBeenCalled();
-
-    await user.click(expandButton);
-    expect(card).not.toHaveClass("min-h-20");
-    expect(card).not.toHaveClass(
-      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
-    );
-    expect(cardBody).toHaveClass(
-      "min-h-28",
-      "max-h-[var(--content-planner-card-max-height,10.5rem)]",
-    );
-    expect(screen.getByText("what changed")).toBeInTheDocument();
-  });
-
-  test("copies the complete Markdown source from a collapsed card", async () => {
-    const user = userEvent.setup();
-    render(<ContentPlannerView {...createProps()} />);
-    const writeText = vi.spyOn(navigator.clipboard, "writeText");
-
-    await user.click(
-      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
-    );
-    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: "Copy card Draft launch story" }),
-    );
-
-    expect(writeText).toHaveBeenCalledWith(
-      "Draft launch story\n\nExplain **what changed** and why it matters.\n\n- [x] Outline the story\n- [ ] Add proof\n\n[Reference](https://example.com)\n\n<script>unsafe</script>",
-    );
-    expect(
-      screen.getByRole("button", { name: "Copied card Draft launch story" }),
-    ).toHaveClass("text-[var(--brand)]");
-    expect(
-      within(screen.getByTestId("content-card-toolbar-card-1")).getByRole(
-        "status",
-      ),
-    ).toHaveTextContent("Copied card Draft launch story");
-  });
-
-  test("adds a multiline card from a full text box", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getAllByRole("button", { name: "Add card" })[0]);
-    const textBox = screen.getByRole("textbox", { name: "New card in Inbox" });
-    expect(textBox.tagName).toBe("TEXTAREA");
-    await user.type(
-      textBox,
-      "Record product walkthrough{Enter}{Enter}Outline the main steps.",
-    );
-    await user.click(screen.getAllByRole("button", { name: "Add card" })[0]);
-
-    expect(props.onAddCard).toHaveBeenCalledWith(
-      props.board.columns[0].id,
-      "Record product walkthrough",
-      "Outline the main steps.",
-    );
-  });
-
-  test("edits the card text directly in place", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getByRole("button", { name: "Edit card Draft launch story" }));
-    expect(screen.queryByRole("heading", { name: "Edit card" })).not.toBeInTheDocument();
-
-    const textBox = screen.getByRole("textbox", {
-      name: "Edit card Draft launch story",
-    });
-    expect(textBox.tagName).toBe("TEXTAREA");
-    await user.clear(textBox);
-    await user.type(textBox, "Publish launch story{Enter}{Enter}Keep it concise.");
-    await user.tab();
-
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "Publish launch story",
-      "Keep it concise.",
-    );
-  });
-
-  test("the toolbar pencil enters inline editing and expands the card", async () => {
-    const user = userEvent.setup();
-    render(<ContentPlannerView {...createProps()} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
-    );
-    expect(screen.queryByText("what changed")).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: "Edit card Draft launch story" }),
-    );
-    expect(
-      screen.getByRole("textbox", { name: "Edit card Draft launch story" }),
-    ).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-    expect(screen.getByText("what changed")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Collapse card Draft launch story" }),
-    ).toHaveAttribute("aria-expanded", "true");
-  });
-
-  test("confirms card deletion", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getByRole("button", {
-      name: "More actions for card Draft launch story",
-    }));
-    const menu = await screen.findByRole("menu", {
-      name: "Card actions for Draft launch story",
-    });
-    await user.click(within(menu).getByRole("menuitem", { name: "Delete card" }));
-    expect(screen.getByText("Delete this card?")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-
-    expect(props.onDeleteCard).toHaveBeenCalledWith("card-1");
-  });
-
-  test("blocks deleting the final or non-empty column", async () => {
-    const user = userEvent.setup();
-    const props = createProps({
-      board: {
-        columns: [{ id: "only", title: "Ideas", subtitle: "" }],
-        updatedAt: "2026-07-29T00:00:00.000Z",
-      },
-      cards: {},
-    });
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "More actions for column Ideas" }),
-    );
-    const menu = await screen.findByRole("menu", {
-      name: "Column actions for Ideas",
-    });
-    const deleteButton = within(menu).getByRole("menuitem", {
-      name: "Delete column",
-    });
-    expect(deleteButton).toBeDisabled();
-    expect(deleteButton).toHaveAttribute("aria-disabled", "true");
-    expect(
-      within(menu).getByText("The board needs at least one column."),
-    ).toBeInTheDocument();
-    await user.click(deleteButton);
-    expect(screen.queryByText("Delete this column?")).not.toBeInTheDocument();
-  });
-
-  test("adds, renames, and confirms deletion of an empty column", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getByRole("button", { name: "Add column" }));
-    await user.type(screen.getByRole("textbox", { name: "New column title" }), "On Hold");
-    await user.type(
-      screen.getByRole("textbox", { name: "New column subtitle" }),
-      "Waiting for capacity{Enter}",
-    );
-    expect(props.onAddColumn).toHaveBeenCalledWith("On Hold", "Waiting for capacity");
-
-    await user.click(screen.getByRole("button", { name: "Rename column Develop" }));
-    const renameInput = screen.getByRole("textbox", { name: "Rename column Develop" });
-    await user.clear(renameInput);
-    await user.type(renameInput, "Scheduled{Enter}");
-    expect(props.onRenameColumn).toHaveBeenCalledWith(
-      props.board.columns[1].id,
-      "Scheduled",
-    );
-
-    await user.click(screen.getByRole("button", { name: "Edit subtitle for Develop" }));
-    const subtitleInput = screen.getByRole("textbox", {
-      name: "Edit subtitle for Develop",
-    });
-    await user.clear(subtitleInput);
-    await user.type(subtitleInput, "Next in the queue{Enter}");
-    expect(props.onUpdateColumnSubtitle).toHaveBeenCalledWith(
-      props.board.columns[1].id,
-      "Next in the queue",
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: "More actions for column Develop" }),
-    );
-    const columnMenu = await screen.findByRole("menu", {
-      name: "Column actions for Develop",
-    });
-    await user.click(
-      within(columnMenu).getByRole("menuitem", { name: "Delete column" }),
-    );
-    expect(screen.getByText("Delete this column?")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    expect(props.onDeleteColumn).toHaveBeenCalledWith(props.board.columns[1].id);
-  }, 10_000);
-
-  test("auto-saves preview card edits when the preview dialog is closed or dismissed", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "View card Draft launch story" }),
-    );
-
-    const dialog = screen.getByRole("dialog");
-    const previewSurface = within(dialog).getByTestId("content-card-preview-surface");
-    const previewEditButton = within(previewSurface).getByRole("button", {
-      name: "Edit card Draft launch story from preview",
-    });
-    await user.click(previewEditButton);
-
-    const previewEditor = within(previewSurface).getByRole("textbox", {
-      name: "Edit card Draft launch story in preview",
-    });
-    await user.clear(previewEditor);
-    await user.type(
-      previewEditor,
-      "New Title From Preview{Enter}{Enter}Important notes typed before accidental close.",
-    );
-
-    // Simulate accidental click on close dialog or backdrop
-    await user.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-
-    // Verify it was auto-saved to onUpdateCard without losing any notes
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "New Title From Preview",
-      "Important notes typed before accidental close.",
-    );
-  }, 10_000);
-
-  test("shows a self-teaching empty state when the board has no cards", () => {
-    const props = createProps({ cards: {} });
-    render(<ContentPlannerView {...props} />);
-
-    const emptyState = screen.getByTestId("content-conveyor-empty-state");
-    expect(emptyState).toBeInTheDocument();
-    expect(screen.getByText("What's on your mind?")).toBeInTheDocument();
-    expect(
-      screen.getByRole("navigation", { name: "How ideas flow" }),
-    ).toBeInTheDocument();
-    expect(within(emptyState).getByText("Example")).toBeInTheDocument();
-    expect(
-      within(emptyState).getByText("Why job boards aren't the problem"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("region", { name: "Content workflow board" }),
-    ).not.toBeInTheDocument();
-
-    // The example is illustrative only — no real card action is exposed.
-    expect(
-      within(emptyState).queryByRole("button", { name: /Develop this/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  test("captures a thought straight into Inbox", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    const capture = screen.getByRole("textbox", { name: "Capture an idea to Inbox" });
-    await user.type(capture, "Video about job boards");
-    await user.click(screen.getByRole("button", { name: "Add to Inbox" }));
-
-    expect(props.onAddCard).toHaveBeenCalledWith(
-      props.board.columns[0].id,
-      "Video about job boards",
-      "",
-    );
-    expect(capture).toHaveValue("");
-  });
-
-  test("advances a card to the next stage in one press", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getByRole("button", { name: "Develop this" }));
-
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "Draft launch story",
-      expect.stringContaining("## IDEA NOTE"),
-    );
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "Draft launch story",
-      expect.stringContaining("## ORIGINAL THOUGHT"),
-    );
-    expect(props.onMoveCard).toHaveBeenCalledWith("card-1", props.board.columns[1].id, 0);
-  });
-
-  test("shows a soft-cap badge on the Shoot next column", () => {
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-    const shootColumn = screen.getByTestId(
-      `content-column-${props.board.columns[2].id}`,
-    );
-    expect(within(shootColumn).getByText("0/5")).toBeInTheDocument();
-  });
-
-  test("copies a ChatGPT prompt with the hidden instruction", async () => {
-    const user = userEvent.setup();
-    const writeText = vi.spyOn(navigator.clipboard, "writeText");
-    render(<ContentPlannerView {...createProps()} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "Copy for ChatGPT card Draft launch story" }),
-    );
-
-    expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining("Idea Note format"),
-    );
-    expect(writeText.mock.calls[0][0]).toContain("Draft launch story");
-  });
-
-  test("reviews the Inbox one card at a time", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    await user.click(screen.getByRole("button", { name: "Review Inbox, 1 cards" }));
-    const review = screen.getByTestId("content-inbox-review");
-    expect(within(review).getByText("Draft launch story")).toBeInTheDocument();
-
-    await user.click(within(review).getByRole("button", { name: "Develop" }));
-    expect(props.onMoveCard).toHaveBeenCalledWith("card-1", props.board.columns[1].id, 0);
-  });
-
-  test("debounces auto-saving while editing a card inline", async () => {
-    const user = userEvent.setup();
-    const props = createProps();
-    render(<ContentPlannerView {...props} />);
-
-    const editButton = screen.getByRole("button", {
-      name: "Edit card Draft launch story",
-    });
-    await user.click(editButton);
-
-    const editor = screen.getByRole("textbox", {
-      name: "Edit card Draft launch story",
-    });
-    await user.clear(editor);
-    await user.type(
-      editor,
-      "Inline Title{Enter}{Enter}Autosaved note content while typing.",
-    );
-
-    // Wait for debounce timer (400ms)
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    expect(props.onUpdateCard).toHaveBeenCalledWith(
-      "card-1",
-      "Inline Title",
-      "Autosaved note content while typing.",
-    );
-  }, 10_000);
+function createProps(cards: ContentCard[], overrides: Partial<ContentPlannerViewProps> = {}): ContentPlannerViewProps {
+  return {
+    board: createDefaultContentBoard(new Date("2026-07-29T00:00:00.000Z")),
+    cards: Object.fromEntries(cards.map((card) => [card.id, card])),
+    fontScale: 1,
+    onAddCard: vi.fn(),
+    onUpdateCard: vi.fn(),
+    onMoveCard: vi.fn(),
+    onDeleteCard: vi.fn(),
+    onRestoreCard: vi.fn(),
+    ...overrides,
+  };
+}
+
+const idea = makeCard("Morning pages for coders", CONTENT_COLUMN_INBOX_ID, {
+  notes: "Writing before coding clears my head.",
+});
+const developing = makeCard("Why I quit Notion", CONTENT_COLUMN_DEVELOP_ID, {
+  notes: "## ORIGINAL THOUGHT\n\nToo much setup.\n\n## IDEA NOTE\n\nAngle: tools as procrastination",
 });
 
+describe("ContentPlannerView — Focus + Shelf", () => {
+  test("lists every card as a readable row grouped by stage, with a snippet of the current work", () => {
+    render(<ContentPlannerView {...createProps([idea, developing])} />);
+
+    const shelf = screen.getByRole("navigation", { name: "Content cards" });
+    expect(within(shelf).getByRole("heading", { name: "Shoot next" })).toBeInTheDocument();
+    expect(within(shelf).getByRole("heading", { name: "Develop" })).toBeInTheDocument();
+    expect(within(shelf).getByRole("heading", { name: "Ideas" })).toBeInTheDocument();
+    expect(within(shelf).getByRole("heading", { name: "Published" })).toBeInTheDocument();
+
+    const developRow = within(shelf).getByRole("button", { name: /^Why I quit Notion/ });
+    expect(developRow).toHaveTextContent("Angle: tools as procrastination");
+    expect(within(shelf).getByRole("button", { name: /^Morning pages for coders/ })).toHaveTextContent(
+      "Writing before coding clears my head.",
+    );
+  });
+
+  test("opens on the Next up card and shows its single next step", () => {
+    render(<ContentPlannerView {...createProps([idea, developing])} />);
+
+    const week = screen.getByRole("region", { name: "This week" });
+    expect(within(week).getByText("Why I quit Notion")).toBeInTheDocument();
+    expect(within(week).getByRole("button", { name: /Ready to shoot/ })).toBeInTheDocument();
+
+    const detail = screen.getByRole("article", { name: "Why I quit Notion" });
+    expect(within(detail).getByLabelText("Idea note")).toHaveValue("Angle: tools as procrastination");
+    expect(within(detail).getByRole("button", { name: /Ready to shoot/ })).toBeInTheDocument();
+  });
+
+  test("captures a thought to the top of Ideas: first line = title, rest = notes", async () => {
+    const user = userEvent.setup();
+    const props = createProps([]);
+    render(<ContentPlannerView {...props} />);
+
+    const box = screen.getByLabelText("Capture a thought");
+    await user.type(box, "Batch shoot on Saturdays{Shift>}{Enter}{/Shift}less context switching{Enter}");
+
+    expect(props.onAddCard).toHaveBeenCalledWith(
+      CONTENT_COLUMN_INBOX_ID,
+      "Batch shoot on Saturdays",
+      "less context switching",
+      { atTop: true },
+    );
+    expect(box).toHaveValue("");
+    expect(screen.getByText("Saved to Ideas")).toBeInTheDocument();
+  });
+
+  test("Develop this adds the Idea note section and moves the card to the top of Develop", async () => {
+    const user = userEvent.setup();
+    const props = createProps([idea]);
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(
+      within(screen.getByRole("navigation", { name: "Content cards" })).getByRole("button", {
+        name: /^Morning pages for coders/,
+      }),
+    );
+    const detail = screen.getByRole("article", { name: "Morning pages for coders" });
+    await user.click(within(detail).getByRole("button", { name: /Develop this/ }));
+
+    expect(props.onUpdateCard).toHaveBeenCalledWith(
+      idea.id,
+      idea.title,
+      "## ORIGINAL THOUGHT\n\nWriting before coding clears my head.\n\n## IDEA NOTE",
+    );
+    expect(props.onMoveCard).toHaveBeenCalledWith(idea.id, CONTENT_COLUMN_DEVELOP_ID, 0);
+  });
+
+  test("auto-saves edits to one section without touching the others", async () => {
+    const user = userEvent.setup();
+    const props = createProps([developing]);
+    render(<ContentPlannerView {...props} />);
+
+    const ideaNote = within(screen.getByRole("article", { name: "Why I quit Notion" })).getByLabelText("Idea note");
+    await user.type(ideaNote, " + hook");
+
+    await waitFor(() =>
+      expect(props.onUpdateCard).toHaveBeenLastCalledWith(
+        developing.id,
+        developing.title,
+        "## ORIGINAL THOUGHT\n\nToo much setup.\n\n## IDEA NOTE\n\nAngle: tools as procrastination + hook",
+      ),
+    );
+  });
+
+  test("counts only cards published this week toward the weekly goal", () => {
+    const thisWeek = makeCard("Shipped today", CONTENT_COLUMN_PUBLISHED_ID, {
+      publishedAt: new Date().toISOString(),
+    });
+    const legacy = makeCard("Old video", CONTENT_COLUMN_PUBLISHED_ID, { order: 1, publishedAt: null });
+    render(<ContentPlannerView {...createProps([thisWeek, legacy])} />);
+
+    expect(within(screen.getByRole("region", { name: "This week" })).getByText("1 of 4 shipped")).toBeInTheDocument();
+  });
+
+  test("Mark published celebrates with the weekly count", async () => {
+    const user = userEvent.setup();
+    const ready = makeCard("Ready one", CONTENT_COLUMN_SHOOT_NEXT_ID);
+    const props = createProps([ready]);
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(within(screen.getByRole("article", { name: "Ready one" })).getByRole("button", { name: /Mark published/ }));
+
+    expect(props.onMoveCard).toHaveBeenCalledWith(ready.id, CONTENT_COLUMN_PUBLISHED_ID, 0);
+    expect(toastMocks.add).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Shipped!", description: "1 of 4 this week." }),
+    );
+  });
+
+  test("deleting a card is instant and Undo restores it at its index", async () => {
+    const user = userEvent.setup();
+    const props = createProps([developing]);
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Card actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete card" }));
+
+    expect(props.onDeleteCard).toHaveBeenCalledWith(developing.id);
+    const { onUndo } = toastMocks.showUndoToast.mock.calls[0][0] as { onUndo: () => void };
+    act(() => onUndo());
+    expect(props.onRestoreCard).toHaveBeenCalledWith(developing, 0);
+  });
+
+  test("Review ideas goes one card at a time and the count goes down", async () => {
+    const user = userEvent.setup();
+    const second = makeCard("Second idea", CONTENT_COLUMN_INBOX_ID, { order: 1 });
+    render(<ContentPlannerView {...createProps([idea, second])} />);
+
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("2 left")).toBeInTheDocument();
+    expect(within(dialog).getByText("Morning pages for coders")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Keep for later" }));
+    expect(within(dialog).getByText("1 left")).toBeInTheDocument();
+    expect(within(dialog).getByText("Second idea")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Keep for later" }));
+    expect(within(dialog).getByText(/All caught up/)).toBeInTheDocument();
+  });
+
+  test("on phones, tapping a row opens the card full screen with a Back button", async () => {
+    setLayout("phone");
+    const user = userEvent.setup();
+    render(<ContentPlannerView {...createProps([idea])} />);
+
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    await user.click(
+      within(screen.getByRole("navigation", { name: "Content cards" })).getByRole("button", {
+        name: /^Morning pages for coders/,
+      }),
+    );
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("article", { name: "Morning pages for coders" })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Back to list" }));
+    await waitFor(() => expect(screen.queryByRole("article")).not.toBeInTheDocument());
+  });
+
+  test("shows the teach-by-doing empty state when there are no cards", () => {
+    render(<ContentPlannerView {...createProps([])} />);
+    expect(screen.getByText("Start with one specific thought")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Content cards" })).not.toBeInTheDocument();
+  });
+
+  test("Copy for ChatGPT copies the stage prompt plus the clean idea", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<ContentPlannerView {...createProps([developing])} />);
+
+    await user.click(screen.getByRole("button", { name: "Copy for ChatGPT" }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("Turn this Idea Note into my Shoot Card format"),
+    );
+    expect(writeText.mock.calls[0][0]).toContain("Why I quit Notion\n\nAngle: tools as procrastination");
+    expect(await screen.findByText(/Copied — paste in ChatGPT/)).toBeInTheDocument();
+  });
+});

@@ -99,6 +99,17 @@ describe("buildSchemaDefinitions", () => {
     expect(titleField).toBeDefined();
     expect(titleField?.required).toBe(false);
   });
+
+  test("content_cards.published_at exists and is optional (only Published cards carry it)", () => {
+    const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+    const contentCards = definitions.find((item) => item.name === "content_cards");
+    const publishedAt = contentCards?.fields.find(
+      (field: { name: string }) => field.name === "published_at",
+    ) as { required?: boolean; type?: string } | undefined;
+
+    expect(publishedAt?.type).toBe("date");
+    expect(publishedAt?.required).toBe(false);
+  });
 });
 
 describe("mergeCollectionDefinition", () => {

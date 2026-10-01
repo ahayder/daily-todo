@@ -28,6 +28,7 @@ import {
   deleteTodoWorkspaceFromState,
   deletePlannerPurposeFromDay,
   deleteContentCard,
+  restoreContentCard,
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
   duplicatePlannerPreset,
@@ -413,12 +414,12 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
       if (!card) {
         return state;
       }
+      const contentCards = { ...state.contentCards, [card.id]: card };
       return {
         ...state,
-        contentCards: {
-          ...state.contentCards,
-          [card.id]: card,
-        },
+        contentCards: action.atTop
+          ? moveContentCard(contentCards, card.id, action.columnId, 0)
+          : contentCards,
       };
     }
     case "update-content-card": {
@@ -442,6 +443,15 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
     }
     case "delete-content-card": {
       const contentCards = deleteContentCard(state.contentCards, action.cardId);
+      return contentCards === state.contentCards ? state : { ...state, contentCards };
+    }
+    case "restore-content-card": {
+      const contentCards = restoreContentCard(
+        state.contentCards,
+        state.contentBoard,
+        action.card,
+        action.index,
+      );
       return contentCards === state.contentCards ? state : { ...state, contentCards };
     }
     default:

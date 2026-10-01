@@ -234,3 +234,184 @@ export function buildChatGptClipboard(
 
   return `${config.prompt}\n\n${idea}`.trim();
 }
+
+/** Canonical stage order, top of the shelf first (what to do soonest). */
+export const SHELF_STAGE_ORDER: ConveyorStage[] = [
+  "shoot-next",
+  "develop",
+  "inbox",
+  "published",
+];
+
+const STAGE_TO_COLUMN: Record<ConveyorStage, string> = {
+  inbox: CONTENT_COLUMN_INBOX_ID,
+  develop: CONTENT_COLUMN_DEVELOP_ID,
+  "shoot-next": CONTENT_COLUMN_SHOOT_NEXT_ID,
+  published: CONTENT_COLUMN_PUBLISHED_ID,
+};
+
+/** Column id for a conveyor stage. */
+export function getColumnForStage(stage: ConveyorStage): string {
+  return STAGE_TO_COLUMN[stage];
+}
+
+/** The three sections a card grows through (Satellites is optional extra). */
+export const GROWTH_SECTIONS = ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"] as const;
+export type GrowthSection = (typeof GROWTH_SECTIONS)[number];
+
+/** Which growth sections hold real text — drives the progress dots on a row. */
+export function getSectionFill(notes: string | undefined): Record<GrowthSection, boolean> {
+  const sections = parseSections(notes);
+  const hasNamed = sections.some((section) => section.name !== null);
+  const filled = (name: GrowthSection) =>
+    sections.some((section) => section.name === name && section.body !== "");
+  return {
+    // Plain notes (no headings yet) count as the original thought.
+    "ORIGINAL THOUGHT": hasNamed
+      ? filled("ORIGINAL THOUGHT") || sections.some((s) => s.name === null && s.body !== "")
+      : (notes ?? "").trim() !== "",
+    "IDEA NOTE": filled("IDEA NOTE"),
+    "SHOOT CARD": filled("SHOOT CARD"),
+  };
+}
+
+/** Markdown → one calm line of plain text for list previews. */
+function toPlainSnippet(markdown: string): string {
+  return markdown
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")
+        .replace(/^>\s?/, "")
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/[*_`~]/g, "")
+        .trim(),
+    )
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * The most useful preview text for a card's row on the shelf: the section the
+ * card is currently working on, falling back to earlier sections, then to the
+ * plain notes. Returns "" when there is nothing to show.
+ */
+export function getRowSnippet(card: Pick<ContentCard, "columnId" | "notes">): string {
+  const stage = getStageForColumn(card.columnId);
+  const preference: ConveyorSection[] =
+    stage === "shoot-next" || stage === "published"
+      ? ["SHOOT CARD", "IDEA NOTE", "ORIGINAL THOUGHT"]
+      : stage === "develop"
+        ? ["IDEA NOTE", "ORIGINAL THOUGHT"]
+        : ["ORIGINAL THOUGHT"];
+  for (const name of preference) {
+    const body = getSectionBody(card.notes, name);
+    if (body) return toPlainSnippet(body);
+  }
+  return toPlainSnippet(stripSectionHeadings(card.notes));
+}
+
+const STAGE_SECTIONS: Record<ConveyorStage, ConveyorSection[]> = {
+  inbox: ["ORIGINAL THOUGHT"],
+  develop: ["ORIGINAL THOUGHT", "IDEA NOTE"],
+  "shoot-next": ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"],
+  published: ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"],
+};
+
+/**
+ * Sections the card editor shows, in canonical order: the ones the card's
+ * stage calls for plus any the notes already contain (e.g. after moving a card
+ * back a stage, or a Satellites section). Original thought is always shown.
+ */
+export function getEditorSections(
+  columnId: string,
+  notes: string | undefined,
+): ConveyorSection[] {
+  const stage = getStageForColumn(columnId) ?? "inbox";
+  const present = new Set<ConveyorSection>(STAGE_SECTIONS[stage]);
+  for (const section of parseSections(notes)) {
+    if (section.name) present.add(section.name);
+  }
+  return CONVEYOR_SECTIONS.filter((name) => present.has(name));
+}
+
+export type CardDraftSections = Partial<Record<ConveyorSection, string>>;
+
+/**
+ * Split stored notes into editable section bodies. Unlabelled text (plain
+ * notes, or text before the first heading) belongs to Original thought.
+ */
+export function notesToDraft(notes: string | undefined): CardDraftSections {
+  const draft: CardDraftSections = {};
+  for (const section of parseSections(notes)) {
+    const name = section.name ?? "ORIGINAL THOUGHT";
+    draft[name] = [draft[name], section.body].filter(Boolean).join("\n\n");
+  }
+  return draft;
+}
+
+/**
+ * Compose editable sections back into stored notes. A card that only has an
+ * original thought stays plain text (no heading scaffolding); otherwise every
+ * shown section is written as a `## SECTION` block, empty ones included so the
+ * card keeps its place in the conveyor.
+ */
+export function draftToNotes(
+  draft: CardDraftSections,
+  sections: ConveyorSection[],
+): string {
+  const named = CONVEYOR_SECTIONS.filter((name) => sections.includes(name));
+  if (named.length === 1 && named[0] === "ORIGINAL THOUGHT") {
+    return (draft["ORIGINAL THOUGHT"] ?? "").trim();
+  }
+  return named
+    .map((name) => {
+      const body = (draft[name] ?? "").trim();
+      return body ? `## ${name}\n\n${body}` : `## ${name}`;
+    })
+    .join("\n\n");
+}
+
+/**
+ * The card to work on next: the top of Shoot next, else the top of Develop.
+ * `cardsByColumn` must already be sorted by order.
+ */
+export function getNextUpCard(
+  cardsByColumn: (columnId: string) => ContentCard[],
+): ContentCard | null {
+  return (
+    cardsByColumn(CONTENT_COLUMN_SHOOT_NEXT_ID)[0] ??
+    cardsByColumn(CONTENT_COLUMN_DEVELOP_ID)[0] ??
+    null
+  );
+}
+
+/** A kind weekly target: four pieces shipped a week; a fifth is a bonus. */
+export const WEEKLY_SHIP_GOAL = 4;
+
+/** Monday 00:00 (local time) of the week containing `date`. */
+export function getWeekStart(date: Date): Date {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysSinceMonday = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - daysSinceMonday);
+  return start;
+}
+
+/** True when `iso` falls in the same Monday-start week as `now`. */
+export function isInCurrentWeek(iso: string | null | undefined, now: Date): boolean {
+  if (!iso) return false;
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return false;
+  const start = getWeekStart(now).getTime();
+  const end = start + 7 * 24 * 60 * 60 * 1000;
+  return time >= start && time < end;
+}
+
+/** Published cards shipped this week (by `publishedAt`). */
+export function countShippedThisWeek(cards: ContentCard[], now: Date): number {
+  return cards.filter(
+    (card) =>
+      card.columnId === CONTENT_COLUMN_PUBLISHED_ID && isInCurrentWeek(card.publishedAt, now),
+  ).length;
+}

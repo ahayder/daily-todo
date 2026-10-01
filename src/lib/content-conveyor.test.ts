@@ -9,6 +9,15 @@ import {
 import {
   appendSection,
   buildChatGptClipboard,
+  countShippedThisWeek,
+  draftToNotes,
+  getEditorSections,
+  getNextUpCard,
+  getRowSnippet,
+  getSectionFill,
+  getWeekStart,
+  isInCurrentWeek,
+  notesToDraft,
   getNextStep,
   getSectionBody,
   getStageForColumn,
@@ -17,6 +26,7 @@ import {
   parseSections,
   stripSectionHeadings,
 } from "@/lib/content-conveyor";
+import type { ContentCard } from "@/lib/types";
 
 describe("getStageForColumn", () => {
   it("maps canonical columns to stages", () => {
@@ -199,5 +209,95 @@ describe("buildChatGptClipboard", () => {
     ).toBeNull();
     expect(hasChatGptPrompt(CONTENT_COLUMN_INBOX_ID)).toBe(true);
     expect(hasChatGptPrompt(CONTENT_COLUMN_PUBLISHED_ID)).toBe(false);
+  });
+});
+
+describe("shelf helpers", () => {
+  it("getEditorSections shows stage sections plus any already present", () => {
+    expect(getEditorSections(CONTENT_COLUMN_INBOX_ID, "plain")).toEqual(["ORIGINAL THOUGHT"]);
+    expect(getEditorSections(CONTENT_COLUMN_DEVELOP_ID, "")).toEqual(["ORIGINAL THOUGHT", "IDEA NOTE"]);
+    expect(getEditorSections(CONTENT_COLUMN_INBOX_ID, "## SHOOT CARD\n\nbeats")).toEqual([
+      "ORIGINAL THOUGHT",
+      "SHOOT CARD",
+    ]);
+  });
+
+  it("notesToDraft folds unlabelled text and legacy RAW IDEA into Original thought", () => {
+    expect(notesToDraft("just a thought")).toEqual({ "ORIGINAL THOUGHT": "just a thought" });
+    expect(notesToDraft("## RAW IDEA\n\nraw\n\n## IDEA NOTE\n\nangle")).toEqual({
+      "ORIGINAL THOUGHT": "raw",
+      "IDEA NOTE": "angle",
+    });
+  });
+
+  it("draftToNotes keeps an Inbox card plain and writes headings once it grows", () => {
+    expect(draftToNotes({ "ORIGINAL THOUGHT": " hi " }, ["ORIGINAL THOUGHT"])).toBe("hi");
+    expect(
+      draftToNotes({ "ORIGINAL THOUGHT": "hi", "IDEA NOTE": "" }, ["ORIGINAL THOUGHT", "IDEA NOTE"]),
+    ).toBe("## ORIGINAL THOUGHT\n\nhi\n\n## IDEA NOTE");
+    const notes = "## ORIGINAL THOUGHT\n\nhi\n\n## IDEA NOTE\n\nangle";
+    expect(draftToNotes(notesToDraft(notes), getEditorSections(CONTENT_COLUMN_DEVELOP_ID, notes))).toBe(notes);
+  });
+
+  it("getSectionFill reports which growth sections hold text", () => {
+    expect(getSectionFill("")).toEqual({ "ORIGINAL THOUGHT": false, "IDEA NOTE": false, "SHOOT CARD": false });
+    expect(getSectionFill("plain")).toMatchObject({ "ORIGINAL THOUGHT": true });
+    expect(getSectionFill("## ORIGINAL THOUGHT\n\nx\n\n## IDEA NOTE\n")).toEqual({
+      "ORIGINAL THOUGHT": true,
+      "IDEA NOTE": false,
+      "SHOOT CARD": false,
+    });
+  });
+
+  it("getRowSnippet previews the section the card is working on, as plain text", () => {
+    const notes = "## ORIGINAL THOUGHT\n\nthe thought\n\n## IDEA NOTE\n\n- **angle** one\n- hook two";
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_INBOX_ID, notes })).toBe("the thought");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_DEVELOP_ID, notes })).toBe("angle one · hook two");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, notes })).toBe("angle one · hook two");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_INBOX_ID, notes: "" })).toBe("");
+  });
+
+  it("getNextUpCard prefers the top of Shoot next, then Develop", () => {
+    const make = (id: string, columnId: string): ContentCard => ({
+      id,
+      columnId,
+      title: id,
+      notes: "",
+      order: 0,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const byColumn: Record<string, ContentCard[]> = {
+      [CONTENT_COLUMN_DEVELOP_ID]: [make("dev", CONTENT_COLUMN_DEVELOP_ID)],
+      [CONTENT_COLUMN_SHOOT_NEXT_ID]: [],
+    };
+    expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("dev");
+    byColumn[CONTENT_COLUMN_SHOOT_NEXT_ID] = [make("shoot", CONTENT_COLUMN_SHOOT_NEXT_ID)];
+    expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("shoot");
+    expect(getNextUpCard(() => [])).toBeNull();
+  });
+
+  it("counts cards shipped since Monday 00:00 local time", () => {
+    // Wednesday, 1 Oct 2026 (local).
+    const now = new Date(2026, 9, 1, 15, 0);
+    expect(getWeekStart(now)).toEqual(new Date(2026, 8, 28));
+    expect(getWeekStart(new Date(2026, 9, 4, 23, 0))).toEqual(new Date(2026, 8, 28)); // Sunday
+    const card = (publishedAt: string | null, columnId = CONTENT_COLUMN_PUBLISHED_ID): ContentCard => ({
+      id: Math.random().toString(),
+      columnId,
+      title: "x",
+      notes: "",
+      order: 0,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      publishedAt,
+    });
+    const cards = [
+      card(new Date(2026, 8, 28, 0, 0).toISOString()), // Monday 00:00 — counts
+      card(new Date(2026, 8, 30).toISOString()), // counts
+      card(new Date(2026, 8, 27, 23, 59).toISOString()), // last Sunday — no
+      card(null), // legacy published, no date — no
+      card(new Date(2026, 8, 30).toISOString(), CONTENT_COLUMN_SHOOT_NEXT_ID), // not published — no
+    ];
+    expect(countShippedThisWeek(cards, now)).toBe(2);
+    expect(isInCurrentWeek(undefined, now)).toBe(false);
   });
 });

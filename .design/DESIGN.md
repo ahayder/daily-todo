@@ -140,7 +140,7 @@ Live in `src/components/signature/`. Inventory and usage: `.claude/skills/ui-cus
 | `NowCard` (`block` / `task` / `mini`) | "This is the one thing right now" — `now-bg` block, 60px ring timer (`--now-bar`), label, title (heading font), time left in DM Mono, next up; lilac rim + `--surface-shadow` | Planner NOW, Focus-mode timer, optional mini chip | lists, cards, settings; never a second one per screen; no warning color when over time |
 | `PriorityTab` | "How much this matters" — pastel sticker pill (`--pN` + `-on`) with symbol + word (`!! Must do`, `! Should do`, `~ Could do`, or the active label set) over a `--pN-soft` group wash | todo group headers, priority filters | task text, buttons, anything not a priority |
 | `WashiTag` | "This came with you" — butter washi tape (`--washi`), torn edges (clip-path), tilted 2°, text "From yesterday" / "3 days waiting" | todo rows, focus card, "Worth a look" review | finished tasks (hidden); more than one per row; never red, grows in weight (700 at 3+ days), not color |
-| `StageTrack` | "Where this idea is" — `Inbox › Develop › Shoot next › Published`; current = primary-filled stamp with a 2px offset shadow, past = solid outline, future = dashed | content board, gallery, review inbox, empty state | todos/planner; never keyed on editable column titles (use stage ids from `content-conveyor.ts`) |
+| `StageTrack` | "Where this idea is" — `Ideas › Develop › Shoot next › Published` (the Inbox stage reads as "Ideas"); current = primary-filled stamp with a 2px offset shadow, past = solid outline, future = dashed | content card detail, empty state | todos/planner; never keyed on editable column titles (use stage ids from `content-conveyor.ts`) |
 | `SoftCapBadge` | "Nudge, don't nag" — `N/5` chip in DM Mono that tints past the cap | Shoot next header | anything that blocks, modals, red; `aria-label="3 of 5"` |
 
 ## UX patterns
@@ -152,7 +152,7 @@ How-to with components: `.claude/skills/ux-patterns`.
 - **Errors:** sync pill is the only global status; `InlineAlert` (warn/info) says what is safe first ("Saved on this device") then the fix. No toasts for autosave.
 - **Empty:** `EmptyState` = icon, title, one-line body, one action; teach by doing (Content Conveyor empty state is the model). Copy: "A fresh page. What's one thing for today?"
 - **Inline add (`InlineComposer`):** `line` — Enter adds and keeps focus; `block` — ⌘/Ctrl+Enter adds, Esc cancels, explicit buttons.
-- **Toggles:** `SegmentedControl` (radio-group semantics) for Now/Set up, Board/Gallery, Todos/Daily note, weekday tabs. Nav pills are navigation, not a segmented control.
+- **Toggles:** `SegmentedControl` (radio-group semantics) for Now/Set up, Todos/Daily note, weekday tabs. Nav pills are navigation, not a segmented control.
 - **Menus:** `DropdownMenu`; destructive item last, separated, destructive tone.
 - **Navigation:** top pills + sync + theme stay; sidebar only on Todos/Notes.
 - **Responsive:** coarse pointer never depends on drag or hover — explicit move dialogs, visible row actions, 44px targets; shared `useMediaQuery` named queries.
@@ -196,7 +196,7 @@ This document is the **target**. Areas that don't follow it yet are legacy — n
 
 - Target-ready: none yet. Once the foundation (tokens + fonts + aliases) lands, colors and fonts change app-wide, but layouts and component code stay legacy.
 - Near target: `/planner` (NOW + Set up; Tailwind, AlertDialog/Tooltip) — needs `NowCard`, `SegmentedControl`, semantic utilities.
-- Legacy: `/todos` (`todos/todos-view.tsx`, most legacy; validation screen), shell (`workspace/top-navbar.tsx`, `workspace/sidebar.tsx`), `/notes`, `/content-planner` (431 arbitrary values, 36 raw buttons, 12 `matchMedia` calls), auth reset/verification (BEM CSS), `AuthGate`.
+- Legacy: `/todos` (`todos/todos-view.tsx`, most legacy; validation screen), shell (`workspace/top-navbar.tsx`, `workspace/sidebar.tsx`), `/notes`, auth reset/verification (BEM CSS), `AuthGate`.
 - Legacy code patterns: ~600 `bg-[var(--paper|ink|brand|line)]` classes, ~108 raw `<button>`, hand-built dialogs/menus/segmented toggles, `text-xs`/`text-[11px]`, 150ms durations, ~4,000 unlayered lines and ~1,580 dead `.planner-*` lines in `globals.css`, `window.confirm`.
 - New UI follows the target; UI touched for a change is brought up to it (only the touched part — including moving its CSS out of unlayered `globals.css`); untouched legacy stays as is; an explicit redesign applies the target fully. Major layout/navigation/hierarchy/workflow changes need the user's approval first (see AGENTS.md).
 

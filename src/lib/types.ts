@@ -38,6 +38,8 @@ export type ContentCard = {
   notes: string;
   order: number;
   updatedAt: string;
+  /** When the card last entered Published (drives the weekly shipped count). */
+  publishedAt?: string | null;
 };
 
 export type PlannerEvent = {
