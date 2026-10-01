@@ -288,18 +288,27 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           required: true,
         },
         {
+          // NOT required: an empty title (blank first line) is a valid, savable
+          // card state that the read side already tolerates. PocketBase treats an
+          // empty string on a required text field as "blank" and rejects the write
+          // with a 400, which reverts the card on the next hydration.
           name: "title",
           type: "text",
-          required: true,
+          required: false,
         },
         {
           name: "notes",
           type: "text",
         },
         {
+          // NOT required: card order is 0-based, so the top card of every column
+          // has position 0. PocketBase treats 0 as "blank" on a required number
+          // field and rejects the write with a 400 — which is why moving a card to
+          // the top of a column reverted after refresh. Position 0 is a valid,
+          // savable state.
           name: "position",
           type: "number",
-          required: true,
+          required: false,
           onlyInt: true,
           min: 0,
         },
