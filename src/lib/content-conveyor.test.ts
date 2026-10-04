@@ -9,12 +9,14 @@ import {
 import {
   appendSection,
   buildChatGptClipboard,
+  cleanPastedShootCard,
   countShippedThisWeek,
   draftToNotes,
   getEditorSections,
   getNextUpCard,
   getRowSnippet,
   getSectionFill,
+  getShootIntent,
   getWeekStart,
   isInCurrentWeek,
   notesToDraft,
@@ -24,6 +26,7 @@ import {
   hasChatGptPrompt,
   hasConveyorSections,
   parseSections,
+  parseShootCard,
   stripSectionHeadings,
 } from "@/lib/content-conveyor";
 import type { ContentCard } from "@/lib/types";
@@ -299,5 +302,85 @@ describe("shelf helpers", () => {
     ];
     expect(countShippedThisWeek(cards, now)).toBe(2);
     expect(isInCurrentWeek(undefined, now)).toBe(false);
+  });
+});
+
+const SAMPLE_SHOOT_CARD = [
+  "1. ভিডিওর মূল বক্তব্য",
+  "Job পাওয়া শুধু interview ভালো হওয়ার ব্যাপার না।",
+  "Employer-এর need আর আপনার skill match করে।",
+  "2. Main Beats / Talk Points",
+  "",
+  "* Job search অনেকটা matchmaking-এর মতো",
+  "   * Employer specific skill খুঁজছে।",
+  "3. Hook Options",
+  "Recommended:",
+  "“Job search আসলে matchmaking।”",
+].join("\n");
+
+describe("shoot card helpers", () => {
+  it("parseShootCard splits numbered parts and keeps nested bullets in their part", () => {
+    const parts = parseShootCard(SAMPLE_SHOOT_CARD);
+    expect(parts.map((part) => [part.number, part.heading])).toEqual([
+      [1, "ভিডিওর মূল বক্তব্য"],
+      [2, "Main Beats / Talk Points"],
+      [3, "Hook Options"],
+    ]);
+    expect(parts[1].body).toBe("* Job search অনেকটা matchmaking-এর মতো\n   * Employer specific skill খুঁজছে।");
+  });
+
+  it("parseShootCard does not split on an inner numbered list or out-of-order numbers", () => {
+    const parts = parseShootCard("1. Intent\nthe point\n2. Beats\n1. first beat\n2. second beat\n3. Hooks\nhook");
+    expect(parts.map((part) => part.heading)).toEqual(["Intent", "Beats", "Hooks"]);
+    expect(parts[1].body).toBe("1. first beat\n2. second beat");
+  });
+
+  it("parseShootCard tolerates markdown headings and keeps text before part 1", () => {
+    const parts = parseShootCard("Quick note\n### 1. Intent\nthe point\n**2. Beats**\nbeat");
+    expect(parts).toEqual([
+      { number: null, heading: "", body: "Quick note" },
+      { number: 1, heading: "Intent", body: "the point" },
+      { number: 2, heading: "Beats", body: "beat" },
+    ]);
+  });
+
+  it("parseShootCard returns one headless part for an unnumbered card", () => {
+    expect(parseShootCard("just some beats\n- one")).toEqual([
+      { number: null, heading: "", body: "just some beats\n- one" },
+    ]);
+    expect(parseShootCard("")).toEqual([]);
+  });
+
+  it("getShootIntent reads part 1 of the Shoot card as plain text", () => {
+    const notes = `## ORIGINAL THOUGHT\n\nthought\n\n## SHOOT CARD\n\n${SAMPLE_SHOOT_CARD}`;
+    expect(getShootIntent(notes)).toBe(
+      "Job পাওয়া শুধু interview ভালো হওয়ার ব্যাপার না। · Employer-এর need আর আপনার skill match করে।",
+    );
+    expect(getShootIntent("## SHOOT CARD\n\nunnumbered beats")).toBe("");
+    expect(getShootIntent("plain idea")).toBe("");
+  });
+
+  it("getRowSnippet shows the intent once a card is in Shoot next or Published", () => {
+    const notes = `## IDEA NOTE\n\nangle\n\n## SHOOT CARD\n\n1. Intent\nthe point\n2. Beats\nbeat`;
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, notes })).toBe("the point");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_PUBLISHED_ID, notes })).toBe("the point");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_DEVELOP_ID, notes })).toBe("angle");
+  });
+
+  it("cleanPastedShootCard strips ChatGPT citation chips and keeps normal words", () => {
+    const pasted = [
+      "সেখানেই আপনার chance সবচেয়ে বেশি। Shoot-Card-Instruction",
+      "story-driven content-এর জন্য strong fit। Story-Driven-Video-Script-Instr…",
+      "A well-known Follow-Up stays",
+      "Employer-এর need",
+    ].join("\n");
+    expect(cleanPastedShootCard(pasted)).toBe(
+      [
+        "সেখানেই আপনার chance সবচেয়ে বেশি।",
+        "story-driven content-এর জন্য strong fit।",
+        "A well-known Follow-Up stays",
+        "Employer-এর need",
+      ].join("\n"),
+    );
   });
 });

@@ -276,7 +276,7 @@ export function getSectionFill(notes: string | undefined): Record<GrowthSection,
 }
 
 /** Markdown → one calm line of plain text for list previews. */
-function toPlainSnippet(markdown: string): string {
+function toPlainSnippet(markdown: string, separator = " · "): string {
   return markdown
     .split(/\r?\n/)
     .map((line) =>
@@ -289,7 +289,7 @@ function toPlainSnippet(markdown: string): string {
         .trim(),
     )
     .filter(Boolean)
-    .join(" · ");
+    .join(separator);
 }
 
 /**
@@ -299,6 +299,10 @@ function toPlainSnippet(markdown: string): string {
  */
 export function getRowSnippet(card: Pick<ContentCard, "columnId" | "notes">): string {
   const stage = getStageForColumn(card.columnId);
+  if (stage === "shoot-next" || stage === "published") {
+    const intent = getShootIntent(card.notes);
+    if (intent) return intent;
+  }
   const preference: ConveyorSection[] =
     stage === "shoot-next" || stage === "published"
       ? ["SHOOT CARD", "IDEA NOTE", "ORIGINAL THOUGHT"]
@@ -310,6 +314,77 @@ export function getRowSnippet(card: Pick<ContentCard, "columnId" | "notes">): st
     if (body) return toPlainSnippet(body);
   }
   return toPlainSnippet(stripSectionHeadings(card.notes));
+}
+
+export type ShootCardPart = {
+  /** 1-based part number, or null for text before part 1 / an unnumbered card. */
+  number: number | null;
+  heading: string;
+  body: string;
+};
+
+// Also tolerates markdown dressing: "### 1. Heading" or "**1. Heading**".
+const SHOOT_PART_HEADING_RE = /^(?:#{1,6}\s+)?(?:\*\*)?(\d+)[.)]\s+(.+?)(?:\*\*)?\s*$/;
+
+/**
+ * Split a Shoot card into its numbered parts ("1. Core message", "2. Beats"…).
+ * A part only starts at a non-indented numbered line whose number follows the
+ * previous part, so numbered lists inside a part never split it. A card with no
+ * numbered parts comes back as one headless part.
+ */
+export function parseShootCard(body: string | undefined): ShootCardPart[] {
+  const parts: ShootCardPart[] = [];
+  let current: ShootCardPart = { number: null, heading: "", body: "" };
+  let lines: string[] = [];
+
+  const flush = () => {
+    const text = lines.join("\n").replace(/^\n+|\s+$/g, "");
+    if (current.number !== null || text) parts.push({ ...current, body: text });
+    lines = [];
+  };
+
+  for (const line of (body ?? "").split(/\r?\n/)) {
+    const match = line.match(SHOOT_PART_HEADING_RE);
+    if (match && Number(match[1]) === (current.number ?? 0) + 1) {
+      flush();
+      current = { number: Number(match[1]), heading: match[2], body: "" };
+    } else {
+      lines.push(line);
+    }
+  }
+  flush();
+  return parts;
+}
+
+/**
+ * The video's intent: the body of part 1 of the card's Shoot card, as one calm
+ * line of plain text. "" when there is no Shoot card or it isn't numbered.
+ */
+export function getShootIntent(notes: string | undefined): string {
+  return getShootCardIntent(getSectionBody(notes, "SHOOT CARD"));
+}
+
+/**
+ * Intent from a Shoot card body (the text of the SHOOT CARD section). Lines are
+ * joined with `separator` — " · " for one-line previews, "\n" to keep them.
+ */
+export function getShootCardIntent(body: string | undefined, separator = " · "): string {
+  const first = parseShootCard(body).find((part) => part.number === 1);
+  return first ? toPlainSnippet(first.body, separator) : "";
+}
+
+/**
+ * ChatGPT leaves source-file chips at the end of lines when copied, e.g.
+ * " Shoot-Card-Instruction" or " Story-Driven-Video-Script-Instr…". Strip those
+ * (a Title-Case token with 2+ hyphens at line end) and keep everything else.
+ */
+const CITATION_CRUMB_RE = /[ \t]+(?:[A-Z][A-Za-z0-9]*-){2,}[A-Z][A-Za-z0-9]*(?:…|\.\.\.)?[ \t]*$/;
+
+export function cleanPastedShootCard(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(CITATION_CRUMB_RE, ""))
+    .join("\n");
 }
 
 const STAGE_SECTIONS: Record<ConveyorStage, ConveyorSection[]> = {

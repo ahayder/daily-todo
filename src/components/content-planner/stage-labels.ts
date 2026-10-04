@@ -19,6 +19,6 @@ export const SECTION_LABELS: Record<ConveyorSection, string> = {
 export const SECTION_PLACEHOLDERS: Record<ConveyorSection, string> = {
   "ORIGINAL THOUGHT": "The specific thought — the problem and the method, not just the topic.",
   "IDEA NOTE": "Angle · hook · talk points · risk",
-  "SHOOT CARD": "Beats · hook options · visual hook · title",
+  "SHOOT CARD": "Paste your shoot card — part 1 (the core message) becomes the intent.",
   SATELLITES: "Spin-off ideas this one could lead to",
 };

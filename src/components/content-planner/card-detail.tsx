@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, Copy, MoreHorizontal, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, MoreHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent } from "react";
 import { StageTrack } from "@/components/signature/stage-track";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +14,11 @@ import {
 import { IconButton } from "@/components/ui/icon-button";
 import {
   buildChatGptClipboard,
+  cleanPastedShootCard,
   draftToNotes,
   getEditorSections,
   getNextStep,
+  getShootCardIntent,
   getStageForColumn,
   hasChatGptPrompt,
   notesToDraft,
@@ -26,6 +28,7 @@ import {
 import type { ContentCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardMoveItems } from "./content-shelf";
+import { ShootCardView } from "./shoot-card-view";
 import { SECTION_LABELS, SECTION_PLACEHOLDERS } from "./stage-labels";
 
 const AUTOSAVE_DELAY_MS = 400;
@@ -76,6 +79,10 @@ export function CardDetail({
   const stage = getStageForColumn(card.columnId);
   const nextStep = getNextStep(card.columnId);
   const sections = getEditorSections(card.columnId, card.notes);
+  // From Shoot next on, the Shoot card leads; earlier sections fold away.
+  const isShootStage = stage === "shoot-next" || stage === "published";
+  const [shootEditing, setShootEditing] = useState(false);
+  const [earlierOpen, setEarlierOpen] = useState(false);
 
   // Autosave plumbing. `pendingRef` holds unsaved edits (`isDirty` mirrors it
   // for rendering); `base` is the stored title/notes the draft corresponds to,
@@ -133,6 +140,22 @@ export function CardDetail({
     onFocusHandled();
   }, [focusSection, onFocusHandled, sections.length]);
 
+  // Edit (from the read view) mounts the text box: focus it, caret at the end.
+  const focusShootOnEditRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!shootEditing || !focusShootOnEditRef.current) return;
+    focusShootOnEditRef.current = false;
+    const target = sectionRefs.current["SHOOT CARD"];
+    if (!target) return;
+    target.focus();
+    target.setSelectionRange(target.value.length, target.value.length);
+  }, [shootEditing]);
+
+  const startShootEdit = () => {
+    focusShootOnEditRef.current = true;
+    setShootEditing(true);
+  };
+
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(null), 1800);
@@ -172,6 +195,71 @@ export function CardDetail({
   };
 
   const isSheet = layout === "sheet";
+  const shootBody = draft.sections["SHOOT CARD"] ?? "";
+  const intent = isShootStage ? getShootCardIntent(shootBody, "\n") : "";
+  // A focus request (right after "Ready to shoot") always gets the text box.
+  const showShootView =
+    isShootStage && !shootEditing && focusSection !== "SHOOT CARD" && shootBody.trim() !== "";
+  const earlierSections = isShootStage ? sections.filter((name) => name !== "SHOOT CARD") : [];
+  const leadSections = isShootStage ? sections.filter((name) => name === "SHOOT CARD") : sections;
+
+  // ChatGPT copies leave source chips at line ends; drop them on paste.
+  const pasteShootCard = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = event.clipboardData.getData("text/plain");
+    const cleaned = cleanPastedShootCard(text);
+    if (cleaned === text) return;
+    event.preventDefault();
+    const element = event.currentTarget;
+    const { selectionStart, selectionEnd, value } = element;
+    const caret = selectionStart + cleaned.length;
+    edit({
+      ...draft,
+      sections: { ...draft.sections, "SHOOT CARD": value.slice(0, selectionStart) + cleaned + value.slice(selectionEnd) },
+    });
+    requestAnimationFrame(() => element.setSelectionRange(caret, caret));
+  };
+
+  const renderSectionField = (name: ConveyorSection) => {
+    const id = `card-${card.id}-${name.toLowerCase().replace(/\s+/g, "-")}`;
+    if (name === "SHOOT CARD" && showShootView) {
+      return <ShootCardView key={name} labelId={id} body={shootBody} onEdit={startShootEdit} />;
+    }
+    const isShoot = name === "SHOOT CARD";
+    return (
+      <div key={name} className="flex flex-col gap-1.5 animate-enter">
+        <label htmlFor={id} className="text-[0.8125rem] font-semibold tracking-wide text-muted-foreground uppercase">
+          {SECTION_LABELS[name]}
+        </label>
+        <textarea
+          id={id}
+          ref={(element) => {
+            sectionRefs.current[name] = element;
+          }}
+          value={draft.sections[name] ?? ""}
+          onChange={(event) =>
+            edit({ ...draft, sections: { ...draft.sections, [name]: event.target.value } })
+          }
+          onPaste={isShoot && isShootStage ? pasteShootCard : undefined}
+          onFocus={isShoot ? () => setShootEditing(true) : undefined}
+          onBlur={() => {
+            flush();
+            if (isShoot) setShootEditing(false);
+          }}
+          placeholder={SECTION_PLACEHOLDERS[name]}
+          className="field-sizing-content min-h-20 w-full resize-none rounded-xl border border-transparent bg-muted/40 px-3 py-2.5 text-[1em] leading-[1.7] text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-input focus-visible:border-ring focus-visible:bg-transparent"
+        />
+      </div>
+    );
+  };
+
+  const focusFirstSection = () => {
+    const first = leadSections[0];
+    if (first === "SHOOT CARD" && showShootView) {
+      startShootEdit();
+      return;
+    }
+    if (first) sectionRefs.current[first]?.focus();
+  };
 
   return (
     <article
@@ -222,37 +310,48 @@ export function CardDetail({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              sectionRefs.current[sections[0]]?.focus();
+              focusFirstSection();
             }
           }}
           className="field-sizing-content w-full resize-none rounded-lg bg-transparent font-heading text-[1.5625em] font-bold leading-snug text-foreground outline-none focus-visible:bg-muted/50"
         />
 
-        <div className="mt-4 flex flex-col gap-5">
-          {sections.map((name) => {
-            const id = `card-${card.id}-${name.toLowerCase().replace(/\s+/g, "-")}`;
-            return (
-              <div key={name} className="flex flex-col gap-1.5 animate-enter">
-                <label htmlFor={id} className="text-[0.8125rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                  {SECTION_LABELS[name]}
-                </label>
-                <textarea
-                  id={id}
-                  ref={(element) => {
-                    sectionRefs.current[name] = element;
-                  }}
-                  value={draft.sections[name] ?? ""}
-                  onChange={(event) =>
-                    edit({ ...draft, sections: { ...draft.sections, [name]: event.target.value } })
-                  }
-                  onBlur={flush}
-                  placeholder={SECTION_PLACEHOLDERS[name]}
-                  className="field-sizing-content min-h-20 w-full resize-none rounded-xl border border-transparent bg-muted/40 px-3 py-2.5 text-[1em] leading-[1.7] text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-input focus-visible:border-ring focus-visible:bg-transparent"
-                />
+        {intent ? (
+          <div className="mt-3 rounded-xl bg-brand-subtle px-4 py-3 text-brand-subtle-foreground animate-enter">
+            <p className="text-[0.8125rem] font-semibold tracking-wide uppercase">Intent</p>
+            <p className="mt-1 font-heading text-[1.125em] font-semibold leading-[1.7] whitespace-pre-line">{intent}</p>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-col gap-5">{leadSections.map(renderSectionField)}</div>
+
+        {earlierSections.length > 0 ? (
+          <section aria-labelledby={`card-${card.id}-earlier-label`} className="mt-6 border-t border-border pt-3">
+            <button
+              type="button"
+              aria-expanded={earlierOpen}
+              aria-controls={`card-${card.id}-earlier`}
+              onClick={() => setEarlierOpen((open) => !open)}
+              className="flex w-full items-center gap-2 rounded-lg py-1 text-left outline-none focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-11"
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className={cn("size-4 text-muted-foreground transition-transform", !earlierOpen && "-rotate-90")}
+              />
+              <h3 id={`card-${card.id}-earlier-label`} className="text-sm font-semibold text-muted-foreground">
+                Earlier notes
+              </h3>
+              <span className="text-[0.8125rem] text-muted-foreground">
+                · {earlierSections.map((name) => SECTION_LABELS[name]).join(", ")}
+              </span>
+            </button>
+            {earlierOpen ? (
+              <div id={`card-${card.id}-earlier`} className="mt-3 flex flex-col gap-5">
+                {earlierSections.map(renderSectionField)}
               </div>
-            );
-          })}
-        </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
 
       {nextStep || hasChatGptPrompt(card.columnId) ? (
