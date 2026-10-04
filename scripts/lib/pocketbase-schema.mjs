@@ -313,6 +313,13 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           min: 0,
         },
         {
+          // NOT required: only Published cards carry it, and it is cleared when a
+          // card leaves Published. Drives the "shipped this week" count.
+          name: "published_at",
+          type: "date",
+          required: false,
+        },
+        {
           name: "updated_at_client",
           type: "date",
           required: true,

@@ -43,7 +43,7 @@ describe("Workspace", () => {
     mockContentPlannerView.mockReset();
   });
 
-  test("passes the board model and board actions to the content planner", () => {
+  test("passes the board model and card actions to the content planner", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.lastView = "content-planner";
     state.uiState.contentFontScale = 1.15;
@@ -82,7 +82,7 @@ describe("Workspace", () => {
     expect(props.fontScale).toBe(1.15);
     expect(typeof props.onDecreaseFontScale).toBe("function");
     expect(typeof props.onIncreaseFontScale).toBe("function");
-    expect(typeof props.onAddColumn).toBe("function");
+    expect(typeof props.onRestoreCard).toBe("function");
     expect(typeof props.onMoveCard).toBe("function");
 
     (props.onDecreaseFontScale as () => void)();

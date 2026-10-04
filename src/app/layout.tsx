@@ -1,49 +1,27 @@
 import type { Metadata } from "next";
-import {
-  Fraunces,
-  Hind_Siliguri,
-  Instrument_Sans,
-  JetBrains_Mono,
-  Noto_Serif_Bengali,
-} from "next/font/google";
+import { Baloo_Da_2, DM_Mono, Nunito } from "next/font/google";
 import { Providers } from "@/components/workspace/providers";
+import { THEME_HINT_SCRIPT } from "@/lib/theme-hint";
 import "./globals.css";
 
-const heading = Fraunces({
+// Headings + Bengali: one family covers both scripts evenly.
+const display = Baloo_Da_2({
+  subsets: ["latin", "bengali"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
+
+const body = Nunito({
   subsets: ["latin"],
-  axes: ["SOFT", "opsz"],
-  variable: "--font-fraunces",
+  variable: "--font-latin-body",
 });
 
-const headingBengali = Noto_Serif_Bengali({
-  subsets: ["bengali"],
-  weight: ["500", "600"],
-  variable: "--font-heading-bengali",
-});
-
-const body = Instrument_Sans({
+// Times, estimates, counts.
+const numeric = DM_Mono({
   subsets: ["latin"],
-  variable: "--font-instrument",
+  weight: ["400", "500"],
+  variable: "--font-numeric",
 });
-
-const bodyBengali = Hind_Siliguri({
-  subsets: ["bengali"],
-  weight: ["400", "600"],
-  variable: "--font-body-bengali",
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains",
-});
-
-const fontVariables = [heading, headingBengali, body, bodyBengali, mono]
-  .map((font) => font.variable)
-  .join(" ");
-
-// Paint the system theme before hydration so dark-mode users never see a light flash.
-// The saved theme preference is applied again once the workspace state loads.
-const themeScript = `(function(){try{var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var r=document.documentElement;r.classList.toggle("dark",d);r.style.colorScheme=d?"dark":"light";}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "DailyTodo",
@@ -56,9 +34,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${fontVariables} font-sans`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`dark font-sans ${display.variable} ${body.variable} ${numeric.variable}`}
+      style={{ colorScheme: "dark" }}
+      suppressHydrationWarning
+    >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_HINT_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
         <Providers>{children}</Providers>

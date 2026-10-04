@@ -118,6 +118,7 @@ type PocketBaseContentCardRecord = {
   title?: string;
   notes?: string;
   position?: number;
+  published_at?: string;
   updated?: string;
   updated_at_client?: string;
 };
@@ -228,6 +229,13 @@ function describeWriteError(reason: unknown): string | null {
 
   const message = (reason as { message?: unknown }).message;
   return typeof message === "string" && message ? message : null;
+}
+
+/** PocketBase returns "" for an unset date field; normalize to an ISO string or null. */
+function normalizePocketBaseDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const time = Date.parse(value.replace(" ", "T"));
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -1286,6 +1294,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         notes: record.notes ?? "",
         order: Math.max(0, Math.trunc(record.position ?? 0)),
         updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
+        publishedAt: normalizePocketBaseDate(record.published_at),
       };
       const key = `content_card:${record.card_id}`;
       values[key] = { key, kind: "content_card", value };
@@ -1449,6 +1458,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         title: record.value.title,
         notes: record.value.notes,
         position: record.value.order,
+        // Empty string clears the optional date field in PocketBase.
+        published_at: record.value.publishedAt ?? "",
         updated_at_client: updatedAtClient,
       };
       if (existing) {

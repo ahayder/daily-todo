@@ -797,8 +797,39 @@ export function moveContentCard(
   let nextCards = reindexContentCards(cards, targetColumnId, targetIds, updatedAt);
   if (sourceColumnId !== targetColumnId) {
     nextCards = reindexContentCards(nextCards, sourceColumnId, sourceIds, updatedAt);
+    // Stamp when a card enters Published (the weekly shipped count reads it);
+    // clear it when the card leaves so un-publishing un-counts it.
+    const movedCard = nextCards[cardId];
+    if (targetColumnId === CONTENT_COLUMN_PUBLISHED_ID) {
+      nextCards[cardId] = { ...movedCard, publishedAt: updatedAt };
+    } else if (sourceColumnId === CONTENT_COLUMN_PUBLISHED_ID) {
+      nextCards[cardId] = { ...movedCard, publishedAt: null };
+    }
   }
   return nextCards;
+}
+
+/**
+ * Undo for `deleteContentCard`: put the exact card back in its column at its
+ * original index. No-op when the card already exists or its column is gone.
+ */
+export function restoreContentCard(
+  cards: Record<string, ContentCard>,
+  board: ContentBoard,
+  card: ContentCard,
+  index: number,
+): Record<string, ContentCard> {
+  if (cards[card.id] || !board.columns.some((column) => column.id === card.columnId)) {
+    return cards;
+  }
+  const ids = getContentCardsForColumn(cards, card.columnId).map((candidate) => candidate.id);
+  ids.splice(Math.max(0, Math.min(Math.trunc(index), ids.length)), 0, card.id);
+  return reindexContentCards(
+    { ...cards, [card.id]: card },
+    card.columnId,
+    ids,
+    new Date().toISOString(),
+  );
 }
 
 function hasOwnKey(record: object, key: string): boolean {
@@ -994,7 +1025,7 @@ export function createInitialState(todayISO: string): AppState {
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],
       lastView: "todos",
-      themeMode: "system",
+      themeMode: "dark",
       categoryTheme: "normal",
       isFocusMode: false,
       focusedTodoId: null,
@@ -1233,36 +1264,28 @@ export function ensurePlannerState(state: AppState): AppState {
 
 export function ensureContentPlannerState(state: AppState): AppState {
   const repairTimestamp = new Date().toISOString();
+  const canonicalColumnIds = new Set(DEFAULT_CONTENT_COLUMNS.map((column) => column.id));
   const defaultSubtitles = new Map(
     DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column.subtitle]),
   );
 
-  // Ensure the canonical conveyor columns exist. This is non-destructive:
-  // legacy columns (Ideas/Planned/In Progress/Ready) and their cards are left
-  // in place so the user can relocate cards and delete the old columns
-  // themselves. Inbox/Develop/Shoot next are prepended in order; Published is
-  // ensured at the end. New boards already contain all four, so this is a
-  // no-op for them.
-  const existingColumnIds = new Set(
-    state.contentBoard.columns.map((column) => column.id),
+  // The board is exactly the four fixed conveyor stages, in stage order.
+  // Missing stages are added (keeping any custom title/subtitle on existing
+  // ones). Legacy/custom columns (old Ideas/Planned/In Progress/Ready) are
+  // folded away: their cards move to the bottom of Inbox, keeping their
+  // relative order, and the columns are dropped. Idempotent — a clean board is
+  // returned unchanged.
+  const existingById = new Map(
+    state.contentBoard.columns.map((column) => [column.id, column]),
   );
-  const canonicalById = new Map(
-    DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column]),
+  const baseColumns = DEFAULT_CONTENT_COLUMNS.map(
+    (canonical) => existingById.get(canonical.id) ?? { ...canonical },
   );
-  const missingFront = [
-    CONTENT_COLUMN_INBOX_ID,
-    CONTENT_COLUMN_DEVELOP_ID,
-    CONTENT_COLUMN_SHOOT_NEXT_ID,
-  ]
-    .filter((id) => !existingColumnIds.has(id))
-    .map((id) => ({ ...canonicalById.get(id)! }));
-  const missingPublished = existingColumnIds.has(CONTENT_COLUMN_PUBLISHED_ID)
-    ? []
-    : [{ ...canonicalById.get(CONTENT_COLUMN_PUBLISHED_ID)! }];
-  const baseColumns =
-    missingFront.length === 0 && missingPublished.length === 0
-      ? state.contentBoard.columns
-      : [...missingFront, ...state.contentBoard.columns, ...missingPublished];
+  const legacyColumnOrder = new Map(
+    state.contentBoard.columns
+      .filter((column) => !canonicalColumnIds.has(column.id))
+      .map((column, index) => [column.id, index]),
+  );
 
   const columns = baseColumns.map((column) => {
     const defaultSubtitle = defaultSubtitles.get(column.id);
@@ -1283,21 +1306,26 @@ export function ensureContentPlannerState(state: AppState): AppState {
   const columnsChanged =
     columns.length !== state.contentBoard.columns.length ||
     columns.some((column, index) => column !== state.contentBoard.columns[index]);
-  const availableColumnIds = new Set(columns.map((column) => column.id));
-  const fallbackColumnId = columns[0]?.id;
-  const repairedCards = Object.fromEntries(
-    Object.entries(state.contentCards)
-      .filter(([, card]) => availableColumnIds.has(card.columnId) || Boolean(fallbackColumnId))
-      .map(([cardId, card]) => [
-        cardId,
-        availableColumnIds.has(card.columnId)
-          ? card
-          : {
-              ...card,
-              columnId: fallbackColumnId!,
-            },
-      ]),
-  );
+  // Cards outside the four stages (legacy or orphaned) go to the end of Inbox,
+  // ordered by their old column, then their old position.
+  const strayCards = Object.values(state.contentCards)
+    .filter((card) => !canonicalColumnIds.has(card.columnId))
+    .toSorted(
+      (left, right) =>
+        (legacyColumnOrder.get(left.columnId) ?? Number.MAX_SAFE_INTEGER) -
+          (legacyColumnOrder.get(right.columnId) ?? Number.MAX_SAFE_INTEGER) ||
+        left.order - right.order ||
+        left.updatedAt.localeCompare(right.updatedAt),
+    );
+  const inboxCount = getContentCardsForColumn(state.contentCards, CONTENT_COLUMN_INBOX_ID).length;
+  const repairedCards = { ...state.contentCards };
+  strayCards.forEach((card, index) => {
+    repairedCards[card.id] = {
+      ...card,
+      columnId: CONTENT_COLUMN_INBOX_ID,
+      order: inboxCount + index,
+    };
+  });
   const cards = columns.reduce(
     (currentCards, column) =>
       reindexContentCards(

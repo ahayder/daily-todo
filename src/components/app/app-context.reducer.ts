@@ -28,6 +28,7 @@ import {
   deleteTodoWorkspaceFromState,
   deletePlannerPurposeFromDay,
   deleteContentCard,
+  restoreContentCard,
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
   duplicatePlannerPreset,
@@ -413,12 +414,12 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
       if (!card) {
         return state;
       }
+      const contentCards = { ...state.contentCards, [card.id]: card };
       return {
         ...state,
-        contentCards: {
-          ...state.contentCards,
-          [card.id]: card,
-        },
+        contentCards: action.atTop
+          ? moveContentCard(contentCards, card.id, action.columnId, 0)
+          : contentCards,
       };
     }
     case "update-content-card": {
@@ -442,6 +443,15 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
     }
     case "delete-content-card": {
       const contentCards = deleteContentCard(state.contentCards, action.cardId);
+      return contentCards === state.contentCards ? state : { ...state, contentCards };
+    }
+    case "restore-content-card": {
+      const contentCards = restoreContentCard(
+        state.contentCards,
+        state.contentBoard,
+        action.card,
+        action.index,
+      );
       return contentCards === state.contentCards ? state : { ...state, contentCards };
     }
     default:
@@ -877,6 +887,22 @@ function handleTodoActions(state: AppState, action: AppAction): AppState | null 
           },
         },
         uiState: nextUiState,
+      };
+    }
+    case "restore-todo": {
+      // Undo for "delete-todo": put the exact task back where it was, in the
+      // workspace/day it was deleted from (even if the user switched since).
+      const key = getDailyPageKey(action.workspaceId, action.date);
+      const page = state.dailyPages[key];
+      if (!page || page.todos.some((todo) => todo.id === action.todo.id)) {
+        return state;
+      }
+      const index = Math.max(0, Math.min(action.index, page.todos.length));
+      const todos = [...page.todos];
+      todos.splice(index, 0, action.todo);
+      return {
+        ...state,
+        dailyPages: { ...state.dailyPages, [key]: { ...page, todos } },
       };
     }
     default:

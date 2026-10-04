@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { createInitialState } from "@/lib/store";
+import {
+  CONTENT_COLUMN_INBOX_ID,
+  createInitialState,
+  getActiveTodoWorkspaceId,
+  getContentCardsForColumn,
+} from "@/lib/store";
 import { appReducer } from "./app-context.reducer";
 
 describe("dev-advance-day", () => {
@@ -167,5 +172,84 @@ describe("ensure-daily-today", () => {
     ]);
     // The carried todo has a fresh id (not the Aug 26 id) so the two days never alias.
     expect(carriedId).not.toBe("keep-open");
+  });
+});
+
+describe("restore-todo", () => {
+  const makeTodo = (id: string) => ({
+    id,
+    text: `Task ${id}`,
+    priority: 1 as const,
+    status: "pending" as const,
+    estimatedMinutes: null,
+    createdAt: "2026-03-10T10:00:00.000Z",
+  });
+
+  test("undoes delete-todo, putting the task back in its original position", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [makeTodo("a"), makeTodo("b"), makeTodo("c")];
+    const workspaceId = getActiveTodoWorkspaceId(state);
+
+    const deleted = appReducer(state, { type: "delete-todo", date: "2026-03-10", todoId: "b" });
+    expect(deleted.dailyPages["2026-03-10"].todos.map((t) => t.id)).toEqual(["a", "c"]);
+
+    const restored = appReducer(deleted, {
+      type: "restore-todo",
+      workspaceId,
+      date: "2026-03-10",
+      todo: makeTodo("b"),
+      index: 1,
+    });
+    expect(restored.dailyPages["2026-03-10"].todos.map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  test("is a no-op when the task already exists (double undo)", () => {
+    const state = createInitialState("2026-03-10");
+    state.dailyPages["2026-03-10"].todos = [makeTodo("a")];
+    const workspaceId = getActiveTodoWorkspaceId(state);
+
+    const next = appReducer(state, {
+      type: "restore-todo",
+      workspaceId,
+      date: "2026-03-10",
+      todo: makeTodo("a"),
+      index: 0,
+    });
+    expect(next).toBe(state);
+  });
+});
+
+describe("content cards", () => {
+  test("create-content-card with atTop inserts at the top of the column", () => {
+    const state = createInitialState("2026-03-10");
+    const first = appReducer(state, {
+      type: "create-content-card",
+      columnId: CONTENT_COLUMN_INBOX_ID,
+      title: "Older idea",
+    });
+    const second = appReducer(first, {
+      type: "create-content-card",
+      columnId: CONTENT_COLUMN_INBOX_ID,
+      title: "Fresh idea",
+      atTop: true,
+    });
+    expect(
+      getContentCardsForColumn(second.contentCards, CONTENT_COLUMN_INBOX_ID).map((card) => card.title),
+    ).toEqual(["Fresh idea", "Older idea"]);
+  });
+
+  test("restore-content-card undoes delete-content-card at the original index", () => {
+    let state = createInitialState("2026-03-10");
+    for (const title of ["A", "B", "C"]) {
+      state = appReducer(state, { type: "create-content-card", columnId: CONTENT_COLUMN_INBOX_ID, title });
+    }
+    const card = getContentCardsForColumn(state.contentCards, CONTENT_COLUMN_INBOX_ID)[1];
+    const deleted = appReducer(state, { type: "delete-content-card", cardId: card.id });
+    const restored = appReducer(deleted, { type: "restore-content-card", card, index: 1 });
+
+    expect(
+      getContentCardsForColumn(restored.contentCards, CONTENT_COLUMN_INBOX_ID).map((item) => item.title),
+    ).toEqual(["A", "B", "C"]);
+    expect(appReducer(restored, { type: "restore-content-card", card, index: 1 })).toBe(restored);
   });
 });

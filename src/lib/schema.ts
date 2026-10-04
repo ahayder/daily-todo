@@ -138,6 +138,7 @@ const contentCardSchema = z.object({
   notes: z.string().catch(""),
   order: z.number().int().min(0),
   updatedAt: z.string(),
+  publishedAt: z.string().nullable().optional().catch(null),
 });
 
 export const appStateSchema = z.object({

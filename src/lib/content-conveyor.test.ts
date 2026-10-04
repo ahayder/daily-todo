@@ -9,14 +9,27 @@ import {
 import {
   appendSection,
   buildChatGptClipboard,
+  cleanPastedShootCard,
+  countShippedThisWeek,
+  draftToNotes,
+  getEditorSections,
+  getNextUpCard,
+  getRowSnippet,
+  getSectionFill,
+  getShootIntent,
+  getWeekStart,
+  isInCurrentWeek,
+  notesToDraft,
   getNextStep,
   getSectionBody,
   getStageForColumn,
   hasChatGptPrompt,
   hasConveyorSections,
   parseSections,
+  parseShootCard,
   stripSectionHeadings,
 } from "@/lib/content-conveyor";
+import type { ContentCard } from "@/lib/types";
 
 describe("getStageForColumn", () => {
   it("maps canonical columns to stages", () => {
@@ -199,5 +212,175 @@ describe("buildChatGptClipboard", () => {
     ).toBeNull();
     expect(hasChatGptPrompt(CONTENT_COLUMN_INBOX_ID)).toBe(true);
     expect(hasChatGptPrompt(CONTENT_COLUMN_PUBLISHED_ID)).toBe(false);
+  });
+});
+
+describe("shelf helpers", () => {
+  it("getEditorSections shows stage sections plus any already present", () => {
+    expect(getEditorSections(CONTENT_COLUMN_INBOX_ID, "plain")).toEqual(["ORIGINAL THOUGHT"]);
+    expect(getEditorSections(CONTENT_COLUMN_DEVELOP_ID, "")).toEqual(["ORIGINAL THOUGHT", "IDEA NOTE"]);
+    expect(getEditorSections(CONTENT_COLUMN_INBOX_ID, "## SHOOT CARD\n\nbeats")).toEqual([
+      "ORIGINAL THOUGHT",
+      "SHOOT CARD",
+    ]);
+  });
+
+  it("notesToDraft folds unlabelled text and legacy RAW IDEA into Original thought", () => {
+    expect(notesToDraft("just a thought")).toEqual({ "ORIGINAL THOUGHT": "just a thought" });
+    expect(notesToDraft("## RAW IDEA\n\nraw\n\n## IDEA NOTE\n\nangle")).toEqual({
+      "ORIGINAL THOUGHT": "raw",
+      "IDEA NOTE": "angle",
+    });
+  });
+
+  it("draftToNotes keeps an Inbox card plain and writes headings once it grows", () => {
+    expect(draftToNotes({ "ORIGINAL THOUGHT": " hi " }, ["ORIGINAL THOUGHT"])).toBe("hi");
+    expect(
+      draftToNotes({ "ORIGINAL THOUGHT": "hi", "IDEA NOTE": "" }, ["ORIGINAL THOUGHT", "IDEA NOTE"]),
+    ).toBe("## ORIGINAL THOUGHT\n\nhi\n\n## IDEA NOTE");
+    const notes = "## ORIGINAL THOUGHT\n\nhi\n\n## IDEA NOTE\n\nangle";
+    expect(draftToNotes(notesToDraft(notes), getEditorSections(CONTENT_COLUMN_DEVELOP_ID, notes))).toBe(notes);
+  });
+
+  it("getSectionFill reports which growth sections hold text", () => {
+    expect(getSectionFill("")).toEqual({ "ORIGINAL THOUGHT": false, "IDEA NOTE": false, "SHOOT CARD": false });
+    expect(getSectionFill("plain")).toMatchObject({ "ORIGINAL THOUGHT": true });
+    expect(getSectionFill("## ORIGINAL THOUGHT\n\nx\n\n## IDEA NOTE\n")).toEqual({
+      "ORIGINAL THOUGHT": true,
+      "IDEA NOTE": false,
+      "SHOOT CARD": false,
+    });
+  });
+
+  it("getRowSnippet previews the section the card is working on, as plain text", () => {
+    const notes = "## ORIGINAL THOUGHT\n\nthe thought\n\n## IDEA NOTE\n\n- **angle** one\n- hook two";
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_INBOX_ID, notes })).toBe("the thought");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_DEVELOP_ID, notes })).toBe("angle one · hook two");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, notes })).toBe("angle one · hook two");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_INBOX_ID, notes: "" })).toBe("");
+  });
+
+  it("getNextUpCard prefers the top of Shoot next, then Develop", () => {
+    const make = (id: string, columnId: string): ContentCard => ({
+      id,
+      columnId,
+      title: id,
+      notes: "",
+      order: 0,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const byColumn: Record<string, ContentCard[]> = {
+      [CONTENT_COLUMN_DEVELOP_ID]: [make("dev", CONTENT_COLUMN_DEVELOP_ID)],
+      [CONTENT_COLUMN_SHOOT_NEXT_ID]: [],
+    };
+    expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("dev");
+    byColumn[CONTENT_COLUMN_SHOOT_NEXT_ID] = [make("shoot", CONTENT_COLUMN_SHOOT_NEXT_ID)];
+    expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("shoot");
+    expect(getNextUpCard(() => [])).toBeNull();
+  });
+
+  it("counts cards shipped since Monday 00:00 local time", () => {
+    // Wednesday, 1 Oct 2026 (local).
+    const now = new Date(2026, 9, 1, 15, 0);
+    expect(getWeekStart(now)).toEqual(new Date(2026, 8, 28));
+    expect(getWeekStart(new Date(2026, 9, 4, 23, 0))).toEqual(new Date(2026, 8, 28)); // Sunday
+    const card = (publishedAt: string | null, columnId = CONTENT_COLUMN_PUBLISHED_ID): ContentCard => ({
+      id: Math.random().toString(),
+      columnId,
+      title: "x",
+      notes: "",
+      order: 0,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      publishedAt,
+    });
+    const cards = [
+      card(new Date(2026, 8, 28, 0, 0).toISOString()), // Monday 00:00 — counts
+      card(new Date(2026, 8, 30).toISOString()), // counts
+      card(new Date(2026, 8, 27, 23, 59).toISOString()), // last Sunday — no
+      card(null), // legacy published, no date — no
+      card(new Date(2026, 8, 30).toISOString(), CONTENT_COLUMN_SHOOT_NEXT_ID), // not published — no
+    ];
+    expect(countShippedThisWeek(cards, now)).toBe(2);
+    expect(isInCurrentWeek(undefined, now)).toBe(false);
+  });
+});
+
+const SAMPLE_SHOOT_CARD = [
+  "1. ভিডিওর মূল বক্তব্য",
+  "Job পাওয়া শুধু interview ভালো হওয়ার ব্যাপার না।",
+  "Employer-এর need আর আপনার skill match করে।",
+  "2. Main Beats / Talk Points",
+  "",
+  "* Job search অনেকটা matchmaking-এর মতো",
+  "   * Employer specific skill খুঁজছে।",
+  "3. Hook Options",
+  "Recommended:",
+  "“Job search আসলে matchmaking।”",
+].join("\n");
+
+describe("shoot card helpers", () => {
+  it("parseShootCard splits numbered parts and keeps nested bullets in their part", () => {
+    const parts = parseShootCard(SAMPLE_SHOOT_CARD);
+    expect(parts.map((part) => [part.number, part.heading])).toEqual([
+      [1, "ভিডিওর মূল বক্তব্য"],
+      [2, "Main Beats / Talk Points"],
+      [3, "Hook Options"],
+    ]);
+    expect(parts[1].body).toBe("* Job search অনেকটা matchmaking-এর মতো\n   * Employer specific skill খুঁজছে।");
+  });
+
+  it("parseShootCard does not split on an inner numbered list or out-of-order numbers", () => {
+    const parts = parseShootCard("1. Intent\nthe point\n2. Beats\n1. first beat\n2. second beat\n3. Hooks\nhook");
+    expect(parts.map((part) => part.heading)).toEqual(["Intent", "Beats", "Hooks"]);
+    expect(parts[1].body).toBe("1. first beat\n2. second beat");
+  });
+
+  it("parseShootCard tolerates markdown headings and keeps text before part 1", () => {
+    const parts = parseShootCard("Quick note\n### 1. Intent\nthe point\n**2. Beats**\nbeat");
+    expect(parts).toEqual([
+      { number: null, heading: "", body: "Quick note" },
+      { number: 1, heading: "Intent", body: "the point" },
+      { number: 2, heading: "Beats", body: "beat" },
+    ]);
+  });
+
+  it("parseShootCard returns one headless part for an unnumbered card", () => {
+    expect(parseShootCard("just some beats\n- one")).toEqual([
+      { number: null, heading: "", body: "just some beats\n- one" },
+    ]);
+    expect(parseShootCard("")).toEqual([]);
+  });
+
+  it("getShootIntent reads part 1 of the Shoot card as plain text", () => {
+    const notes = `## ORIGINAL THOUGHT\n\nthought\n\n## SHOOT CARD\n\n${SAMPLE_SHOOT_CARD}`;
+    expect(getShootIntent(notes)).toBe(
+      "Job পাওয়া শুধু interview ভালো হওয়ার ব্যাপার না। · Employer-এর need আর আপনার skill match করে।",
+    );
+    expect(getShootIntent("## SHOOT CARD\n\nunnumbered beats")).toBe("");
+    expect(getShootIntent("plain idea")).toBe("");
+  });
+
+  it("getRowSnippet shows the intent once a card is in Shoot next or Published", () => {
+    const notes = `## IDEA NOTE\n\nangle\n\n## SHOOT CARD\n\n1. Intent\nthe point\n2. Beats\nbeat`;
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, notes })).toBe("the point");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_PUBLISHED_ID, notes })).toBe("the point");
+    expect(getRowSnippet({ columnId: CONTENT_COLUMN_DEVELOP_ID, notes })).toBe("angle");
+  });
+
+  it("cleanPastedShootCard strips ChatGPT citation chips and keeps normal words", () => {
+    const pasted = [
+      "সেখানেই আপনার chance সবচেয়ে বেশি। Shoot-Card-Instruction",
+      "story-driven content-এর জন্য strong fit। Story-Driven-Video-Script-Instr…",
+      "A well-known Follow-Up stays",
+      "Employer-এর need",
+    ].join("\n");
+    expect(cleanPastedShootCard(pasted)).toBe(
+      [
+        "সেখানেই আপনার chance সবচেয়ে বেশি।",
+        "story-driven content-এর জন্য strong fit।",
+        "A well-known Follow-Up stays",
+        "Employer-এর need",
+      ].join("\n"),
+    );
   });
 });

@@ -2,6 +2,7 @@ import type { Dispatch, ReactNode } from "react";
 import type {
   AppState,
   CategoryTheme,
+  ContentCard,
   NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
@@ -9,6 +10,7 @@ import type {
   PlannerPurposeRole,
   Priority,
   TaskStatus,
+  Todo,
   ThemeMode,
   ViewMode,
 } from "@/lib/types";
@@ -43,6 +45,7 @@ export type AppAction =
   | { type: "set-todo-status"; date: string; todoId: string; status: TaskStatus }
   | { type: "set-todo-estimated-minutes"; date: string; todoId: string; estimatedMinutes: number | null }
   | { type: "delete-todo"; date: string; todoId: string }
+  | { type: "restore-todo"; workspaceId: string; date: string; todo: Todo; index: number }
   | { type: "create-note"; title?: string }
   | { type: "create-note-folder"; name?: string; parentFolderId?: string | null }
   | { type: "rename-note-folder"; folderId: string; name: string }
@@ -59,10 +62,18 @@ export type AppAction =
   | { type: "update-content-column-subtitle"; columnId: string; subtitle: string }
   | { type: "reorder-content-columns"; activeColumnId: string; overColumnId: string }
   | { type: "delete-content-column"; columnId: string }
-  | { type: "create-content-card"; columnId: string; title: string; notes?: string }
+  | {
+      type: "create-content-card";
+      columnId: string;
+      title: string;
+      notes?: string;
+      /** Insert at the top of the column instead of the bottom. */
+      atTop?: boolean;
+    }
   | { type: "update-content-card"; cardId: string; title: string; notes: string }
   | { type: "move-content-card"; cardId: string; targetColumnId: string; targetIndex: number }
   | { type: "delete-content-card"; cardId: string }
+  | { type: "restore-content-card"; card: ContentCard; index: number }
   | { type: "create-planner-preset"; name?: string }
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }

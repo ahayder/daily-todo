@@ -4,41 +4,42 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Light Mode Tokens ─────────────────────────── */
+/* ─── Light Mode Tokens ───────────────────────── */
 :root {
-  /* Ember Journal — see .design/DESIGN.md. Cream paper, warm ink, one ember accent. */
-  --font-heading: var(--font-fraunces), var(--font-heading-bengali), Georgia, serif;
-  --font-body: var(--font-instrument), var(--font-body-bengali), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
-  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
-
-  /* shadcn set */
-  --background: oklch(0.965 0.016 82);
-  --foreground: oklch(0.22 0.025 50);
-  --card: oklch(0.99 0.008 85);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.99 0.008 85);
-  --popover-foreground: var(--foreground);
-  --primary: oklch(0.545 0.14 42);
+  /* Semantic tokens (shadcn) — values: .design/DESIGN.md */
+  --background: oklch(0.978 0.012 300);
+  --foreground: oklch(0.2 0.029 300);
+  --card: oklch(0.996 0.002 300);
+  --card-foreground: oklch(0.2 0.029 300);
+  --popover: oklch(0.996 0.002 300);
+  --popover-foreground: oklch(0.2 0.029 300);
+  --primary: oklch(0.52 0.15 295);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.935 0.018 78);
-  --secondary-foreground: oklch(0.24 0.025 50);
-  --muted: oklch(0.935 0.018 78);
-  --muted-foreground: oklch(0.48 0.03 55);
-  --accent: oklch(0.935 0.018 78);
-  --accent-foreground: oklch(0.24 0.025 50);
-  --destructive: oklch(0.56 0.22 15);
+  --secondary: oklch(0.943 0.017 300);
+  --secondary-foreground: oklch(0.2 0.029 300);
+  --muted: oklch(0.943 0.017 300);
+  --muted-foreground: oklch(0.5 0.031 300);
+  --accent: oklch(0.943 0.017 300);
+  --accent-foreground: oklch(0.2 0.029 300);
+  --destructive: oklch(0.56 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.87 0.02 70);
-  --input: oklch(0.8 0.022 70);
-  --ring: oklch(0.62 0.147 42);
-  --chart-1: oklch(0.62 0.14 42);
-  --chart-2: oklch(0.62 0.106 192);
-  --chart-3: oklch(0.62 0.13 102);
-  --chart-4: oklch(0.62 0.15 252);
-  --chart-5: oklch(0.62 0.15 332);
-  --radius: 0.75rem;
-  --sidebar: var(--background);
+  --success: oklch(0.545 0.15 150);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.78 0.16 75);
+  --warning-foreground: oklch(0.16 0.031 295);
+  --info: oklch(0.55 0.15 250);
+  --info-foreground: oklch(0.99 0 0);
+  --border: oklch(0.903 0.019 300);
+  --input: oklch(0.654 0.019 300);
+  --ring: oklch(0.62 0.158 295);
+  --brand-subtle: oklch(0.975 0.015 307.8);
+  --brand-subtle-foreground: oklch(0.39 0.126 293.8);
+  --chart-1: oklch(0.62 0.15 295);
+  --chart-2: oklch(0.62 0.127 85);
+  --chart-3: oklch(0.62 0.15 355);
+  --chart-4: oklch(0.62 0.15 145);
+  --chart-5: oklch(0.62 0.118 225);
+  --sidebar: oklch(0.978 0.012 300);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -46,48 +47,57 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-
-  /* Status + brand extras */
-  --success: oklch(0.545 0.15 150);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.78 0.16 75);
-  --warning-foreground: oklch(0.16 0.02 70);
-  --info: oklch(0.55 0.15 250);
-  --info-foreground: oklch(0.99 0 0);
-  --brand-subtle: oklch(0.94 0.03 55);
-  --brand-subtle-foreground: oklch(0.42 0.12 40);
-  --now: oklch(0.26 0.03 50);
-  --now-foreground: oklch(0.96 0.015 80);
-  --now-accent: oklch(0.76 0.12 50);
-  --check: oklch(0.55 0.03 55);
-
-  /* Custom app set (legacy names, mapped onto the shadcn roles) */
+  /* Product tokens: priority stickers, Now card, washi carryover, page rule */
+  --p1: oklch(0.89 0.062 45);
+  --p1-on: oklch(0.3 0.06 40);
+  --p1-soft: oklch(0.965 0.019 45);
+  --p1-ink: oklch(0.44 0.1 40);
+  --p2: oklch(0.92 0.085 95);
+  --p2-on: oklch(0.32 0.06 85);
+  --p2-soft: oklch(0.97 0.03 95);
+  --p2-ink: oklch(0.43 0.08 80);
+  --p3: oklch(0.9 0.065 165);
+  --p3-on: oklch(0.3 0.06 165);
+  --p3-soft: oklch(0.965 0.02 165);
+  --p3-ink: oklch(0.41 0.08 165);
+  --now-bg: oklch(0.895 0.057 295);
+  --now-fg: oklch(0.22 0.05 295);
+  --now-muted: oklch(0.36 0.07 295);
+  --now-bar: oklch(0.3 0.08 295);
+  --margin-ink: oklch(0.43 0.08 80);
+  --rule: oklch(0.55 0.05 300 / 12%);
+  --washi: var(--p2);
+  --washi-foreground: var(--p2-on);
+  --card-shadow: 0 8px 24px -12px oklch(0.25 0.08 300 / 0.35);
+  --rim: inset 0 0 0 1px transparent;
+  /* Legacy aliases — prefer the semantic names in new code */
+  --ink-900: var(--foreground);
+  --ink-700: var(--muted-foreground);
   --paper: var(--background);
   --paper-strong: var(--card);
   --line: var(--border);
-  --ink-900: var(--foreground);
-  --ink-700: var(--muted-foreground);
-  /* Legacy ink steps still referenced by editor/drawing chrome; were undefined before. */
-  --ink-600: var(--muted-foreground);
-  --ink-500: var(--muted-foreground);
-  --ink-300: var(--input);
-  --ink-100: var(--muted);
   --brand: var(--primary);
   --brand-soft: var(--brand-subtle);
-  --warn: oklch(0.56 0.22 15);
-  --priority-1: oklch(0.53 0.15 38);
-  --priority-1-soft: oklch(0.94 0.03 45);
-  --priority-2: oklch(0.6 0.11 72);
-  --priority-2-soft: oklch(0.95 0.035 82);
-  --priority-3: oklch(0.51 0.07 140);
-  --priority-3-soft: oklch(0.945 0.025 140);
-  --planner-teal: oklch(0.55 0.08 185);
-  --planner-gold: oklch(0.62 0.11 72);
-  --planner-rose: oklch(0.58 0.12 25);
-  --planner-sage: oklch(0.56 0.07 140);
-  --planner-lavender: oklch(0.56 0.09 295);
-  --planner-track: oklch(0.91 0.02 78);
-  --surface-shadow: 0 1px 2px oklch(0.3 0.04 50 / 0.07);
+  --warn: var(--destructive);
+  --priority-1: var(--p1-ink);
+  --priority-1-soft: var(--p1-soft);
+  --priority-2: var(--p2-ink);
+  --priority-2-soft: var(--p2-soft);
+  --priority-3: var(--p3-ink);
+  --priority-3-soft: var(--p3-soft);
+  --planner-teal: var(--chart-5);
+  --planner-gold: var(--chart-2);
+  --planner-rose: var(--chart-3);
+  --planner-sage: var(--chart-4);
+  --planner-lavender: var(--chart-1);
+  --planner-track: var(--muted);
+  --surface-shadow: var(--card-shadow);
+  --radius: 0.875rem;
+  /* Nunito for Latin; Baloo Da 2 picks up Bengali glyphs */
+  --font-body: var(--font-latin-body), var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --duration-ui: 200ms;
+  --duration-fast: 160ms;
+  --ease-ui: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ─── Reset ───────────────────────────────────── */
@@ -109,8 +119,8 @@ body {
 
 body {
   font-family: var(--font-body);
-  color: var(--ink-900);
-  background: var(--paper);
+  color: var(--foreground);
+  background: var(--background);
 }
 
 button,
@@ -536,7 +546,7 @@ select {
   height: 30px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--brand) 78%, var(--ink-900));
-  color: var(--primary-foreground);
+  color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -1304,7 +1314,7 @@ select {
 }
 
 .tiptap-editor code {
-  font-family: var(--font-mono);
+  font-family: var(--font-numeric), ui-monospace, monospace;
   font-size: 0.9em;
   background: color-mix(in srgb, var(--ink-700) 8%, transparent);
   padding: 0.15em 0.35em;
@@ -2478,54 +2488,92 @@ select {
 /* ─── DARK MODE ─────────────────────────────── */
 /* ═══════════════════════════════════════════════ */
 .dark {
-  /* Espresso, never slate. */
-  --background: oklch(0.195 0.016 55);
-  --foreground: oklch(0.93 0.02 82);
-  --card: oklch(0.23 0.018 55);
-  --popover: oklch(0.26 0.018 55);
-  --primary: oklch(0.72 0.13 45);
-  --primary-foreground: oklch(0.2 0.04 45);
-  --secondary: oklch(0.28 0.02 55);
-  --secondary-foreground: oklch(0.93 0.02 82);
-  --muted: oklch(0.28 0.02 55);
-  --muted-foreground: oklch(0.75 0.03 70);
-  --accent: oklch(0.28 0.02 55);
-  --accent-foreground: oklch(0.93 0.02 82);
-  --destructive: oklch(0.56 0.19 15);
-  --border: oklch(0.32 0.02 55);
-  --input: oklch(0.4 0.022 55);
-  --ring: oklch(0.72 0.13 45);
-  --chart-1: oklch(0.72 0.14 42);
-  --chart-2: oklch(0.72 0.106 192);
-  --chart-3: oklch(0.72 0.13 102);
-  --chart-4: oklch(0.72 0.15 252);
-  --chart-5: oklch(0.72 0.15 332);
-
+  /* Semantic tokens (shadcn) — values: .design/DESIGN.md */
+  --background: oklch(0.145 0.024 300);
+  --foreground: oklch(0.96 0.01 300);
+  --card: oklch(0.175 0.024 300);
+  --card-foreground: oklch(0.96 0.01 300);
+  --popover: oklch(0.2 0.024 300);
+  --popover-foreground: oklch(0.96 0.01 300);
+  --primary: oklch(0.78 0.1 295);
+  --primary-foreground: oklch(0.19 0.026 300);
+  --secondary: oklch(0.215 0.024 300);
+  --secondary-foreground: oklch(0.96 0.01 300);
+  --muted: oklch(0.215 0.024 300);
+  --muted-foreground: oklch(0.74 0.022 300);
+  --accent: oklch(0.215 0.024 300);
+  --accent-foreground: oklch(0.96 0.01 300);
+  --destructive: oklch(0.56 0.19 27);
+  --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.52 0.13 150);
+  --success-foreground: oklch(0.99 0 0);
   --warning: oklch(0.8 0.14 75);
-  --warning-foreground: oklch(0.18 0.02 70);
+  --warning-foreground: oklch(0.18 0.031 295);
   --info: oklch(0.52 0.13 250);
-  --brand-subtle: oklch(0.3 0.05 45);
-  --brand-subtle-foreground: oklch(0.88 0.06 55);
-  --now: oklch(0.93 0.02 82);
-  --now-foreground: oklch(0.22 0.025 50);
-  --now-accent: oklch(0.5 0.14 40);
-  --check: oklch(0.58 0.03 60);
-
-  --warn: oklch(0.7 0.15 22);
-  --priority-1: oklch(0.72 0.13 40);
-  --priority-1-soft: oklch(0.28 0.04 40);
-  --priority-2: oklch(0.79 0.11 78);
-  --priority-2-soft: oklch(0.285 0.035 75);
-  --priority-3: oklch(0.74 0.07 140);
-  --priority-3-soft: oklch(0.27 0.025 140);
-  --planner-teal: oklch(0.72 0.08 185);
-  --planner-gold: oklch(0.79 0.11 78);
-  --planner-rose: oklch(0.72 0.11 28);
-  --planner-sage: oklch(0.74 0.07 140);
-  --planner-lavender: oklch(0.74 0.08 295);
-  --planner-track: oklch(0.3 0.02 55);
-  --surface-shadow: 0 1px 2px oklch(0.08 0.02 50 / 0.45);
+  --info-foreground: oklch(0.99 0 0);
+  --border: oklch(0.24 0.022 300);
+  --input: oklch(0.479 0.022 300);
+  --ring: oklch(0.72 0.095 297.8);
+  --brand-subtle: oklch(0.22 0.045 295);
+  --brand-subtle-foreground: oklch(0.88 0.05 300);
+  --chart-1: oklch(0.72 0.12 295);
+  --chart-2: oklch(0.72 0.148 85);
+  --chart-3: oklch(0.72 0.15 355);
+  --chart-4: oklch(0.72 0.15 145);
+  --chart-5: oklch(0.72 0.136 225);
+  --sidebar: oklch(0.16 0.024 300);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  /* Product tokens: priority stickers, Now card, washi carryover, page rule */
+  --p1: oklch(0.78 0.075 45);
+  --p1-on: oklch(0.2 0.035 40);
+  --p1-soft: oklch(0.215 0.03 355);
+  --p1-ink: oklch(0.85 0.06 45);
+  --p2: oklch(0.84 0.085 95);
+  --p2-on: oklch(0.22 0.035 90);
+  --p2-soft: oklch(0.22 0.018 75);
+  --p2-ink: oklch(0.87 0.07 95);
+  --p3: oklch(0.79 0.075 165);
+  --p3-on: oklch(0.2 0.035 165);
+  --p3-soft: oklch(0.215 0.024 205);
+  --p3-ink: oklch(0.85 0.06 165);
+  --now-bg: oklch(0.285 0.075 295);
+  --now-fg: oklch(0.97 0.012 295);
+  --now-muted: oklch(0.84 0.05 295);
+  --now-bar: oklch(0.8 0.1 295);
+  --margin-ink: oklch(0.86 0.065 95);
+  --rule: oklch(0.9 0.03 300 / 6%);
+  --washi: var(--p2);
+  --washi-foreground: var(--p2-on);
+  --card-shadow: 0 10px 28px -14px oklch(0 0 0 / 0.6);
+  --rim: inset 0 0 0 1px oklch(0.96 0.01 300 / 6%);
+  /* Legacy aliases — prefer the semantic names in new code */
+  --ink-900: var(--foreground);
+  --ink-700: var(--muted-foreground);
+  --paper: var(--background);
+  --paper-strong: var(--card);
+  --line: var(--border);
+  --brand: var(--primary);
+  --brand-soft: var(--brand-subtle);
+  --warn: var(--destructive);
+  --priority-1: var(--p1-ink);
+  --priority-1-soft: var(--p1-soft);
+  --priority-2: var(--p2-ink);
+  --priority-2-soft: var(--p2-soft);
+  --priority-3: var(--p3-ink);
+  --priority-3-soft: var(--p3-soft);
+  --planner-teal: var(--chart-5);
+  --planner-gold: var(--chart-2);
+  --planner-rose: var(--chart-3);
+  --planner-sage: var(--chart-4);
+  --planner-lavender: var(--chart-1);
+  --planner-track: var(--muted);
+  --surface-shadow: var(--card-shadow);
 }
 
 
@@ -3519,7 +3567,7 @@ select {
 .planner-textarea:focus,
 .planner-day-title:focus {
   border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+  box-shadow: 0 0 0 3px rgba(47, 109, 98, 0.12);
 }
 
 .planner-textarea {
@@ -4813,20 +4861,41 @@ select {
 /* ─── Tailwind Theme Token Bridge ─────────────── */
 @theme inline {
   --font-sans: var(--font-body);
-  --font-serif: var(--font-heading);
-  --color-destructive-foreground: var(--destructive-foreground);
+  --font-heading: var(--font-display);
+  --font-mono: var(--font-numeric);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-brand-subtle: var(--brand-subtle);
   --color-brand-subtle-foreground: var(--brand-subtle-foreground);
-  --color-now: var(--now);
-  --color-now-foreground: var(--now-foreground);
-  --color-now-accent: var(--now-accent);
-  --color-check: var(--check);
+  --color-p1: var(--p1);
+  --color-p1-on: var(--p1-on);
+  --color-p1-soft: var(--p1-soft);
+  --color-p1-ink: var(--p1-ink);
+  --color-p2: var(--p2);
+  --color-p2-on: var(--p2-on);
+  --color-p2-soft: var(--p2-soft);
+  --color-p2-ink: var(--p2-ink);
+  --color-p3: var(--p3);
+  --color-p3-on: var(--p3-on);
+  --color-p3-soft: var(--p3-soft);
+  --color-p3-ink: var(--p3-ink);
+  --color-now: var(--now-bg);
+  --color-now-foreground: var(--now-fg);
+  --color-now-muted: var(--now-muted);
+  --color-now-bar: var(--now-bar);
+  --color-washi: var(--washi);
+  --color-washi-foreground: var(--washi-foreground);
+  --color-margin-ink: var(--margin-ink);
+  --color-rule: var(--rule);
+  --shadow-card: var(--card-shadow);
+  --ease-out: var(--ease-ui);
+  --default-transition-duration: var(--duration-ui);
+  --default-transition-timing-function: var(--ease-ui);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -4862,7 +4931,7 @@ select {
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
@@ -4876,5 +4945,66 @@ select {
   }
   html {
     @apply font-sans;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), var(--font-body);
+    letter-spacing: -0.01em;
+  }
+}
+
+/* ─── Signature shapes (see .design/DESIGN.md → Custom elements) ─── */
+@layer components {
+  /* Torn washi-tape edge for carryover tags */
+  .washi-tape {
+    clip-path: polygon(0 12%, 5% 0, 50% 8%, 95% 0, 100% 12%, 100% 88%, 95% 100%, 50% 92%, 5% 100%, 0 88%);
+    transform: rotate(-1.5deg);
+  }
+}
+
+/* ─── Motion primitives (subtle, 160–220ms, off under reduced motion) ─── */
+@layer utilities {
+  @keyframes dt-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes dt-settle {
+    40% {
+      transform: scale(0.98);
+    }
+  }
+  @keyframes dt-stamp {
+    from {
+      opacity: 0;
+      transform: scale(1.06) rotate(-2deg);
+    }
+  }
+  .animate-enter {
+    animation: dt-enter var(--duration-ui) var(--ease-ui) both;
+  }
+  .animate-settle {
+    animation: dt-settle var(--duration-ui) var(--ease-ui);
+  }
+  .animate-stamp {
+    animation: dt-stamp var(--duration-ui) var(--ease-ui) both;
+  }
+  .press {
+    transition: transform var(--duration-fast) var(--ease-ui);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-enter,
+    .animate-settle,
+    .animate-stamp {
+      animation: none;
+    }
+    .press:active {
+      transform: none;
+    }
   }
 }
