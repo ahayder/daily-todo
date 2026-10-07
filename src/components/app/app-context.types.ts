@@ -153,6 +153,14 @@ export type AppAction =
       extraMinutes?: number;
     };
 
+export type SyncIndicator =
+  | "loading"
+  | "offline-readonly"
+  | "saved"
+  | "saving"
+  | "unsynced"
+  | "issue";
+
 export type AppContextValue = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
@@ -163,7 +171,7 @@ export type AppContextValue = {
   };
   sync: {
     status: PersistenceStatus;
-    indicator: "saved" | "saving" | "unsynced" | "issue";
+    indicator: SyncIndicator;
     lastSavedAt: string | null;
     lastSyncedAt: string | null;
     notice: string | null;
@@ -171,6 +179,10 @@ export type AppContextValue = {
     hasPendingChanges: boolean;
     hasUnsyncedChanges: boolean;
     isSaving: boolean;
+    /** True until the server's data has loaded (or while it can't be reached). */
+    isReadOnly: boolean;
+    /** This device's edits still waiting to reach the server. */
+    pendingCount: number;
     persistenceAvailable: boolean;
   };
   retrySync: () => Promise<void>;

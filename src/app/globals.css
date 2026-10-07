@@ -396,7 +396,9 @@ select {
     gap: 0;
   }
 
-  .top-navbar__sync {
+  /* Phones hide the routine "Last saved" text, but keep warnings visible
+     (loading, offline read-only, changes waiting, sync issue). */
+  .top-navbar__sync:not(.top-navbar__sync--attention) {
     display: none;
   }
 }

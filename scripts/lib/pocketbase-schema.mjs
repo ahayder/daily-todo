@@ -46,7 +46,9 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
       viewRule: COLLECTION_ACCESS_RULE,
       createRule: COLLECTION_ACCESS_RULE,
       updateRule: COLLECTION_ACCESS_RULE,
-      deleteRule: COLLECTION_ACCESS_RULE,
+      // Daily history is append-only. Only a superuser can delete a page, so no
+      // app bug can ever erase it again (see the 2026-10-07 data loss).
+      deleteRule: null,
       fields: [
         {
           name: "owner",

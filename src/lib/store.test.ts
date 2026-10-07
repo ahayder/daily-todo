@@ -12,7 +12,6 @@ import {
   applyPlannerPurposeToDays,
   createContentCard,
   createContentColumn,
-  createCarryoverDailyPage,
   createIdealPlannerPreset,
   createInitialState,
   createPlannerEvent,
@@ -33,8 +32,6 @@ import {
   getDailyPageForWorkspace,
   getDailyPageKey,
   makeTodoSubtask,
-  mergeHydratedAppState,
-  repairMisSourcedTodayCarryover,
   moveContentCard,
   renameContentColumn,
   reorderContentColumns,
@@ -634,46 +631,6 @@ describe("planner state", () => {
     expect(restoreContentCard(restored, state.contentBoard, second, 1)).toBe(restored);
   });
 
-  test("merges remote hydration without discarding a local card drag", () => {
-    const base = createInitialState("2026-03-11");
-    const [ideas, planned] = base.contentBoard.columns;
-    const draggedCard = createContentCard({
-      columnId: ideas.id,
-      title: "Drag me",
-      order: 0,
-    })!;
-    base.contentCards = { [draggedCard.id]: draggedCard };
-
-    const local = {
-      ...base,
-      contentCards: moveContentCard(
-        base.contentCards,
-        draggedCard.id,
-        planned.id,
-        0,
-      ),
-    };
-    const remoteOnlyCard = createContentCard({
-      columnId: ideas.id,
-      title: "Created elsewhere",
-      order: 1,
-    })!;
-    const remote = {
-      ...base,
-      contentBoard: renameContentColumn(base.contentBoard, ideas.id, "Inbox"),
-      contentCards: {
-        ...base.contentCards,
-        [remoteOnlyCard.id]: remoteOnlyCard,
-      },
-    };
-
-    const merged = mergeHydratedAppState(base, local, remote);
-
-    expect(merged.contentBoard.columns[0].title).toBe("Inbox");
-    expect(merged.contentCards[draggedCard.id].columnId).toBe(planned.id);
-    expect(merged.contentCards[remoteOnlyCard.id]).toBe(remoteOnlyCard);
-  });
-
   test("backfills planner state when missing", () => {
     const state = createInitialState("2026-03-11");
     const { ...rest } = state;
@@ -768,118 +725,5 @@ describe("planner state", () => {
     expect(copied.days.tuesday.events[0].id).not.toBe("monday-office");
     expect(copied.days.wednesday.purposes).toEqual([]);
     expect(copied.days.thursday.events).toHaveLength(1);
-  });
-});
-
-describe("mergeHydratedAppState daily-page preservation", () => {
-  test("keeps a past day that is present locally but missing from remote", () => {
-    // base + local both hold Aug 26 (unchanged locally); the freshly loaded
-    // remote does not have it yet (e.g. it was never uploaded). It must survive.
-    const base = createInitialState("2026-08-26");
-    base.dailyPages["2026-08-26"].markdown = "August 26 note";
-
-    const local: typeof base = {
-      ...base,
-      dailyPages: { ...base.dailyPages },
-    };
-
-    const remote: typeof base = {
-      ...base,
-      dailyPages: {}, // remote is missing Aug 26 entirely
-    };
-
-    const merged = mergeHydratedAppState(base, local, remote);
-
-    expect(merged.dailyPages["2026-08-26"]).toBeDefined();
-    expect(merged.dailyPages["2026-08-26"].markdown).toBe("August 26 note");
-  });
-
-  test("still drops a note the user deleted (local removed it)", () => {
-    // A user deletion removes the record locally, so local differs from base and
-    // the record is correctly dropped — the never-delete guard is daily-page only.
-    const base = createInitialState("2026-08-26");
-    const noteId = Object.keys(base.notesDocs)[0];
-
-    const local: typeof base = {
-      ...base,
-      notesDocs: {}, // user deleted the note locally
-    };
-
-    const merged = mergeHydratedAppState(base, local, base);
-
-    expect(merged.notesDocs[noteId]).toBeUndefined();
-  });
-});
-
-describe("repairMisSourcedTodayCarryover", () => {
-  test("re-derives a today that was carried from an older day than yesterday", () => {
-    // History has Aug 18 (old note) and Aug 27 (yesterday's real note), but today
-    // (Aug 28) was carried forward from Aug 18 instead of Aug 27.
-    const state = createInitialState("2026-08-18");
-    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
-    state.dailyPages["2026-08-27"] = {
-      date: "2026-08-27",
-      markdown: "August 27 plan",
-      todos: [],
-    };
-    // Simulate the mis-sourced today: Aug 28 = carryover of Aug 18.
-    state.dailyPages["2026-08-28"] = createCarryoverDailyPage(
-      { "2026-08-18": state.dailyPages["2026-08-18"] },
-      "2026-08-28",
-    );
-    state.uiState.selectedDailyDate = "2026-08-28";
-
-    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
-
-    // Today now carries Aug 27's content, and Aug 27/Aug 18 are untouched.
-    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("August 27 plan");
-    expect(repaired.dailyPages["2026-08-27"].markdown).toBe("August 27 plan");
-    expect(repaired.dailyPages["2026-08-18"].markdown).toBe("Old Velox note");
-  });
-
-  test("leaves today alone when it already carries yesterday", () => {
-    const state = createInitialState("2026-08-27");
-    state.dailyPages["2026-08-27"].markdown = "August 27 plan";
-    const withToday = ensureDailyPageForDate(state, "2026-08-28");
-
-    const repaired = repairMisSourcedTodayCarryover(withToday, "2026-08-28");
-
-    expect(repaired).toBe(withToday);
-    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("August 27 plan");
-  });
-
-  test("preserves a today the user has edited", () => {
-    const state = createInitialState("2026-08-18");
-    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
-    state.dailyPages["2026-08-27"] = {
-      date: "2026-08-27",
-      markdown: "August 27 plan",
-      todos: [],
-    };
-    state.dailyPages["2026-08-28"] = {
-      date: "2026-08-28",
-      markdown: "My own fresh writing for today",
-      todos: [],
-    };
-
-    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
-
-    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("My own fresh writing for today");
-  });
-
-  test("does not repair toward stale data when yesterday is not loaded yet", () => {
-    // Only Aug 18 is present; the correct source (Aug 27) has not hydrated. Today
-    // equals a carryover of Aug 18, which is also the latest available day, so
-    // there is nothing to repair to.
-    const state = createInitialState("2026-08-18");
-    state.dailyPages["2026-08-18"].markdown = "Old Velox note";
-    state.dailyPages["2026-08-28"] = createCarryoverDailyPage(
-      { "2026-08-18": state.dailyPages["2026-08-18"] },
-      "2026-08-28",
-    );
-
-    const repaired = repairMisSourcedTodayCarryover(state, "2026-08-28");
-
-    expect(repaired.dailyPages["2026-08-28"].markdown).toBe("Old Velox note");
   });
 });

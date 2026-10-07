@@ -13,6 +13,7 @@ import { EditorToolbar } from "./editor-toolbar";
 import { EditorBubbleMenu } from "./bubble-menu";
 import { SlashCommand } from "./slash-command";
 import { compressImageToBase64 } from "@/lib/image";
+import { useIsWorkspaceReadOnly } from "@/components/app/app-provider";
 
 type Props = {
   value: string;
@@ -21,9 +22,12 @@ type Props = {
 
 export function MarkdownEditor({ value, onChange }: Props) {
   const isInternalChange = useRef(false);
+  // Locked until the server's data has loaded, so nothing typed can be silently dropped.
+  const isReadOnly = useIsWorkspaceReadOnly();
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: !isReadOnly,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
@@ -99,6 +103,10 @@ export function MarkdownEditor({ value, onChange }: Props) {
       onChange(md);
     },
   });
+
+  useEffect(() => {
+    editor?.setEditable(!isReadOnly);
+  }, [editor, isReadOnly]);
 
   // Sync external value changes (e.g. switching between pages)
   useEffect(() => {

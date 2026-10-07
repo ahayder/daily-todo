@@ -4,7 +4,17 @@
     {
       "name": "dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
+      "port": 5005
+    },
+    {
+      "name": "dev-test",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:test"
+      ],
       "port": 5005
     }
   ]
