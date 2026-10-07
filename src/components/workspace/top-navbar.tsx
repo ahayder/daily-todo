@@ -22,24 +22,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { AppContextValue } from "@/components/app/app-context.types";
 import type { AppState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
-  sync: {
-    status: "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
-    indicator: "saved" | "saving" | "unsynced" | "issue";
-    lastSavedAt: string | null;
-    lastSyncedAt: string | null;
-    notice: string | null;
-    errorMessage: string | null;
-    hasPendingChanges: boolean;
-    hasUnsyncedChanges: boolean;
-    isSaving: boolean;
-    persistenceAvailable: boolean;
-  };
+  sync: AppContextValue["sync"];
   retrySync: () => Promise<void>;
 };
 
@@ -200,22 +190,39 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
           : MonitorDown;
 
   const syncPresentation = useMemo(() => {
+    if (sync.indicator === "loading") {
+      return {
+        label: "Loading latest…",
+        detail: "Showing this device’s copy. Editing unlocks once the latest data arrives.",
+        tone: "text-muted-foreground",
+      };
+    }
+
+    if (sync.indicator === "offline-readonly") {
+      return {
+        label: "Offline · read-only",
+        detail: sync.notice ?? "Can’t reach the server. Editing unlocks when it’s back.",
+        tone: "text-destructive",
+      };
+    }
+
     if (sync.indicator === "saving") {
       return {
         label: "Saving…",
         detail: sync.notice ?? "Your latest changes will be saved to PocketBase automatically.",
-        tone: "text-[var(--brand)]",
+        tone: "text-primary",
       };
     }
 
     if (sync.indicator === "unsynced") {
       return {
-        label: formatRelativeLastSaved(sync.lastSavedAt),
+        label:
+          sync.pendingCount === 1 ? "1 change waiting" : `${sync.pendingCount} changes waiting`,
         detail:
           sync.errorMessage ??
           sync.notice ??
-          "Your latest state is still on this device and not yet confirmed in PocketBase.",
-        tone: "text-[color:color-mix(in_srgb,var(--brand)_70%,var(--ink-700))]",
+          "Saved on this device. It will be sent as soon as PocketBase is reachable.",
+        tone: "text-muted-foreground",
       };
     }
 
@@ -223,16 +230,16 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
       return {
         label: "Sync issue",
         detail: sync.errorMessage ?? sync.notice ?? "We couldn’t verify your sync state right now.",
-        tone: "text-[color:color-mix(in_srgb,var(--brand)_58%,var(--ink-700))]",
+        tone: "text-destructive",
       };
     }
 
     return {
       label: formatRelativeLastSaved(sync.lastSavedAt),
       detail: sync.notice ?? "Your current workspace state is saved to PocketBase.",
-      tone: "text-[var(--ink-700)]",
+      tone: "text-muted-foreground",
     };
-  }, [sync.errorMessage, sync.indicator, sync.lastSavedAt, sync.notice]);
+  }, [sync.errorMessage, sync.indicator, sync.lastSavedAt, sync.notice, sync.pendingCount]);
 
   return (
     <header
@@ -310,9 +317,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         <div
           aria-live="polite"
           className={cn(
-            "top-navbar__sync inline-flex min-h-8 items-center px-1 text-xs font-medium",
+            "top-navbar__sync inline-flex min-h-8 items-center px-1 text-[0.8125rem] font-medium",
+            sync.indicator !== "saved" && sync.indicator !== "saving" && "top-navbar__sync--attention",
             syncPresentation.tone,
           )}
+          title={syncPresentation.detail}
         >
           <span>{syncPresentation.label}</span>
         </div>
@@ -336,7 +345,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
               <RefreshCw className={cn("h-4 w-4", (isRetrying || sync.isSaving) && "animate-spin")} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
+          <TooltipContent side="bottom" className="text-[0.8125rem]">
             Force sync now
           </TooltipContent>
         </Tooltip>

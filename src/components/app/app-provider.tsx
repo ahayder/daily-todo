@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import { usePathname } from "next/navigation";
 import { AuthGate } from "@/components/auth/auth-gate";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/auth-context";
 import { VerificationPendingScreen } from "@/components/auth/verification-pending-screen";
 import {
@@ -19,7 +20,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children, repository }: AppProviderProps) {
   const { session, status: authStatus } = useAuth();
   const pathname = usePathname();
-  const { state, value } = useAppPersistenceState({
+  const { state, value, loadError, retryLoad } = useAppPersistenceState({
     authStatus,
     repository,
     session,
@@ -41,6 +42,10 @@ export function AppProvider({ children, repository }: AppProviderProps) {
 
   if (authStatus === "anonymous") {
     return <AuthGate />;
+  }
+
+  if ((!state || !value) && loadError) {
+    return <AppLoadErrorScreen message={loadError} onRetry={retryLoad} />;
   }
 
   if (!state || !value) {
@@ -85,6 +90,15 @@ export function useAppState(): AppContextValue {
   return context;
 }
 
+/**
+ * True while the workspace is read-only (showing this device's copy before the
+ * server's data has loaded, or while the server can't be reached). Safe outside
+ * the provider (returns false), e.g. in isolated component tests.
+ */
+export function useIsWorkspaceReadOnly(): boolean {
+  return useContext(AppContext)?.sync.isReadOnly ?? false;
+}
+
 function AppLoadingScreen({ label }: { label: string }) {
   return (
     <main className="auth-screen">
@@ -92,6 +106,25 @@ function AppLoadingScreen({ label }: { label: string }) {
         <div className="app-logo auth-card__logo" aria-hidden="true" />
         <p className="auth-card__eyebrow">DailyTodo</p>
         <h1 className="auth-card__title">{label}</h1>
+      </section>
+    </main>
+  );
+}
+
+/** No device copy and the server is unreachable: never fall back to an empty workspace. */
+function AppLoadErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <main className="auth-screen">
+      <section className="auth-card auth-card--loading" role="alert">
+        <div className="app-logo auth-card__logo" aria-hidden="true" />
+        <p className="auth-card__eyebrow">DailyTodo</p>
+        <h1 className="auth-card__title">{message}</h1>
+        <p className="text-sm text-muted-foreground">
+          Your data is safe on the server. Check your connection and try again.
+        </p>
+        <Button className="mt-4" onClick={onRetry}>
+          Try again
+        </Button>
       </section>
     </main>
   );

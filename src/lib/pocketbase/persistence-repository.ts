@@ -1,39 +1,33 @@
 import { createBrowserLocalCacheStorage } from "@/lib/local-cache-storage";
 import { createRecentNoteBodiesStorage } from "@/lib/recent-note-bodies-storage";
-import { toISODate } from "@/lib/date";
 import {
-  APP_STATE_VERSION,
-  compareTimestamps,
-  createPersistenceMetadata,
   extractLocalOnlyUIState,
   extractSyncableUIState,
-  extractSyncableWorkspaceState,
-  getMaxTimestamp,
-  getNoteSummary,
   mergeUiState,
-  normalizeAppState,
+  parseAppStateOrThrow,
   seedAppState,
   type NoteBodyLoadResult,
   type NoteBodySaveResult,
-  type PersistenceConflictResolution,
-  type PersistenceLoadResult,
-  type PersistenceMetadata,
   type PersistenceRecordKind,
   type PersistenceRecordMetadata,
-  type PersistenceSaveResult,
-  type RemoteAppStateStore,
-  type RemoteSnapshot,
+  type ServerLoadResult,
   type SyncableUIState,
   type SyncableWorkspaceState,
 } from "@/lib/persistence";
 import { SplitPersistenceRepository, type SplitRemotePersistenceStore } from "@/lib/split-persistence-repository";
 import { getPocketBaseClient } from "@/lib/pocketbase/client";
 import {
-  createCarryoverDailyPage,
-  DEFAULT_TODO_WORKSPACE_ID,
-  getDailyPageKey,
-  getTodoWorkspaceIdFromDailyPageKey,
-} from "@/lib/store";
+  createBrowserOutboxStorage,
+  fingerprintSyncValue,
+  getWorkspaceIdFromDailyPageRecordKey,
+  mergeDailyPageConflict,
+  sameTimestamp,
+  WORKSPACE_RECORD_KEY,
+  type ApplyOpResult,
+  type SyncOp,
+  type SyncRecordValue,
+} from "@/lib/sync-outbox";
+import { DEFAULT_TODO_WORKSPACE_ID, getDailyPageKey } from "@/lib/store";
 import type {
   AppState,
   ContentBoard,
@@ -47,15 +41,7 @@ import type {
   TodoWorkspace,
 } from "@/lib/types";
 
-const WORKSPACE_RECORD_KEY = "workspace_state:self";
-
-type PocketBaseSnapshotRecord = {
-  id: string;
-  state_json?: unknown;
-  state_version?: number;
-  updated?: string;
-  updated_at_client?: string;
-};
+export { getSyncRecordValuesFromState } from "@/lib/sync-outbox";
 
 type PocketBaseDailyPageRecord = {
   id: string;
@@ -139,63 +125,31 @@ type PocketBaseWorkspaceStateRecord = {
   updated_at_client?: string;
 };
 
-type SyncRecordValue =
-  | { key: string; kind: "daily_page"; value: DailyPage }
-  | { key: string; kind: "note"; value: NoteSummary }
-  | { key: string; kind: "note_folder"; value: NoteFolder }
-  | { key: string; kind: "planner_preset"; value: PlannerPreset }
-  | { key: string; kind: "content_board"; value: ContentBoard }
-  | { key: string; kind: "content_card"; value: ContentCard }
-  | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
-
-type SplitWorkspaceRawRecords = {
-  dailyPages: Map<string, PocketBaseDailyPageRecord>;
-  notes: Map<string, PocketBaseNoteRecord>;
-  noteFolders: Map<string, PocketBaseNoteFolderRecord>;
-  plannerPresets: Map<string, PocketBasePlannerPresetRecord>;
-  contentBoard: PocketBaseContentBoardRecord | null;
-  contentCards: Map<string, PocketBaseContentCardRecord>;
-  workspaceState: PocketBaseWorkspaceStateRecord | null;
+/** The fields of a written/read row that the sync writer needs. */
+type PocketBaseRow = {
+  id: string;
+  markdown?: string;
+  todos_json?: unknown;
+  date?: string;
+  updated_at_client?: string;
 };
 
-type SplitWorkspacePayload = {
-  state: AppState;
-  records: Record<string, PersistenceRecordMetadata>;
-  rawRecords: SplitWorkspaceRawRecords;
-  hasData: boolean;
-  hasRepairedDailyPage: boolean;
+const COLLECTION_BY_KIND: Record<PersistenceRecordKind, string> = {
+  daily_page: "daily_pages",
+  note: "notes",
+  note_folder: "note_folders",
+  planner_preset: "planner_presets",
+  content_board: "content_boards",
+  content_card: "content_cards",
+  workspace_state: "workspace_state",
 };
 
-export function hasUnsavedDailyPage(
-  state: AppState,
-  records: Record<string, PersistenceRecordMetadata>,
-): boolean {
-  return Object.keys(state.dailyPages).some((pageKey) => {
-    const workspaceId = getTodoWorkspaceIdFromDailyPageKey(pageKey);
-    const page = state.dailyPages[pageKey];
-    const workspaceRecord = records[`daily_page:${workspaceId}:${page.date}`];
-    const legacyMainRecord =
-      workspaceId === DEFAULT_TODO_WORKSPACE_ID
-        ? records[`daily_page:${page.date}`]
-        : null;
-    return !workspaceRecord && !legacyMainRecord;
-  });
-}
-
-export function isUntouchedEmptyDailyPage(
-  page: DailyPage,
-  created: string | null | undefined,
-  updated: string | null | undefined,
-): boolean {
-  const createdAt = created ? Date.parse(created) : Number.NaN;
-  const updatedAt = updated ? Date.parse(updated) : Number.NaN;
-
+function isNetworkError(error: unknown): boolean {
   return (
-    page.markdown.trim() === "" &&
-    page.todos.length === 0 &&
-    Number.isFinite(createdAt) &&
-    Number.isFinite(updatedAt) &&
-    Math.abs(updatedAt - createdAt) <= 1000
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status?: unknown }).status === 0
   );
 }
 
@@ -273,19 +227,6 @@ function readPlannerDaysPayload(value: unknown) {
   };
 }
 
-function stableFingerprint(value: unknown): string {
-  return JSON.stringify(value);
-}
-
-function toSnapshot(record: PocketBaseSnapshotRecord): RemoteSnapshot {
-  return {
-    state: record.state_json ?? null,
-    stateVersion: record.state_version ?? APP_STATE_VERSION,
-    updatedAt: record.updated ?? null,
-    updatedAtClient: record.updated_at_client ?? null,
-  };
-}
-
 function createRecordMetadata(
   key: string,
   kind: PersistenceRecordKind,
@@ -296,72 +237,10 @@ function createRecordMetadata(
   return {
     key,
     kind,
-    fingerprint: stableFingerprint(value),
+    fingerprint: fingerprintSyncValue(value),
     lastRemoteUpdatedAt: remoteUpdatedAt,
     lastRemoteUpdatedAtClient: remoteUpdatedAtClient,
   };
-}
-
-export function getSyncRecordValuesFromState(
-  state: AppState,
-): Record<string, SyncRecordValue> {
-  const values: Record<string, SyncRecordValue> = {};
-
-  for (const [pageKey, page] of Object.entries(state.dailyPages)) {
-    const workspaceId = getTodoWorkspaceIdFromDailyPageKey(pageKey);
-    const key = `daily_page:${workspaceId}:${page.date}`;
-    values[key] = {
-      key,
-      kind: "daily_page",
-      value: page,
-    };
-  }
-
-  for (const [noteId, note] of Object.entries(state.notesDocs)) {
-    values[`note:${noteId}`] = {
-      key: `note:${noteId}`,
-      kind: "note",
-      value: getNoteSummary(note),
-    };
-  }
-
-  for (const [folderId, folder] of Object.entries(state.noteFolders)) {
-    values[`note_folder:${folderId}`] = {
-      key: `note_folder:${folderId}`,
-      kind: "note_folder",
-      value: folder,
-    };
-  }
-
-  for (const [presetId, preset] of Object.entries(state.plannerPresets)) {
-    values[`planner_preset:${presetId}`] = {
-      key: `planner_preset:${presetId}`,
-      kind: "planner_preset",
-      value: preset,
-    };
-  }
-
-  values["content_board:self"] = {
-    key: "content_board:self",
-    kind: "content_board",
-    value: state.contentBoard,
-  };
-
-  for (const [cardId, card] of Object.entries(state.contentCards)) {
-    values[`content_card:${cardId}`] = {
-      key: `content_card:${cardId}`,
-      kind: "content_card",
-      value: card,
-    };
-  }
-
-  values[WORKSPACE_RECORD_KEY] = {
-    key: WORKSPACE_RECORD_KEY,
-    kind: "workspace_state",
-    value: extractSyncableWorkspaceState(state),
-  };
-
-  return values;
 }
 
 function assembleStateFromValues(
@@ -418,7 +297,7 @@ function assembleStateFromValues(
     syncableUiState = record.value.uiState;
   }
 
-  return normalizeAppState(
+  return parseAppStateOrThrow(
     {
       dailyPages,
       todoWorkspaces,
@@ -437,456 +316,143 @@ function assembleStateFromValues(
   );
 }
 
-function buildMetadataFromRemote(
-  state: AppState,
-  remoteRecords: Record<string, PersistenceRecordMetadata>,
-  overrides: Partial<PersistenceMetadata> = {},
-): PersistenceMetadata {
-  const stateValues = getSyncRecordValuesFromState(state);
-  const mergedRecords: Record<string, PersistenceRecordMetadata> = {};
-
-  for (const [key, record] of Object.entries(stateValues)) {
-    const remote = remoteRecords[key];
-    mergedRecords[key] = createRecordMetadata(
-      key,
-      record.kind,
-      record.value,
-      remote?.lastRemoteUpdatedAt ?? null,
-      remote?.lastRemoteUpdatedAtClient ?? null,
-    );
-  }
-
-  return createPersistenceMetadata({
-    records: mergedRecords,
-    lastRemoteUpdatedAt: getMaxTimestamp(
-      Object.values(mergedRecords).map((record) => record.lastRemoteUpdatedAt),
-    ),
-    lastRemoteUpdatedAtClient: getMaxTimestamp(
-      Object.values(mergedRecords).map((record) => record.lastRemoteUpdatedAtClient),
-    ),
-    hasMigratedToSplitStore: true,
-    ...overrides,
-  });
-}
-
-function toLoadResult(
-  state: AppState,
-  metadata: PersistenceMetadata,
-  input: {
-    source: PersistenceLoadResult["source"];
-    status: PersistenceLoadResult["status"];
-    conflictResolution: PersistenceConflictResolution;
-    notice: string | null;
-    errorMessage: string | null;
-    persistenceAvailable: boolean;
-  },
-): PersistenceLoadResult {
-  return {
-    state,
-    metadata,
-    source: input.source,
-    status: input.status,
-    conflictResolution: input.conflictResolution,
-    notice: input.notice,
-    errorMessage: input.errorMessage,
-    persistenceAvailable: input.persistenceAvailable,
-  };
-}
-
 async function getFirstByFilter<T>(collection: string, filter: string): Promise<T | null> {
   const client = getPocketBaseClient();
   const list = await client.collection(collection).getList<T>(1, 1, { filter, requestKey: null });
   return list.items[0] ?? null;
 }
 
-class PocketBaseSnapshotStore implements RemoteAppStateStore {
-  async loadSnapshot({ userId }: { userId: string }): Promise<RemoteSnapshot | null> {
-    const client = getPocketBaseClient();
-
-    try {
-      const record = await client
-        .collection("app_state_snapshots")
-        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`, { requestKey: null });
-
-      return toSnapshot(record);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        return null;
-      }
-
-      throw error;
-    }
-  }
-
-  async saveSnapshot({
-    userId,
-    state,
-    updatedAtClient,
-    knownRemoteUpdatedAt,
-  }: {
-    userId: string;
-    state: AppState;
-    updatedAtClient: string;
-    knownRemoteUpdatedAt?: string | null;
-  }): Promise<RemoteSnapshot> {
-    const client = getPocketBaseClient();
-    const payload = {
-      owner: userId,
-      state_json: state,
-      state_version: APP_STATE_VERSION,
-      updated_at_client: updatedAtClient,
-    };
-
-    try {
-      const existing = await client
-        .collection("app_state_snapshots")
-        .getFirstListItem<PocketBaseSnapshotRecord>(`owner="${userId}"`, { requestKey: null });
-
-      if (knownRemoteUpdatedAt && existing.updated && existing.updated !== knownRemoteUpdatedAt) {
-        return toSnapshot(existing);
-      }
-
-      const updated = await client
-        .collection("app_state_snapshots")
-        .update<PocketBaseSnapshotRecord>(existing.id, payload, { requestKey: null });
-
-      return toSnapshot(updated);
-    } catch (error) {
-      if (!isNotFoundError(error)) {
-        throw error;
-      }
-
-      const created = await client
-        .collection("app_state_snapshots")
-        .create<PocketBaseSnapshotRecord>(payload, { requestKey: null });
-
-      return toSnapshot(created);
-    }
-  }
-}
-
 class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
-  private readonly legacySnapshotStore = new PocketBaseSnapshotStore();
-
-  async loadRemoteState({
-    userId,
-    cachedEnvelope,
-    cacheAvailable,
-    now = new Date(),
-  }: {
-    userId: string;
-    cachedEnvelope: { state: AppState; metadata: PersistenceMetadata } | null;
-    cacheAvailable: boolean;
-    now?: Date;
-  }): Promise<PersistenceLoadResult> {
-    const splitPayload = await this.loadSplitWorkspaceState(userId, cachedEnvelope?.state ?? null, now);
-
-    if (splitPayload.hasData) {
-      const shouldBackfillDailyPage = hasUnsavedDailyPage(
-        splitPayload.state,
-        splitPayload.records,
-      );
-
-      if (
-        !splitPayload.records["content_board:self"] ||
-        shouldBackfillDailyPage ||
-        splitPayload.hasRepairedDailyPage
-      ) {
-        const backfilled = await this.saveRemoteState({
-          userId,
-          state: splitPayload.state,
-          metadata: createPersistenceMetadata({
-            ...buildMetadataFromRemote(splitPayload.state, splitPayload.records),
-            lastLocalMutationAt: now.toISOString(),
-          }),
-          now,
-        });
-        return toLoadResult(backfilled.resolvedState ?? splitPayload.state, backfilled.metadata, {
-          source: cachedEnvelope ? "local" : "remote",
-          status: backfilled.status,
-          conflictResolution: backfilled.conflictResolution,
-          notice: backfilled.notice,
-          errorMessage: backfilled.errorMessage,
-          persistenceAvailable: cacheAvailable,
-        });
-      }
-
-      const resolved = await this.reconcileSplitState(
-        userId,
-        splitPayload,
-        cachedEnvelope,
-        cacheAvailable,
-        now,
-      );
-      return resolved;
-    }
-
-    const legacySnapshot = await this.legacySnapshotStore.loadSnapshot({ userId });
-
-    if (legacySnapshot) {
-      const legacyState = normalizeAppState(legacySnapshot.state, now);
-      const state = normalizeAppState(
-        {
-          ...legacyState,
-          uiState: mergeUiState(
-            extractSyncableUIState(legacyState.uiState),
-            extractLocalOnlyUIState((cachedEnvelope?.state ?? legacyState).uiState),
-            (cachedEnvelope?.state ?? legacyState).uiState,
-          ),
-        },
-        now,
-      );
-
-      const migrationSeedMetadata = createPersistenceMetadata({
-        lastLocalMutationAt:
-          cachedEnvelope &&
-          compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, legacySnapshot.updatedAtClient) > 0
-            ? cachedEnvelope.metadata.lastLocalMutationAt
-            : legacySnapshot.updatedAtClient ?? now.toISOString(),
-        lastRemoteUpdatedAt: legacySnapshot.updatedAt,
-        lastRemoteUpdatedAtClient: legacySnapshot.updatedAtClient,
-      });
-
-      const migrated = await this.saveRemoteState({
-        userId,
-        state:
-          cachedEnvelope &&
-          compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, legacySnapshot.updatedAtClient) > 0
-            ? cachedEnvelope.state
-            : state,
-        metadata: migrationSeedMetadata,
-        now,
-      });
-
-      const resolvedState = migrated.resolvedState ?? state;
-
-      return toLoadResult(resolvedState, migrated.metadata, {
-        source:
-          cachedEnvelope &&
-          compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, legacySnapshot.updatedAtClient) > 0
-            ? "local"
-            : "remote",
-        status: migrated.status,
-        conflictResolution: migrated.conflictResolution,
-        notice: migrated.notice,
-        errorMessage: migrated.errorMessage,
-        persistenceAvailable: cacheAvailable,
-      });
-    }
-
-    if (cachedEnvelope) {
-      const saved = await this.saveRemoteState({
-        userId,
-        state: cachedEnvelope.state,
-        metadata: cachedEnvelope.metadata,
-        now,
-      });
-
-      return toLoadResult(saved.resolvedState ?? cachedEnvelope.state, saved.metadata, {
-        source: "local",
-        status: saved.status,
-        conflictResolution: saved.conflictResolution,
-        notice: saved.notice,
-        errorMessage: saved.errorMessage,
-        persistenceAvailable: cacheAvailable,
-      });
-    }
-
-    const seeded = seedAppState(now);
-    const saved = await this.saveRemoteState({
-      userId,
-      state: seeded,
-      metadata: createPersistenceMetadata({ lastLocalMutationAt: now.toISOString() }),
-      now,
-    });
-
-    return toLoadResult(saved.resolvedState ?? seeded, saved.metadata, {
-      source: "seed",
-      status: saved.status,
-      conflictResolution: saved.conflictResolution,
-      notice: saved.notice,
-      errorMessage: saved.errorMessage,
-      persistenceAvailable: cacheAvailable,
-    });
+  async loadServerState({ userId, now = new Date() }: { userId: string; now?: Date }): Promise<ServerLoadResult> {
+    const { values, records } = await this.loadServerRecords(userId);
+    return {
+      state: assembleStateFromValues(values, null, now),
+      serverRecords: records,
+    };
   }
 
-  async saveRemoteState({
-    userId,
-    state,
-    metadata,
-    now = new Date(),
-  }: {
-    userId: string;
-    state: AppState;
-    metadata: PersistenceMetadata;
-    now?: Date;
-  }): Promise<PersistenceSaveResult> {
-    try {
-      const remote = await this.loadSplitWorkspaceState(userId, state, now);
-      const localValues = getSyncRecordValuesFromState(state);
-      const remoteValues = getSyncRecordValuesFromState(remote.state);
-      const keys = new Set([...Object.keys(localValues), ...Object.keys(remoteValues)]);
-      const operations: Array<Promise<void>> = [];
-      let conflictResolution: PersistenceConflictResolution = "none";
-      let remoteWon = false;
-      let localWonAfterConflict = false;
-      const resolvedValues: Record<string, SyncRecordValue> = { ...remoteValues };
+  /**
+   * Writes this device's queued changes one record at a time. Each op is
+   * independent: a failure leaves that op queued for the next attempt, and a
+   * network failure stops early (the rest would fail the same way).
+   */
+  async applyOps({ userId, ops }: { userId: string; ops: SyncOp[] }): Promise<ApplyOpResult[]> {
+    const results: ApplyOpResult[] = [];
 
-      for (const key of keys) {
-        const localRecord = localValues[key];
-        const remoteRecord = remoteValues[key];
-        const knownRemote = metadata.records[key];
-        const currentRemote = remote.records[key];
-        const remoteChangedSinceLastSync =
-          currentRemote && knownRemote
-            ? currentRemote.lastRemoteUpdatedAt !== knownRemote.lastRemoteUpdatedAt
-            : Boolean(knownRemote && !currentRemote);
-
-        if (!localRecord && !remoteRecord) {
-          continue;
-        }
-
-        if (localRecord && remoteRecord) {
-          const localFingerprint = stableFingerprint(localRecord.value);
-          const sameFingerprint = localFingerprint === stableFingerprint(remoteRecord.value);
-          if (sameFingerprint) {
-            if (!currentRemote || currentRemote.fingerprint !== localFingerprint) {
-              operations.push(
-                this.upsertRecord(
-                  userId,
-                  localRecord,
-                  metadata.lastLocalMutationAt ?? now.toISOString(),
-                  remote.rawRecords,
-                ),
-              );
-            }
-            resolvedValues[key] = localRecord;
-            continue;
+    for (const [index, op] of ops.entries()) {
+      try {
+        results.push(await this.applyOp(userId, op));
+      } catch (error) {
+        const errorMessage = describeWriteError(error) ?? "Couldn’t reach PocketBase.";
+        if (isNetworkError(error)) {
+          for (const remaining of ops.slice(index)) {
+            results.push({
+              key: remaining.key,
+              status: "failed",
+              errorMessage: "Sync is offline right now.",
+              offline: true,
+            });
           }
+          break;
         }
-
-        // Never let a daily page that still exists locally be dropped just
-        // because it is absent from the remote read. Daily history is
-        // append-only, so re-upload it instead of resolving it as a remote
-        // deletion. (Real removals come from workspace deletion, where the page
-        // is gone from localRecord too and handled by the delete branch below.)
-        const isLocalOnlyDailyPage =
-          Boolean(localRecord) && !remoteRecord && localRecord.kind === "daily_page";
-
-        if (remoteChangedSinceLastSync && !isLocalOnlyDailyPage) {
-          const remoteTimestamp =
-            currentRemote?.lastRemoteUpdatedAtClient ??
-            currentRemote?.lastRemoteUpdatedAt ??
-            knownRemote?.lastRemoteUpdatedAtClient ??
-            knownRemote?.lastRemoteUpdatedAt ??
-            null;
-
-          if (compareTimestamps(metadata.lastLocalMutationAt, remoteTimestamp) <= 0) {
-            remoteWon = true;
-            if (remoteRecord) {
-              resolvedValues[key] = remoteRecord;
-            } else {
-              delete resolvedValues[key];
-            }
-            continue;
-          }
-
-          localWonAfterConflict = true;
-        }
-
-        if (!localRecord && remoteRecord) {
-          operations.push(this.deleteRecord(userId, remoteRecord, remote.rawRecords));
-          delete resolvedValues[key];
-          continue;
-        }
-
-        if (localRecord) {
-          operations.push(
-            this.upsertRecord(
-              userId,
-              localRecord,
-              metadata.lastLocalMutationAt ?? now.toISOString(),
-              remote.rawRecords,
-            ),
-          );
-          resolvedValues[key] = localRecord;
-        }
+        results.push({ key: op.key, status: "failed", errorMessage, offline: false });
       }
+    }
 
-      // Settle each write independently. Previously a single rejected record
-      // (e.g. a PocketBase validation 400) rejected the whole Promise.all, which
-      // was caught below and misreported as a generic "offline" — silently
-      // freezing the entire workspace while other records in the batch had
-      // already been written. Isolating writes means one bad record can no
-      // longer block every other record's sync; we still reload authoritative
-      // remote state afterward, so successful writes are reflected and the
-      // failed one is retried on the next save.
-      const settledOperations = await Promise.allSettled(operations);
-      const failedOperations = settledOperations.filter(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
-      );
-      const firstWriteError = describeWriteError(failedOperations[0]?.reason);
+    return results;
+  }
 
-      const resolvedState = assembleStateFromValues(resolvedValues, state, now);
-      const dualWriteTimestamp = metadata.lastLocalMutationAt ?? now.toISOString();
-      const legacySnapshot = await this.legacySnapshotStore.saveSnapshot({
-        userId,
-        state: resolvedState,
-        updatedAtClient: dualWriteTimestamp,
-      });
-      const finalRemote = await this.loadSplitWorkspaceState(userId, resolvedState, now);
-      const resolvedMetadata = createPersistenceMetadata({
-        ...buildMetadataFromRemote(finalRemote.state, finalRemote.records, {
-          lastLocalMutationAt: metadata.lastLocalMutationAt,
-          hasMigratedToSplitStore: true,
-        }),
-        lastSuccessfulDualWriteAt: legacySnapshot.updatedAt ?? dualWriteTimestamp,
-      });
+  private async applyOp(userId: string, op: SyncOp): Promise<ApplyOpResult> {
+    const client = getPocketBaseClient();
+    const existing = await this.findRow(userId, op.record);
 
-      if (remoteWon) {
-        conflictResolution = "remote-overwrote-local";
-      } else if (localWonAfterConflict) {
-        conflictResolution = "local-overwrote-remote";
+    if (op.type === "delete") {
+      // Daily history is append-only; the server refuses these deletes too.
+      if (op.kind === "daily_page") {
+        return { key: op.key, status: "skipped", reason: "Daily pages are never deleted." };
       }
+      if (existing) {
+        await client.collection(COLLECTION_BY_KIND[op.kind]).delete(existing.id, { requestKey: null });
+      }
+      return { key: op.key, status: "written", serverUpdatedAtClient: null };
+    }
 
-      // A record failed to write (e.g. validation rejection). Successful writes
-      // are already persisted and reflected in the reloaded metadata/state, so
-      // we keep those — but surface the failure so the client shows a sync issue
-      // and retries, rather than pretending everything synced.
-      if (failedOperations.length > 0) {
+    // Version check: if another device changed this page since this device last
+    // saw it, merge instead of overwriting their edit.
+    if (
+      op.record.kind === "daily_page" &&
+      existing &&
+      !sameTimestamp(existing.updated_at_client, op.baseUpdatedAtClient)
+    ) {
+      const serverPage: DailyPage = {
+        date: existing.date ?? op.record.value.date,
+        markdown: existing.markdown ?? "",
+        todos: safeArray(existing.todos_json),
+      };
+
+      if (fingerprintSyncValue(serverPage) !== fingerprintSyncValue(op.record.value)) {
+        const merged = {
+          ...op.record,
+          value: mergeDailyPageConflict({
+            base: op.base?.kind === "daily_page" ? op.base.value : null,
+            local: op.record.value,
+            server: serverPage,
+          }),
+        };
+        const saved = await this.writeRow(userId, merged, op.updatedAtClient, existing);
         return {
-          status: "error",
-          metadata: resolvedMetadata,
-          conflictResolution,
-          notice: null,
-          errorMessage: firstWriteError
-            ? `Some changes could not be saved to PocketBase: ${firstWriteError}`
-            : "Some changes could not be saved to PocketBase.",
-          resolvedState: finalRemote.state,
+          key: op.key,
+          status: "merged",
+          record: merged,
+          serverUpdatedAtClient: saved.updated_at_client ?? null,
         };
       }
-
-      return {
-        status: "synced",
-        metadata: resolvedMetadata,
-        conflictResolution,
-        notice:
-          conflictResolution === "remote-overwrote-local"
-            ? "Newer changes from another device were loaded."
-            : null,
-        errorMessage: null,
-        resolvedState: finalRemote.state,
-      };
-    } catch {
-      return {
-        status: "offline",
-        metadata,
-        conflictResolution: "none",
-        notice: "PocketBase is unavailable, so your changes are saved on this device.",
-        errorMessage: "Sync is offline right now.",
-        resolvedState: state,
-      };
     }
+
+    const saved = await this.writeRow(userId, op.record, op.updatedAtClient, existing);
+    return { key: op.key, status: "written", serverUpdatedAtClient: saved.updated_at_client ?? null };
+  }
+
+  private async findRow(userId: string, record: SyncRecordValue): Promise<PocketBaseRow | null> {
+    const client = getPocketBaseClient();
+    const collection = COLLECTION_BY_KIND[record.kind];
+
+    if (record.kind === "daily_page") {
+      const workspaceId = getWorkspaceIdFromDailyPageRecordKey(record.key);
+      // Legacy Main pages may be stored with an empty workspace_id.
+      const filter =
+        workspaceId === DEFAULT_TODO_WORKSPACE_ID
+          ? client.filter('owner = {:owner} && date = {:date} && (workspace_id = {:workspace} || workspace_id = "")', {
+              owner: userId,
+              date: record.value.date,
+              workspace: workspaceId,
+            })
+          : client.filter("owner = {:owner} && date = {:date} && workspace_id = {:workspace}", {
+              owner: userId,
+              date: record.value.date,
+              workspace: workspaceId,
+            });
+      const list = await client
+        .collection(collection)
+        .getList<PocketBaseRow>(1, 1, { filter, sort: "-workspace_id", requestKey: null });
+      return list.items[0] ?? null;
+    }
+
+    const idField: Partial<Record<PersistenceRecordKind, string>> = {
+      note: "note_id",
+      note_folder: "folder_id",
+      planner_preset: "preset_id",
+      content_card: "card_id",
+    };
+    const field = idField[record.kind];
+    const filter = field
+      ? client.filter(`owner = {:owner} && ${field} = {:id}`, {
+          owner: userId,
+          id: (record.value as { id: string }).id,
+        })
+      : client.filter("owner = {:owner}", { owner: userId });
+    const list = await client.collection(collection).getList<PocketBaseRow>(1, 1, { filter, requestKey: null });
+    return list.items[0] ?? null;
   }
 
   async loadNoteBody({
@@ -998,124 +564,11 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     }
   }
 
-  private async reconcileSplitState(
-    userId: string,
-    remote: SplitWorkspacePayload,
-    cachedEnvelope: { state: AppState; metadata: PersistenceMetadata } | null,
-    cacheAvailable: boolean,
-    now: Date,
-  ): Promise<PersistenceLoadResult> {
-    if (!cachedEnvelope) {
-      return toLoadResult(remote.state, buildMetadataFromRemote(remote.state, remote.records), {
-        source: "remote",
-        status: "synced",
-        conflictResolution: "none",
-        notice: null,
-        errorMessage: null,
-        persistenceAvailable: cacheAvailable,
-      });
-    }
-
-    const localValues = getSyncRecordValuesFromState(cachedEnvelope.state);
-    const remoteValues = getSyncRecordValuesFromState(remote.state);
-    const mergedValues: Record<string, SyncRecordValue> = {};
-    let hasLocalNewer = false;
-    let hasRemoteNewer = false;
-
-    for (const key of new Set([...Object.keys(localValues), ...Object.keys(remoteValues)])) {
-      const localRecord = localValues[key];
-      const remoteRecord = remoteValues[key];
-      const remoteMeta = remote.records[key];
-      const knownRemoteMeta = cachedEnvelope.metadata.records[key];
-
-      if (localRecord && remoteRecord) {
-        const sameFingerprint = stableFingerprint(localRecord.value) === stableFingerprint(remoteRecord.value);
-        if (sameFingerprint) {
-          mergedValues[key] = remoteRecord;
-          continue;
-        }
-      }
-
-      const localWasMutated =
-        !knownRemoteMeta ||
-        (localRecord && knownRemoteMeta.fingerprint !== stableFingerprint(localRecord.value));
-
-      const comparisonTimestamp =
-        remoteMeta?.lastRemoteUpdatedAtClient ??
-        remoteMeta?.lastRemoteUpdatedAt ??
-        knownRemoteMeta?.lastRemoteUpdatedAtClient ??
-        knownRemoteMeta?.lastRemoteUpdatedAt ??
-        null;
-
-      if (
-        localRecord &&
-        localWasMutated &&
-        compareTimestamps(cachedEnvelope.metadata.lastLocalMutationAt, comparisonTimestamp) > 0
-      ) {
-        mergedValues[key] = localRecord;
-        hasLocalNewer = true;
-        continue;
-      }
-
-      if (remoteRecord) {
-        mergedValues[key] = remoteRecord;
-        hasRemoteNewer = true;
-      } else if (localRecord && !localWasMutated && localRecord.kind === "daily_page") {
-        // A daily page present locally but absent from remote is treated as a
-        // never-uploaded page rather than a remote deletion. Daily history is
-        // append-only (no per-page delete), so keep it and re-upload instead of
-        // dropping a past day's notes/todos.
-        mergedValues[key] = localRecord;
-        hasLocalNewer = true;
-      } else if (localRecord && !localWasMutated) {
-        hasRemoteNewer = true;
-      } else if (localRecord) {
-        mergedValues[key] = localRecord;
-        hasLocalNewer = true;
-      }
-    }
-
-    if (hasLocalNewer) {
-      const mergedState = assembleStateFromValues(mergedValues, cachedEnvelope.state, now);
-      const saved = await this.saveRemoteState({
-        userId,
-        state: mergedState,
-        metadata: createPersistenceMetadata({
-          ...buildMetadataFromRemote(remote.state, remote.records, {
-            lastLocalMutationAt: cachedEnvelope.metadata.lastLocalMutationAt,
-          }),
-        }),
-        now,
-      });
-
-      return toLoadResult(saved.resolvedState ?? mergedState, saved.metadata, {
-        source: "local",
-        status: saved.status,
-        conflictResolution:
-          saved.conflictResolution === "none" ? "local-overwrote-remote" : saved.conflictResolution,
-        notice:
-          saved.notice ??
-          (saved.status === "synced" ? "This device had newer changes, so they were synced." : null),
-        errorMessage: saved.errorMessage,
-        persistenceAvailable: cacheAvailable,
-      });
-    }
-
-    return toLoadResult(remote.state, buildMetadataFromRemote(remote.state, remote.records), {
-      source: "remote",
-      status: "synced",
-      conflictResolution: hasRemoteNewer ? "remote-overwrote-local" : "none",
-      notice: hasRemoteNewer ? "Newer changes from another device were loaded." : null,
-      errorMessage: null,
-      persistenceAvailable: cacheAvailable,
-    });
-  }
-
-  private async loadSplitWorkspaceState(
-    userId: string,
-    localState: AppState | null,
-    now: Date,
-  ): Promise<SplitWorkspacePayload> {
+  /** Reads every record the user has. Never writes. */
+  private async loadServerRecords(userId: string): Promise<{
+    values: Record<string, SyncRecordValue>;
+    records: Record<string, PersistenceRecordMetadata>;
+  }> {
     const client = getPocketBaseClient();
     const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, workspaceState] =
       await Promise.all([
@@ -1138,18 +591,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     const values: Record<string, SyncRecordValue> = {};
     const records: Record<string, PersistenceRecordMetadata> = {};
-    const loadedDailyPagesByWorkspace = new Map<string, Record<string, DailyPage>>();
-    const dailyPageRecords = new Map<string, PocketBaseDailyPageRecord>();
-    const rawRecords: SplitWorkspaceRawRecords = {
-      dailyPages: new Map(),
-      notes: new Map(),
-      noteFolders: new Map(),
-      plannerPresets: new Map(),
-      contentBoard,
-      contentCards: new Map(),
-      workspaceState,
-    };
-    let hasRepairedDailyPage = false;
 
     for (const record of dailyPages) {
       if (!record.date) continue;
@@ -1160,11 +601,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         todos: safeArray(record.todos_json),
       };
       const key = `daily_page:${workspaceId}:${record.date}`;
-      const workspacePages = loadedDailyPagesByWorkspace.get(workspaceId) ?? {};
-      workspacePages[record.date] = value;
-      loadedDailyPagesByWorkspace.set(workspaceId, workspacePages);
-      dailyPageRecords.set(`${workspaceId}:${record.date}`, record);
-      rawRecords.dailyPages.set(`${workspaceId}:${record.date}`, record);
       values[key] = { key, kind: "daily_page", value };
       records[key] = createRecordMetadata(
         key,
@@ -1175,34 +611,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
-    const todayISO = toISODate(now);
-    for (const [workspaceId, loadedDailyPages] of loadedDailyPagesByWorkspace) {
-      const todayPage = loadedDailyPages[todayISO];
-      const todayRecord = dailyPageRecords.get(`${workspaceId}:${todayISO}`);
-      if (
-        todayPage &&
-        todayRecord &&
-        isUntouchedEmptyDailyPage(todayPage, todayRecord.created, todayRecord.updated)
-      ) {
-        const history = { ...loadedDailyPages };
-        delete history[todayISO];
-        const repairedPage = createCarryoverDailyPage(history, todayISO);
-
-        if (repairedPage.markdown.trim() !== "" || repairedPage.todos.length > 0) {
-          const key = `daily_page:${workspaceId}:${todayISO}`;
-          values[key] = {
-            key,
-            kind: "daily_page",
-            value: repairedPage,
-          };
-          hasRepairedDailyPage = true;
-        }
-      }
-    }
-
     for (const record of notes) {
       if (!record.note_id) continue;
-      rawRecords.notes.set(record.note_id, record);
       const value: NoteSummary = {
         id: record.note_id,
         title: record.title ?? "",
@@ -1222,7 +632,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of noteFolders) {
       if (!record.folder_id) continue;
-      rawRecords.noteFolders.set(record.folder_id, record);
       const value: NoteFolder = {
         id: record.folder_id,
         name: record.name ?? "New Folder",
@@ -1242,7 +651,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of plannerPresets) {
       if (!record.preset_id) continue;
-      rawRecords.plannerPresets.set(record.preset_id, record);
       const updatedAt = record.updated_at_client ?? record.updated ?? new Date(0).toISOString();
       const plannerPayload = readPlannerDaysPayload(record.days_json);
       const value: PlannerPreset = {
@@ -1286,7 +694,6 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of contentCards) {
       if (!record.card_id || !record.column_id || !record.title) continue;
-      rawRecords.contentCards.set(record.card_id, record);
       const value: ContentCard = {
         id: record.card_id,
         columnId: record.column_id,
@@ -1332,35 +739,19 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
-    const state = assembleStateFromValues(values, localState, now);
-
-    return {
-      state,
-      records,
-      rawRecords,
-      hasRepairedDailyPage,
-      hasData:
-        dailyPages.length > 0 ||
-        notes.length > 0 ||
-        noteFolders.length > 0 ||
-        plannerPresets.length > 0 ||
-        Boolean(contentBoard) ||
-        contentCards.length > 0 ||
-        Boolean(workspaceState),
-    };
+    return { values, records };
   }
 
-  private async upsertRecord(
+  private async writeRow(
     userId: string,
     record: SyncRecordValue,
     updatedAtClient: string,
-    rawRecords: SplitWorkspaceRawRecords,
-  ) {
+    existing: PocketBaseRow | null,
+  ): Promise<PocketBaseRow> {
     const client = getPocketBaseClient();
 
     if (record.kind === "daily_page") {
       const workspaceId = record.key.split(":").slice(1, -1).join(":");
-      const existing = rawRecords.dailyPages.get(`${workspaceId}:${record.value.date}`);
       const payload = {
         owner: userId,
         workspace_id: workspaceId,
@@ -1370,15 +761,13 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("daily_pages").update(existing.id, payload, { requestKey: null });
+        return client.collection("daily_pages").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("daily_pages").create(payload, { requestKey: null });
+        return client.collection("daily_pages").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
     if (record.kind === "note") {
-      const existing = rawRecords.notes.get(record.value.id);
       const payload = {
         owner: userId,
         note_id: record.value.id,
@@ -1388,15 +777,13 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("notes").update(existing.id, payload, { requestKey: null });
+        return client.collection("notes").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("notes").create(payload, { requestKey: null });
+        return client.collection("notes").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
     if (record.kind === "note_folder") {
-      const existing = rawRecords.noteFolders.get(record.value.id);
       const payload = {
         owner: userId,
         folder_id: record.value.id,
@@ -1405,15 +792,13 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("note_folders").update(existing.id, payload, { requestKey: null });
+        return client.collection("note_folders").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("note_folders").create(payload, { requestKey: null });
+        return client.collection("note_folders").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
     if (record.kind === "planner_preset") {
-      const existing = rawRecords.plannerPresets.get(record.value.id);
       const payload = {
         owner: userId,
         preset_id: record.value.id,
@@ -1427,30 +812,26 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("planner_presets").update(existing.id, payload, { requestKey: null });
+        return client.collection("planner_presets").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("planner_presets").create(payload, { requestKey: null });
+        return client.collection("planner_presets").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
     if (record.kind === "content_board") {
-      const existing = rawRecords.contentBoard;
       const payload = {
         owner: userId,
         columns_json: record.value.columns,
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("content_boards").update(existing.id, payload, { requestKey: null });
+        return client.collection("content_boards").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("content_boards").create(payload, { requestKey: null });
+        return client.collection("content_boards").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
     if (record.kind === "content_card") {
-      const existing = rawRecords.contentCards.get(record.value.id);
       const payload = {
         owner: userId,
         card_id: record.value.id,
@@ -1463,14 +844,12 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         updated_at_client: updatedAtClient,
       };
       if (existing) {
-        await client.collection("content_cards").update(existing.id, payload, { requestKey: null });
+        return client.collection("content_cards").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
-        await client.collection("content_cards").create(payload, { requestKey: null });
+        return client.collection("content_cards").create<PocketBaseRow>(payload, { requestKey: null });
       }
-      return;
     }
 
-    const existing = rawRecords.workspaceState;
     const payload = {
       owner: userId,
       selected_daily_date: record.value.uiState.selectedDailyDate,
@@ -1485,79 +864,19 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       updated_at_client: updatedAtClient,
     };
     if (existing) {
-      await client.collection("workspace_state").update(existing.id, payload, { requestKey: null });
+      return client.collection("workspace_state").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
     } else {
-      await client.collection("workspace_state").create(payload, { requestKey: null });
+      return client.collection("workspace_state").create<PocketBaseRow>(payload, { requestKey: null });
     }
   }
 
-  private async deleteRecord(
-    userId: string,
-    record: SyncRecordValue,
-    rawRecords: SplitWorkspaceRawRecords,
-  ) {
-    const client = getPocketBaseClient();
-
-    if (record.kind === "daily_page") {
-      const workspaceId = record.key.split(":").slice(1, -1).join(":");
-      const existing = rawRecords.dailyPages.get(`${workspaceId}:${record.value.date}`);
-      if (existing) {
-        await client.collection("daily_pages").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    if (record.kind === "note") {
-      const existing = rawRecords.notes.get(record.value.id);
-      if (existing) {
-        await client.collection("notes").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    if (record.kind === "note_folder") {
-      const existing = rawRecords.noteFolders.get(record.value.id);
-      if (existing) {
-        await client.collection("note_folders").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    if (record.kind === "planner_preset") {
-      const existing = rawRecords.plannerPresets.get(record.value.id);
-      if (existing) {
-        await client.collection("planner_presets").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    if (record.kind === "content_board") {
-      const existing = rawRecords.contentBoard;
-      if (existing) {
-        await client.collection("content_boards").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    if (record.kind === "content_card") {
-      const existing = rawRecords.contentCards.get(record.value.id);
-      if (existing) {
-        await client.collection("content_cards").delete(existing.id, { requestKey: null });
-      }
-      return;
-    }
-
-    const existing = rawRecords.workspaceState;
-    if (existing) {
-      await client.collection("workspace_state").delete(existing.id, { requestKey: null });
-    }
-  }
 }
 
 export function createPocketBasePersistenceRepository() {
   return new SplitPersistenceRepository(
     new PocketBaseSplitRemoteStore(),
     createBrowserLocalCacheStorage(),
+    createBrowserOutboxStorage(),
     createRecentNoteBodiesStorage(),
   );
 }

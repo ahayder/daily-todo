@@ -1,9 +1,12 @@
 import { vi } from "vitest";
 import type { AuthRepository, AuthSession, RegisterInput, SignInInput } from "@/lib/auth";
+import type { PersistenceRepository } from "@/lib/persistence";
 import {
-  createPersistenceMetadata,
-  type PersistenceRepository,
-} from "@/lib/persistence";
+  applySyncOpsToState,
+  getSyncRecordValuesFromState,
+  type ApplyOpResult,
+  type SyncOp,
+} from "@/lib/sync-outbox";
 import { createInitialState } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
@@ -65,35 +68,38 @@ export function createMockPersistenceRepository(
   initialState: AppState = createInitialState("2026-03-11"),
 ) {
   let currentState = initialState;
+  let outbox: SyncOp[] = [];
 
   const repository: PersistenceRepository = {
-    load: vi.fn(async () => ({
+    loadCached: vi.fn(() => null),
+    loadServer: vi.fn(async () => ({
       state: currentState,
-      source: "remote" as const,
-      status: "synced" as const,
-      metadata: createPersistenceMetadata({
-        lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
-        lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
-      }),
-      conflictResolution: "none" as const,
-      notice: null,
-      errorMessage: null,
-      persistenceAvailable: true,
+      serverRecords: Object.fromEntries(
+        Object.values(getSyncRecordValuesFromState(currentState)).map((record) => [
+          record.key,
+          {
+            key: record.key,
+            kind: record.kind,
+            fingerprint: JSON.stringify(record.value),
+            lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
+            lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
+          },
+        ]),
+      ),
     })),
-    save: vi.fn(async ({ state }) => {
-      currentState = state;
-      return {
-        status: "synced" as const,
-        metadata: createPersistenceMetadata({
-          lastLocalMutationAt: "2026-03-11T08:10:00.000Z",
-          lastRemoteUpdatedAt: "2026-03-11T08:10:01.000Z",
-          lastRemoteUpdatedAtClient: "2026-03-11T08:10:00.000Z",
-        }),
-        conflictResolution: "none" as const,
-        notice: null,
-        errorMessage: null,
-      };
+    applyOps: vi.fn(async ({ ops }: { ops: SyncOp[] }): Promise<ApplyOpResult[]> => {
+      currentState = applySyncOpsToState(currentState, ops);
+      return ops.map((op) => ({
+        key: op.key,
+        status: "written" as const,
+        serverUpdatedAtClient: op.updatedAtClient,
+      }));
     }),
+    loadOutbox: vi.fn(() => outbox),
+    saveOutbox: vi.fn(({ ops }: { ops: SyncOp[] }) => {
+      outbox = ops;
+    }),
+    saveLocalCache: vi.fn(),
     loadNoteBody: vi.fn(async ({ noteId }) => ({
       markdown: currentState.notesDocs[noteId]?.markdown ?? "",
       status: "ready" as const,
@@ -134,6 +140,12 @@ export function createMockPersistenceRepository(
     repository,
     getState() {
       return currentState;
+    },
+    setServerState(state: AppState) {
+      currentState = state;
+    },
+    getOutbox() {
+      return outbox;
     },
   };
 }

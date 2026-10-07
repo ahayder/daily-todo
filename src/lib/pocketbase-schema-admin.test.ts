@@ -26,11 +26,11 @@ function createBaseCollection(
     id: input.id ?? "col_1",
     name: input.name ?? "example",
     type: "base",
-    listRule: input.listRule ?? COLLECTION_ACCESS_RULE,
-    viewRule: input.viewRule ?? COLLECTION_ACCESS_RULE,
-    createRule: input.createRule ?? COLLECTION_ACCESS_RULE,
-    updateRule: input.updateRule ?? COLLECTION_ACCESS_RULE,
-    deleteRule: input.deleteRule ?? COLLECTION_ACCESS_RULE,
+    listRule: "listRule" in input ? (input.listRule ?? null) : COLLECTION_ACCESS_RULE,
+    viewRule: "viewRule" in input ? (input.viewRule ?? null) : COLLECTION_ACCESS_RULE,
+    createRule: "createRule" in input ? (input.createRule ?? null) : COLLECTION_ACCESS_RULE,
+    updateRule: "updateRule" in input ? (input.updateRule ?? null) : COLLECTION_ACCESS_RULE,
+    deleteRule: "deleteRule" in input ? (input.deleteRule ?? null) : COLLECTION_ACCESS_RULE,
     indexes: input.indexes ?? [],
     fields: input.fields ?? [],
     system: false,
@@ -58,7 +58,10 @@ describe("buildSchemaDefinitions", () => {
       expect(definition.viewRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.createRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.updateRule).toBe(COLLECTION_ACCESS_RULE);
-      expect(definition.deleteRule).toBe(COLLECTION_ACCESS_RULE);
+      // Daily pages are append-only: only a superuser may delete them.
+      expect(definition.deleteRule).toBe(
+        definition.name === "daily_pages" ? null : COLLECTION_ACCESS_RULE,
+      );
       expect(definition.fields.find((field: { name: string }) => field.name === "owner")?.collectionId).toBe(
         "users_1",
       );
@@ -118,6 +121,7 @@ describe("mergeCollectionDefinition", () => {
     const existing = createBaseCollection({
       id: "daily_pages_1",
       name: desired.name,
+      deleteRule: desired.deleteRule,
       indexes: desired.indexes,
       fields: desired.fields.map((field, index) => ({
         id: `field_${index}`,
@@ -230,6 +234,7 @@ describe("applyPocketBaseSchema", () => {
     const dailyPages = createBaseCollection({
       id: "daily_pages_1",
       name: definitions[0].name,
+      deleteRule: definitions[0].deleteRule,
       indexes: definitions[0].indexes,
       fields: definitions[0].fields.map((field, index) => ({ id: `field_${index}`, ...field })),
     });

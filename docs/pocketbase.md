@@ -42,7 +42,11 @@ What it does:
 - creates or updates the app collections
 - reconciles collection fields, indexes, and API rules
 - preserves extra unknown fields and indexes instead of deleting them, except for explicitly replaced managed indexes
-- keeps `app_state_snapshots` available for the migration window
+- keeps the legacy `app_state_snapshots` collection (no longer written by the app)
+
+Safety rules it enforces:
+
+- `daily_pages.deleteRule` is `null`: only a superuser can delete a daily page. The app never deletes daily history, and even a buggy client gets a 403.
 
 What it does not do in v1:
 
@@ -63,6 +67,17 @@ Updated: notes, workspace_state
 Unchanged: app_state_snapshots
 Failed: none
 ```
+
+## Daily backups
+
+Run once per server (needs the same admin env vars as the schema script):
+
+```bash
+pnpm pocketbase:backups:enable        # production (.env.local)
+pnpm pocketbase:backups:enable:local  # local test DB (.env.test.local)
+```
+
+This sets PocketBase's built-in backups to run daily at 03:00 (server time) and keep the last 7. Backups are zip files in the server's `pb_data/backups` folder, listed and downloadable in the PocketBase dashboard (Settings → Backups). They live on the same machine, so the host's own VPS backups are the off-site copy; PocketBase can also push backups to S3-compatible storage (Settings → Backups → S3).
 
 ## Local test database
 
@@ -86,7 +101,7 @@ pnpm dev:test                    # 4. run the app against the local DB
 ```
 
 - `pnpm dev` → production PocketBase (unchanged).
-- `pnpm dev:test` → local PocketBase.
+- `pnpm dev:test` → local PocketBase. Open `http://dailytodo.localhost:5005` (not `localhost`): on a loopback hostname the app always forces the offline dev workspace, so real login and sync only happen on a non-loopback name.
 - Seeded login: `test@local.test` / `testuser1234`.
 - The seed intentionally tries a position-0 content card, which reproduces the
   known `content_cards` required-field bug (it warns and continues until the
@@ -107,7 +122,7 @@ Use PocketBase's built-in auth collection:
 
 ## Synced workspace collections
 
-The app reads from the split collections first, then falls back to `app_state_snapshots` only for migration and rollback safety.
+The app is server-first: it reads every collection (a pure read, never writing during load) and writes only the individual records a device changed, from a per-device outbox. A device never deletes records it simply doesn't have. `app_state_snapshots` is legacy and no longer written. See `CLAUDE.md` → Persistence for the full rules.
 
 ### `daily_pages`
 
@@ -117,7 +132,7 @@ Fields:
 - `workspace_id`: text; empty legacy values are treated as the protected Main workspace
 - `date`: text, required
 - `markdown`: text
-- `todos_json`: JSON, required
+- `todos_json`: JSON, not required (an empty task list must be savable)
 - `updated_at_client`: date/time, required
 
 Indexes:

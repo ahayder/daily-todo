@@ -9,7 +9,7 @@ import {
   CONTENT_FONT_SCALE_MIN,
 } from "@/lib/content-font-scale";
 import { createPersistenceMetadata } from "@/lib/persistence";
-import { createInitialState, renameContentColumn } from "@/lib/store";
+import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository, createMockPersistenceRepository } from "@/test/repositories";
 
 vi.mock("next/navigation", () => ({
@@ -90,34 +90,6 @@ function Harness() {
           })
         }
       />
-    </div>
-  );
-}
-
-function ContentPlannerSyncHarness() {
-  const { state, dispatch } = useAppState();
-  const card = Object.values(state.contentCards)[0];
-  const targetColumn = state.contentBoard.columns[1];
-
-  return (
-    <div>
-      <p data-testid="hydrated-column-title">{state.contentBoard.columns[0].title}</p>
-      <p data-testid="dragged-card-column">{card?.columnId ?? "missing"}</p>
-      <button
-        type="button"
-        disabled={!card || !targetColumn}
-        onClick={() => {
-          if (!card || !targetColumn) return;
-          dispatch({
-            type: "move-content-card",
-            cardId: card.id,
-            targetColumnId: targetColumn.id,
-            targetIndex: 0,
-          });
-        }}
-      >
-        move planner card
-      </button>
     </div>
   );
 }
@@ -695,23 +667,19 @@ describe("AppProvider theme class behavior", () => {
     expect(
       await screen.findByRole("heading", { name: "Sign in to your DailyTodo workspace" }),
     ).toBeInTheDocument();
-    expect(persistence.repository.load).not.toHaveBeenCalled();
+    expect(persistence.repository.loadServer).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByLabelText("Email"), "test@example.com");
     await userEvent.type(screen.getByLabelText("Password"), "password123");
     await userEvent.click(screen.getAllByRole("button", { name: "Sign in" })[1]);
 
     expect(await screen.findByTestId("theme-mode")).toHaveTextContent("dark");
-    expect(persistence.repository.load).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "user_1",
-        now: expect.any(Date),
-        onRemoteSync: expect.any(Function),
-      }),
+    expect(persistence.repository.loadServer).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1", now: expect.any(Date) }),
     );
   });
 
-  test("keeps editing available when persistence save fails", async () => {
+  test("keeps editing available when sending changes fails", async () => {
     installMatchMedia(false);
     const auth = createMockAuthRepository({
       userId: "user_1",
@@ -720,7 +688,7 @@ describe("AppProvider theme class behavior", () => {
       accessToken: "token_1",
     });
     const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
-    persistence.repository.save = vi.fn(async () => {
+    persistence.repository.applyOps = vi.fn(async () => {
       throw new Error("network down");
     });
 
@@ -739,98 +707,116 @@ describe("AppProvider theme class behavior", () => {
   });
 });
 
-describe("AppProvider save queue", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    // Keep "today" on the fixture day so the load-time day advance does not queue its own save.
-    vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
-    window.localStorage.clear();
-    document.documentElement.classList.remove("dark");
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      value: "visible",
-    });
-    installMatchMedia(false);
+async function flushMicrotasks() {
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+function useFixtureClock() {
+  vi.useFakeTimers();
+  // Keep "today" on the fixture day so the load-time day advance doesn't queue its own change.
+  vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
+  window.localStorage.clear();
+  document.documentElement.classList.remove("dark");
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
   });
+  installMatchMedia(false);
+}
+
+function renderApp(persistence: ReturnType<typeof createMockPersistenceRepository>) {
+  const auth = createMockAuthRepository({
+    userId: "user_1",
+    email: "test@example.com",
+    isVerified: true,
+    accessToken: "token_1",
+  });
+  return render(
+    <AuthProvider repository={auth.repository}>
+      <AppProvider repository={persistence.repository}>
+        <Harness />
+      </AppProvider>
+    </AuthProvider>,
+  );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("AppProvider outbox sync", () => {
+  beforeEach(useFixtureClock);
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  test("shows unsynced when a save fails without blocking editing", async () => {
-    const { persistence } = renderWithProviders();
-
-    persistence.repository.save = vi.fn(async () => {
+  test("shows changes waiting when sending fails, without blocking editing", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    persistence.repository.applyOps = vi.fn(async () => {
       throw new Error("network down");
     });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
     expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
 
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "Welcome note!" },
-    });
-
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Welcome note!" } });
     expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saving");
 
     await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
+      vi.advanceTimersByTime(600);
+      await flushMicrotasks();
     });
 
     expect(screen.getByTestId("sync-indicator")).toHaveTextContent("unsynced");
     expect(screen.getByLabelText("Note title")).toHaveValue("Welcome note!");
+    expect(persistence.getOutbox()).toHaveLength(1);
   });
 
-  test("debounces note title saves and avoids per-character requests", async () => {
-    const { persistence } = renderWithProviders();
-    await act(async () => {
-      await Promise.resolve();
-    });
+  test("sends only the changed record, once typing pauses", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "S" },
-    });
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "Sp" },
-    });
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "Sprint notes" },
-    });
-
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saving");
-    expect(persistence.repository.save).not.toHaveBeenCalled();
+    for (const value of ["S", "Sp", "Sprint notes"]) {
+      fireEvent.change(screen.getByLabelText("Note title"), { target: { value } });
+    }
 
     await act(async () => {
-      vi.advanceTimersByTime(2999);
+      vi.advanceTimersByTime(599);
     });
-    expect(persistence.repository.save).not.toHaveBeenCalled();
+    expect(persistence.repository.applyOps).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(1);
+      await flushMicrotasks();
     });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
+
+    expect(persistence.repository.applyOps).toHaveBeenCalledTimes(1);
+    const [{ ops }] = vi.mocked(persistence.repository.applyOps).mock.calls[0];
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ type: "upsert", kind: "note" });
+    expect(ops[0].record.value).toMatchObject({ title: "Sprint notes" });
     expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
+    expect(persistence.getOutbox()).toEqual([]);
   });
 
   test("debounces note body remote saves for 5 seconds", async () => {
-    const { persistence } = renderWithProviders();
-    await act(async () => {
-      await Promise.resolve();
-    });
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
-    fireEvent.change(screen.getByLabelText("Note markdown"), {
-      target: { value: "Draft" },
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
+    fireEvent.change(screen.getByLabelText("Note markdown"), { target: { value: "Draft" } });
+    await act(flushMicrotasks);
     expect(persistence.repository.saveNoteBody).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -840,386 +826,233 @@ describe("AppProvider save queue", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(1);
-      await Promise.resolve();
+      await flushMicrotasks();
     });
     expect(persistence.repository.saveNoteBody).toHaveBeenCalledTimes(1);
   });
 
-  test("throttles remote workspace saves to at most once every 10 seconds", async () => {
-    const { persistence } = renderWithProviders();
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "A" },
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "AB" },
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(6999);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(2);
-  });
-
-  test("queues one follow-up save when edits happen during an in-flight save", async () => {
+  test("sends edits made during an in-flight send right after it finishes", async () => {
     const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
-    const auth = createMockAuthRepository({
-      userId: "user_1",
-      email: "test@example.com",
-      isVerified: true,
-      accessToken: "token_1",
+    const firstSend = deferred<never[]>();
+    const applyOps = vi
+      .fn()
+      .mockImplementationOnce(() => firstSend.promise)
+      .mockImplementation(async ({ ops }: { ops: Array<{ key: string; updatedAtClient: string }> }) =>
+        ops.map((op) => ({ key: op.key, status: "written", serverUpdatedAtClient: op.updatedAtClient })),
+      );
+    persistence.repository.applyOps = applyOps;
+    renderApp(persistence);
+    await act(flushMicrotasks);
+
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "First" } });
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+      await flushMicrotasks();
     });
-    let saveCallCount = 0;
-    let resolveFirstSave!: () => void;
-    const firstSavePromise = new Promise<void>((resolve) => {
-      resolveFirstSave = resolve;
+    expect(applyOps).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Second" } });
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+      await flushMicrotasks();
     });
-
-    persistence.repository.save = vi.fn(async () => {
-      saveCallCount += 1;
-
-      if (saveCallCount === 1) {
-        await firstSavePromise;
-      }
-
-      return {
-        status: "synced" as const,
-        metadata: createPersistenceMetadata({
-          lastLocalMutationAt: "2026-03-11T08:10:00.000Z",
-          lastRemoteUpdatedAt: "2026-03-11T08:10:01.000Z",
-          lastRemoteUpdatedAtClient: "2026-03-11T08:10:00.000Z",
-        }),
-        conflictResolution: "none" as const,
-        notice: null,
-        errorMessage: null,
-      };
-    });
-
-    render(
-      <AuthProvider repository={auth.repository}>
-        <AppProvider repository={persistence.repository}>
-          <Harness />
-        </AppProvider>
-      </AuthProvider>,
-    );
+    expect(applyOps).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await Promise.resolve();
+      firstSend.resolve([]);
+      await flushMicrotasks();
     });
 
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "A" },
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saving");
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "AB" },
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saving");
-
-    resolveFirstSave();
-
-    await act(async () => {
-      await firstSavePromise;
-      await Promise.resolve();
-    });
-
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(6999);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(2);
-    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
+    expect(applyOps).toHaveBeenCalledTimes(2);
+    expect(applyOps.mock.calls[1][0].ops[0].record.value).toMatchObject({ title: "Second" });
   });
 
-  test("manual retry bypasses debounce and throttle", async () => {
-    const { persistence } = renderWithProviders();
-    await act(async () => {
-      await Promise.resolve();
-    });
+  test("manual retry sends immediately", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "A" },
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "AB" },
-    });
-
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Retry me" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "retry sync" }));
-      await Promise.resolve();
+      await flushMicrotasks();
     });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(2);
+
+    expect(persistence.repository.applyOps).toHaveBeenCalledTimes(1);
   });
 
-  test("pagehide flush bypasses debounce and throttle", async () => {
-    const { persistence } = renderWithProviders();
-    await act(async () => {
-      await Promise.resolve();
-    });
+  test("leaving the page sends immediately", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "A" },
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "AB" },
-    });
-
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Bye" } });
     await act(async () => {
       window.dispatchEvent(new Event("pagehide"));
-      await Promise.resolve();
+      await flushMicrotasks();
     });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(2);
+
+    expect(persistence.repository.applyOps).toHaveBeenCalledTimes(1);
   });
 
-  test("hidden tab flush bypasses debounce and throttle", async () => {
-    const { persistence } = renderWithProviders();
+  test("offline edits survive a reload and are sent once the server is reachable", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    const workingApplyOps = persistence.repository.applyOps;
+    persistence.repository.applyOps = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    const first = renderApp(persistence);
+    await act(flushMicrotasks);
+
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Written offline" } });
     await act(async () => {
-      await Promise.resolve();
+      vi.advanceTimersByTime(600);
+      await flushMicrotasks();
     });
+    first.unmount();
+    expect(persistence.getOutbox()).toHaveLength(1);
 
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "A" },
-    });
-
+    persistence.repository.applyOps = workingApplyOps;
+    renderApp(persistence);
+    await act(flushMicrotasks);
     await act(async () => {
-      vi.advanceTimersByTime(3000);
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByLabelText("Note title"), {
-      target: { value: "AB" },
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushMicrotasks();
     });
 
-    await act(async () => {
-      Object.defineProperty(document, "visibilityState", {
-        configurable: true,
-        value: "hidden",
-      });
-      document.dispatchEvent(new Event("visibilitychange"));
-      await Promise.resolve();
-    });
-    expect(persistence.repository.save).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText("Note title")).toHaveValue("Written offline");
+    expect(persistence.getOutbox()).toEqual([]);
+    const noteId = Object.keys(persistence.getState().notesDocs)[0];
+    expect(persistence.getState().notesDocs[noteId].title).toBe("Written offline");
   });
 });
 
-describe("AppProvider cache-first hydration", () => {
-  beforeEach(() => {
-    // Keep "today" on the fixture day so the load-time day advance does not
-    // create a local change that races the remote hydration being tested.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(2026, 2, 11, 8, 0, 0));
-  });
+describe("AppProvider server-first loading", () => {
+  beforeEach(useFixtureClock);
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  test("keeps a local card drag when a later remote hydration finishes", async () => {
-    installMatchMedia(false);
-    const auth = createMockAuthRepository({
-      userId: "user_1",
-      email: "test@example.com",
-      isVerified: true,
-      accessToken: "token_1",
-    });
-    const cachedState = appReducer(createInitialState("2026-03-11"), {
-      type: "create-content-card",
-      columnId: "content-column-inbox",
-      title: "Move this card",
-    });
-    const persistence = createMockPersistenceRepository(cachedState);
-    let finishRemoteHydration:
-      | NonNullable<Parameters<typeof persistence.repository.load>[0]["onRemoteSync"]>
-      | undefined;
-
-    persistence.repository.load = vi.fn(async ({ onRemoteSync }) => {
-      finishRemoteHydration = onRemoteSync;
-      return {
-        state: cachedState,
-        source: "local" as const,
-        status: "syncing" as const,
-        metadata: createPersistenceMetadata({
-          lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
-          lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
-        }),
-        conflictResolution: "none" as const,
-        notice: null,
-        errorMessage: null,
-        persistenceAvailable: true,
-      };
-    });
-
-    render(
-      <AuthProvider repository={auth.repository}>
-        <AppProvider repository={persistence.repository}>
-          <ContentPlannerSyncHarness />
-        </AppProvider>
-      </AuthProvider>,
-    );
-
-    expect(await screen.findByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-inbox",
-    );
-    await userEvent.click(screen.getByRole("button", { name: "move planner card" }));
-    expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-develop",
-    );
-
-    const remoteState = {
-      ...cachedState,
-      contentBoard: renameContentColumn(
-        cachedState.contentBoard,
-        "content-column-inbox",
-        "Capture",
-      ),
+  function withNoteTitle(title: string) {
+    const state = createInitialState("2026-03-11");
+    const noteId = state.uiState.selectedNoteId!;
+    return {
+      ...state,
+      notesDocs: { ...state.notesDocs, [noteId]: { ...state.notesDocs[noteId], title } },
     };
+  }
+
+  test("shows this device's copy read-only until the server's data arrives", async () => {
+    const persistence = createMockPersistenceRepository(withNoteTitle("Server title"));
+    const server = deferred<Awaited<ReturnType<typeof persistence.repository.loadServer>>>();
+    const realLoadServer = persistence.repository.loadServer;
+    persistence.repository.loadCached = vi.fn(() => ({
+      state: withNoteTitle("Cached title"),
+      metadata: createPersistenceMetadata(),
+    }));
+    persistence.repository.loadServer = vi.fn(() => server.promise);
+    renderApp(persistence);
+    await act(flushMicrotasks);
+
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("loading");
+    expect(screen.getByLabelText("Note title")).toHaveValue("Cached title");
+
+    // Content edits are blocked; UI-only actions still work.
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Typed too early" } });
+    expect(screen.getByLabelText("Note title")).toHaveValue("Cached title");
+    fireEvent.click(screen.getByRole("button", { name: "light" }));
+    expect(screen.getByTestId("theme-mode")).toHaveTextContent("light");
+
     await act(async () => {
-      finishRemoteHydration?.({
-        state: remoteState,
-        source: "remote",
-        status: "synced",
-        metadata: createPersistenceMetadata({
-          lastRemoteUpdatedAt: "2026-03-11T08:01:00.000Z",
-          lastRemoteUpdatedAtClient: "2026-03-11T08:01:00.000Z",
-        }),
-        conflictResolution: "remote-overwrote-local",
-        notice: "Newer changes from another device were loaded.",
-        errorMessage: null,
-        persistenceAvailable: true,
-      });
-      await Promise.resolve();
+      server.resolve(await realLoadServer({ userId: "user_1" }));
+      await flushMicrotasks();
     });
 
-    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Capture");
-    expect(screen.getByTestId("dragged-card-column")).toHaveTextContent(
-      "content-column-develop",
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
+    expect(screen.getByLabelText("Note title")).toHaveValue("Server title");
+    expect(screen.getByTestId("theme-mode")).toHaveTextContent("light");
+    expect(persistence.repository.applyOps).not.toHaveBeenCalled();
+  });
+
+  test("a stale device copy can never delete server history (2026-10-07)", async () => {
+    const serverState = createInitialState("2026-03-11");
+    for (const date of ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-10"]) {
+      serverState.dailyPages[date] = { date, markdown: `Notes ${date}`, todos: [] };
+    }
+    const persistence = createMockPersistenceRepository(serverState);
+    persistence.repository.loadCached = vi.fn(() => ({
+      state: createInitialState("2026-03-11"),
+      metadata: createPersistenceMetadata(),
+    }));
+    renderApp(persistence);
+    await act(flushMicrotasks);
+
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Edited" } });
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+      await flushMicrotasks();
+    });
+
+    const sentOps = vi.mocked(persistence.repository.applyOps).mock.calls.flatMap(([input]) => input.ops);
+    expect(sentOps.filter((op) => op.type === "delete")).toEqual([]);
+    expect(Object.keys(persistence.getState().dailyPages)).toEqual(
+      expect.arrayContaining(["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-10"]),
     );
   });
 
-  test("refreshes a clean workspace from PocketBase when the window regains focus", async () => {
-    installMatchMedia(false);
-    const auth = createMockAuthRepository({
-      userId: "user_1",
-      email: "test@example.com",
-      isVerified: true,
-      accessToken: "token_1",
-    });
-    const initialState = createInitialState("2026-03-11");
-    const refreshedState = {
-      ...initialState,
-      contentBoard: renameContentColumn(
-        initialState.contentBoard,
-        "content-column-inbox",
-        "Capture",
-      ),
-    };
-    const persistence = createMockPersistenceRepository(initialState);
-    const metadata = createPersistenceMetadata({
-      lastRemoteUpdatedAt: "2026-03-11T08:00:00.000Z",
-      lastRemoteUpdatedAtClient: "2026-03-11T08:00:00.000Z",
-    });
-    const loadResult = {
-      state: initialState,
-      source: "remote" as const,
-      status: "synced" as const,
-      metadata,
-      conflictResolution: "none" as const,
-      notice: null,
-      errorMessage: null,
-      persistenceAvailable: true,
-    };
-
-    persistence.repository.load = vi
+  test("never falls back to an empty workspace when the server can't be reached", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    const realLoadServer = persistence.repository.loadServer;
+    persistence.repository.loadServer = vi
       .fn()
-      .mockResolvedValueOnce(loadResult)
-      .mockResolvedValueOnce({
-        ...loadResult,
-        state: refreshedState,
-        metadata: createPersistenceMetadata({
-          lastRemoteUpdatedAt: "2026-03-11T08:02:00.000Z",
-          lastRemoteUpdatedAtClient: "2026-03-11T08:02:00.000Z",
-        }),
-      });
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementation(realLoadServer);
+    renderApp(persistence);
+    await act(flushMicrotasks);
 
-    render(
-      <AuthProvider repository={auth.repository}>
-        <AppProvider repository={persistence.repository}>
-          <ContentPlannerSyncHarness />
-        </AppProvider>
-      </AuthProvider>,
-    );
-
-    expect(await screen.findByTestId("hydrated-column-title")).toHaveTextContent(
-      "Inbox",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Can’t reach the server right now.");
+    expect(persistence.repository.applyOps).not.toHaveBeenCalled();
 
     await act(async () => {
-      window.dispatchEvent(new Event("focus"));
-      await Promise.resolve();
-      await Promise.resolve();
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await flushMicrotasks();
     });
 
-    expect(persistence.repository.load).toHaveBeenCalledTimes(2);
-    expect(screen.getByTestId("hydrated-column-title")).toHaveTextContent("Capture");
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("saved");
+  });
+
+  test("with a device copy but no server, the app stays read-only", async () => {
+    const persistence = createMockPersistenceRepository(createInitialState("2026-03-11"));
+    persistence.repository.loadCached = vi.fn(() => ({
+      state: withNoteTitle("Cached title"),
+      metadata: createPersistenceMetadata(),
+    }));
+    persistence.repository.loadServer = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    renderApp(persistence);
+    await act(flushMicrotasks);
+
+    expect(screen.getByTestId("sync-indicator")).toHaveTextContent("offline-readonly");
+    fireEvent.change(screen.getByLabelText("Note title"), { target: { value: "Nope" } });
+    expect(screen.getByLabelText("Note title")).toHaveValue("Cached title");
+    expect(persistence.repository.applyOps).not.toHaveBeenCalled();
+  });
+
+  test("refreshes from the server when the window regains focus", async () => {
+    const persistence = createMockPersistenceRepository(withNoteTitle("Before"));
+    renderApp(persistence);
+    await act(flushMicrotasks);
+    expect(screen.getByLabelText("Note title")).toHaveValue("Before");
+
+    persistence.setServerState(withNoteTitle("Changed on phone"));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await flushMicrotasks();
+    });
+
+    expect(persistence.repository.loadServer).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText("Note title")).toHaveValue("Changed on phone");
   });
 });

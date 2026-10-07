@@ -43,6 +43,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -71,6 +73,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -106,6 +110,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -157,6 +163,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -217,6 +225,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: true,
             hasUnsyncedChanges: true,
             isSaving: true,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -253,6 +263,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -282,6 +294,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
@@ -318,6 +332,8 @@ describe("TopNavbar", () => {
             hasPendingChanges: false,
             hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
           }}
           retrySync={retrySync}
@@ -329,38 +345,62 @@ describe("TopNavbar", () => {
     expect(retrySync).toHaveBeenCalled();
   });
 
-  test("shows relative saved message even when latest local changes are not yet synced", () => {
-    const dispatch = vi.fn();
+  function renderNavbarWithSync(sync: Partial<Parameters<typeof TopNavbar>[0]["sync"]>) {
     const auth = createMockAuthRepository({
       userId: "user_1",
       email: "test@example.com",
       isVerified: true,
       accessToken: "token_1",
     });
-    const state = createInitialState("2026-03-10");
 
     render(
       <AuthProvider repository={auth.repository}>
         <TopNavbar
-          state={state}
-          dispatch={dispatch}
+          state={createInitialState("2026-03-10")}
+          dispatch={vi.fn()}
           sync={{
-            status: "offline",
-            indicator: "unsynced",
+            status: "synced",
+            indicator: "saved",
             lastSavedAt: "2026-03-10T08:12:00.000Z",
             lastSyncedAt: "2026-03-10T08:00:00.000Z",
-            notice: "PocketBase is unavailable, so your changes are saved on this device.",
-            errorMessage: "Sync is offline right now.",
-            hasPendingChanges: true,
-            hasUnsyncedChanges: true,
+            notice: null,
+            errorMessage: null,
+            hasPendingChanges: false,
+            hasUnsyncedChanges: false,
             isSaving: false,
+            isReadOnly: false,
+            pendingCount: 0,
             persistenceAvailable: true,
+            ...sync,
           }}
           retrySync={vi.fn(async () => {})}
         />
       </AuthProvider>,
     );
+  }
 
-    expect(screen.getByText(/Last saved/)).toBeInTheDocument();
+  test("shows how many changes are waiting when edits haven't reached the server", () => {
+    renderNavbarWithSync({
+      status: "offline",
+      indicator: "unsynced",
+      errorMessage: "Sync is offline right now.",
+      hasPendingChanges: true,
+      hasUnsyncedChanges: true,
+      pendingCount: 2,
+    });
+
+    expect(screen.getByText("2 changes waiting")).toBeInTheDocument();
+  });
+
+  test("shows a read-only loading label until the server's data arrives", () => {
+    renderNavbarWithSync({ status: "loading", indicator: "loading", isReadOnly: true });
+
+    expect(screen.getByText("Loading latest…")).toBeInTheDocument();
+  });
+
+  test("shows offline read-only when the server can't be reached on start", () => {
+    renderNavbarWithSync({ status: "offline", indicator: "offline-readonly", isReadOnly: true });
+
+    expect(screen.getByText("Offline · read-only")).toBeInTheDocument();
   });
 });

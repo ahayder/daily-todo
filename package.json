@@ -19,6 +19,8 @@
     "pocketbase:local": "cd pocketbase-local && ./pocketbase serve",
     "pocketbase:schema:apply:local": "node --env-file=.env.test.local scripts/apply-pocketbase-schema.mjs",
     "pocketbase:seed:local": "node --env-file=.env.test.local scripts/seed-local-pocketbase.mjs",
+    "pocketbase:backups:enable": "node scripts/enable-pocketbase-backups.mjs",
+    "pocketbase:backups:enable:local": "node --env-file=.env.test.local scripts/enable-pocketbase-backups.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"

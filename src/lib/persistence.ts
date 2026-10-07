@@ -15,17 +15,13 @@ import {
   createDefaultTodoWorkspace,
   DEFAULT_TODO_WORKSPACE_ID,
 } from "@/lib/store";
+import type { ApplyOpResult, SyncOp } from "@/lib/sync-outbox";
 import type { AppState, CachedNoteBody, NoteSummary, TodoWorkspace, UIState } from "@/lib/types";
 
 export const APP_STATE_VERSION = 5;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
 
 export type PersistenceStatus = "idle" | "loading" | "syncing" | "synced" | "offline" | "error";
-export type PersistenceSource = "seed" | "local" | "remote" | "ephemeral";
-export type PersistenceConflictResolution =
-  | "none"
-  | "local-overwrote-remote"
-  | "remote-overwrote-local";
 
 export type PersistenceRecordKind =
   | "daily_page"
@@ -76,24 +72,11 @@ export type NoteBodySaveResult = {
   errorMessage: string | null;
 };
 
-export type PersistenceLoadResult = {
+export type ServerLoadResult = {
+  /** The server's data, normalized for the app (may include today's carried-over page). */
   state: AppState;
-  source: PersistenceSource;
-  status: PersistenceStatus;
-  metadata: PersistenceMetadata;
-  conflictResolution: PersistenceConflictResolution;
-  notice: string | null;
-  errorMessage: string | null;
-  persistenceAvailable: boolean;
-};
-
-export type PersistenceSaveResult = {
-  status: PersistenceStatus;
-  metadata: PersistenceMetadata;
-  conflictResolution: PersistenceConflictResolution;
-  notice: string | null;
-  errorMessage: string | null;
-  resolvedState?: AppState;
+  /** What actually exists on the server, keyed by sync record key. */
+  serverRecords: Record<string, PersistenceRecordMetadata>;
 };
 
 export type LocalCacheLoadResult = {
@@ -103,13 +86,6 @@ export type LocalCacheLoadResult = {
 
 export type LocalCacheWriteResult = {
   available: boolean;
-};
-
-export type RemoteSnapshot = {
-  state: unknown;
-  stateVersion: number;
-  updatedAt: string | null;
-  updatedAtClient: string | null;
 };
 
 export type SyncableUIState = Pick<
@@ -148,17 +124,15 @@ export type LocalOnlyUIState = Pick<
 >;
 
 export type PersistenceRepository = {
-  load(input: {
-    userId: string;
-    now?: Date;
-    onRemoteSync?: (result: PersistenceLoadResult) => void;
-  }): Promise<PersistenceLoadResult>;
-  save(input: {
-    userId: string;
-    state: AppState;
-    baseMetadata: PersistenceMetadata;
-    now?: Date;
-  }): Promise<PersistenceSaveResult>;
+  /** The device copy, shown read-only until fresh server data arrives. */
+  loadCached(input: { userId: string; now?: Date }): CachedAppStateEnvelope | null;
+  /** A pure read of the server. Never writes. Throws when the server can't be reached. */
+  loadServer(input: { userId: string; now?: Date }): Promise<ServerLoadResult>;
+  /** Sends this device's own queued changes, one record at a time. */
+  applyOps(input: { userId: string; ops: SyncOp[] }): Promise<ApplyOpResult[]>;
+  loadOutbox(input: { userId: string }): SyncOp[];
+  saveOutbox(input: { userId: string; ops: SyncOp[] }): void;
+  saveLocalCache(input: { userId: string; state: AppState; metadata: PersistenceMetadata }): void;
   loadNoteBody(input: {
     userId: string;
     noteId: string;
@@ -177,12 +151,6 @@ export type PersistenceRepository = {
     now?: Date;
   }): Promise<void>;
   evictExpiredCachedBodies(input: { userId?: string; now?: Date }): Promise<void>;
-  saveLocalCache?(input: {
-    userId: string;
-    state: AppState;
-    baseMetadata: PersistenceMetadata;
-    now?: Date;
-  }): void;
   clearUserData(input: { userId: string }): Promise<void>;
 };
 
@@ -190,16 +158,6 @@ export type LocalCacheStorage = {
   loadCached(input: { userId: string; now?: Date }): LocalCacheLoadResult;
   saveCached(input: { userId: string; envelope: CachedAppStateEnvelope }): LocalCacheWriteResult;
   clearCached(input: { userId: string }): LocalCacheWriteResult;
-};
-
-export type RemoteAppStateStore = {
-  loadSnapshot(input: { userId: string }): Promise<RemoteSnapshot | null>;
-  saveSnapshot(input: {
-    userId: string;
-    state: AppState;
-    updatedAtClient: string;
-    knownRemoteUpdatedAt: string | null;
-  }): Promise<RemoteSnapshot>;
 };
 
 export type RecentNoteBodiesStorage = {
@@ -469,6 +427,19 @@ export function tryParseAppState(input: unknown, now = new Date()): AppState | n
 
 export function normalizeAppState(input: unknown, now = new Date()): AppState {
   return tryParseAppState(input, now) ?? seedAppState(now);
+}
+
+/**
+ * Like normalizeAppState, but bad data throws instead of quietly becoming a
+ * brand-new empty workspace. Used for server data, where a silent reset could
+ * look like "everything was deleted".
+ */
+export function parseAppStateOrThrow(input: unknown, now = new Date()): AppState {
+  const state = tryParseAppState(input, now);
+  if (!state) {
+    throw new Error("Workspace data from the server failed validation.");
+  }
+  return state;
 }
 
 export function extractSyncableUIState(uiState: UIState): SyncableUIState {
