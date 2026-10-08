@@ -330,7 +330,7 @@ describe("appReducer theme mode", () => {
         type: "delete-content-column",
         columnId: column.id,
       }).contentBoard.columns,
-    ).toHaveLength(4);
+    ).toHaveLength(5);
 
     const singleColumn = {
       ...initial,

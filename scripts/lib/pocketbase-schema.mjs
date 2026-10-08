@@ -322,6 +322,20 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           required: false,
         },
         {
+          // NOT required: links are optional per platform; {} is a valid state.
+          name: "links",
+          type: "json",
+          required: false,
+        },
+        {
+          // NOT required. Explicit max: PocketBase's default text limit (5000)
+          // is far too small for a full video transcript.
+          name: "transcript",
+          type: "text",
+          required: false,
+          max: 200000,
+        },
+        {
           name: "updated_at_client",
           type: "date",
           required: true,

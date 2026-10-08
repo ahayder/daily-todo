@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   CONTENT_COLUMN_DEVELOP_ID,
+  CONTENT_COLUMN_EDITING_ID,
   CONTENT_COLUMN_INBOX_ID,
   CONTENT_COLUMN_PUBLISHED_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
@@ -36,6 +37,7 @@ import {
   renameContentColumn,
   reorderContentColumns,
   selectTodoWorkspaceInState,
+  updateContentCardPublishInfo,
   updateContentColumnSubtitle,
   updatePlannerPurposeInDay,
 } from "@/lib/store";
@@ -555,17 +557,17 @@ describe("planner state", () => {
     )!;
     expect(repairedInbox.subtitle).toBe("Capture the specific thought, not just the topic.");
     expect(repaired.contentBoard.columns.some((column) => column.id === customColumn.id)).toBe(false);
-    expect(repaired.contentBoard.columns).toHaveLength(4);
+    expect(repaired.contentBoard.columns).toHaveLength(5);
   });
 
   test("leaves a fresh canonical board untouched", () => {
     const state = createInitialState("2026-03-11");
     const repaired = ensureContentPlannerState(state);
     expect(repaired).toBe(state);
-    expect(repaired.contentBoard.columns).toHaveLength(4);
+    expect(repaired.contentBoard.columns).toHaveLength(5);
   });
 
-  test("folds a legacy board into the four stages, moving legacy cards to the end of Inbox", () => {
+  test("folds a legacy board into the five stages, moving legacy cards to the end of Inbox", () => {
     const state = createInitialState("2026-03-11");
     const legacyColumns = [
       { id: "content-column-ideas", title: "Ideas", subtitle: "Capture raw concepts" },
@@ -591,10 +593,11 @@ describe("planner state", () => {
       CONTENT_COLUMN_INBOX_ID,
       CONTENT_COLUMN_DEVELOP_ID,
       CONTENT_COLUMN_SHOOT_NEXT_ID,
+      CONTENT_COLUMN_EDITING_ID,
       CONTENT_COLUMN_PUBLISHED_ID,
     ]);
     // Existing custom subtitle on a canonical column is kept.
-    expect(repaired.contentBoard.columns[3].subtitle).toBe("Live and complete");
+    expect(repaired.contentBoard.columns[4].subtitle).toBe("Live and complete");
     expect(
       getContentCardsForColumn(repaired.contentCards, CONTENT_COLUMN_INBOX_ID).map((card) => card.title),
     ).toEqual(["Already inbox", "Idea A", "Idea B", "Ready one"]);
@@ -602,6 +605,42 @@ describe("planner state", () => {
 
     // Idempotent: a folded board is returned unchanged.
     expect(ensureContentPlannerState(repaired)).toBe(repaired);
+  });
+
+  test("adds the Editing stage to an existing four-stage board without moving cards", () => {
+    const state = createInitialState("2026-03-11");
+    const oldColumns = state.contentBoard.columns.filter((column) => column.id !== CONTENT_COLUMN_EDITING_ID);
+    const shoot = createContentCard({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, title: "Shoot me", order: 0 })!;
+    const repaired = ensureContentPlannerState({
+      ...state,
+      contentBoard: { ...state.contentBoard, columns: oldColumns },
+      contentCards: { [shoot.id]: shoot },
+    });
+    expect(repaired.contentBoard.columns.map((column) => column.id)).toEqual(
+      DEFAULT_CONTENT_COLUMNS.map((column) => column.id),
+    );
+    expect(repaired.contentBoard.columns[3]).toMatchObject({ id: CONTENT_COLUMN_EDITING_ID, title: "Editing" });
+    expect(repaired.contentCards[shoot.id]).toEqual(shoot);
+  });
+
+  test("saves published links and transcript, dropping empty values", () => {
+    const card = createContentCard({ columnId: CONTENT_COLUMN_PUBLISHED_ID, title: "Live", order: 0 })!;
+    const cards = { [card.id]: card };
+    expect(updateContentCardPublishInfo(cards, card.id, { links: { youtube: "  " }, transcript: " " })).toBe(cards);
+
+    const saved = updateContentCardPublishInfo(cards, card.id, {
+      links: { youtube: " https://youtu.be/x ", tiktok: "" },
+      transcript: "hello",
+    });
+    expect(saved[card.id].links).toEqual({ youtube: "https://youtu.be/x" });
+    expect(saved[card.id].transcript).toBe("hello");
+    expect(
+      updateContentCardPublishInfo(saved, card.id, { links: { youtube: "https://youtu.be/x" }, transcript: "hello" }),
+    ).toBe(saved);
+
+    const cleared = updateContentCardPublishInfo(saved, card.id, { links: {}, transcript: "" });
+    expect(cleared[card.id]).not.toHaveProperty("links");
+    expect(cleared[card.id]).not.toHaveProperty("transcript");
   });
 
   test("stamps publishedAt when a card enters Published and clears it when it leaves", () => {

@@ -2,7 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getNextStep, getShootIntent, getStageForColumn, WEEKLY_SHIP_GOAL } from "@/lib/content-conveyor";
+import { getNextStep, getShootIntent, getStageForColumn, isShootStage, WEEKLY_SHIP_GOAL } from "@/lib/content-conveyor";
 import type { ContentCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { STAGE_LABELS } from "./stage-labels";
@@ -30,7 +30,7 @@ export function WeekStrip({ shippedThisWeek, nextUpCard, onSelectCard, onAdvance
   const dots = Math.max(WEEKLY_SHIP_GOAL + 1, shippedThisWeek);
   const nextStep = nextUpCard ? getNextStep(nextUpCard.columnId) : null;
   const stage = nextUpCard ? getStageForColumn(nextUpCard.columnId) : null;
-  const intent = nextUpCard && stage === "shoot-next" ? getShootIntent(nextUpCard.notes) : "";
+  const intent = nextUpCard && isShootStage(stage) ? getShootIntent(nextUpCard.notes) : "";
 
   return (
     <section

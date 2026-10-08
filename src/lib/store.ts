@@ -5,6 +5,7 @@ import type {
   ContentBoard,
   ContentCard,
   ContentColumn,
+  ContentLinks,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -20,6 +21,7 @@ import type {
   Todo,
   TodoWorkspace,
 } from "@/lib/types";
+import { CONTENT_PLATFORMS } from "@/lib/types";
 
 export const PLANNER_DAY_ORDER: PlannerDayKey[] = [
   "monday",
@@ -42,6 +44,7 @@ export const DEFAULT_PLANNER_SUBTITLE =
 export const CONTENT_COLUMN_INBOX_ID = "content-column-inbox";
 export const CONTENT_COLUMN_DEVELOP_ID = "content-column-develop";
 export const CONTENT_COLUMN_SHOOT_NEXT_ID = "content-column-shoot-next";
+export const CONTENT_COLUMN_EDITING_ID = "content-column-editing";
 export const CONTENT_COLUMN_PUBLISHED_ID = "content-column-published";
 export const SHOOT_NEXT_SOFT_CAP = 5;
 
@@ -67,6 +70,11 @@ export const DEFAULT_CONTENT_COLUMNS: ContentColumn[] = [
     id: CONTENT_COLUMN_SHOOT_NEXT_ID,
     title: "Shoot next",
     subtitle: "Ready to record — max 5",
+  },
+  {
+    id: CONTENT_COLUMN_EDITING_ID,
+    title: "Editing",
+    subtitle: "Shot — now cutting it",
   },
   {
     id: CONTENT_COLUMN_PUBLISHED_ID,
@@ -854,6 +862,30 @@ export function updateContentCard(
   };
 }
 
+/** Save a card's published links and transcript; unchanged input is a no-op. */
+export function updateContentCardPublishInfo(
+  cards: Record<string, ContentCard>,
+  cardId: string,
+  updates: { links: ContentLinks; transcript: string },
+): Record<string, ContentCard> {
+  const card = cards[cardId];
+  if (!card) return cards;
+  const links: ContentLinks = {};
+  for (const platform of CONTENT_PLATFORMS) {
+    const url = updates.links[platform]?.trim();
+    if (url) links[platform] = url;
+  }
+  const transcript = updates.transcript.trim();
+  const currentLinks = card.links ?? {};
+  const sameLinks = CONTENT_PLATFORMS.every((platform) => (currentLinks[platform] ?? "") === (links[platform] ?? ""));
+  if (sameLinks && (card.transcript ?? "") === transcript) return cards;
+  // Only present when filled, matching how PocketBase records are read.
+  const next: ContentCard = { ...card, links, transcript, updatedAt: new Date().toISOString() };
+  if (Object.keys(links).length === 0) delete next.links;
+  if (!transcript) delete next.transcript;
+  return { ...cards, [cardId]: next };
+}
+
 export function deleteContentCard(
   cards: Record<string, ContentCard>,
   cardId: string,
@@ -1154,7 +1186,7 @@ export function ensureContentPlannerState(state: AppState): AppState {
     DEFAULT_CONTENT_COLUMNS.map((column) => [column.id, column.subtitle]),
   );
 
-  // The board is exactly the four fixed conveyor stages, in stage order.
+  // The board is exactly the five fixed conveyor stages, in stage order.
   // Missing stages are added (keeping any custom title/subtitle on existing
   // ones). Legacy/custom columns (old Ideas/Planned/In Progress/Ready) are
   // folded away: their cards move to the bottom of Inbox, keeping their
@@ -1191,7 +1223,7 @@ export function ensureContentPlannerState(state: AppState): AppState {
   const columnsChanged =
     columns.length !== state.contentBoard.columns.length ||
     columns.some((column, index) => column !== state.contentBoard.columns[index]);
-  // Cards outside the four stages (legacy or orphaned) go to the end of Inbox,
+  // Cards outside the five stages (legacy or orphaned) go to the end of Inbox,
   // ordered by their old column, then their old position.
   const strayCards = Object.values(state.contentCards)
     .filter((card) => !canonicalColumnIds.has(card.columnId))

@@ -3,6 +3,7 @@ import type {
   AppState,
   CategoryTheme,
   ContentCard,
+  ContentLinks,
   NoteBodyStatus,
   PlannerDayKey,
   PlannerEventColor,
@@ -71,6 +72,7 @@ export type AppAction =
       atTop?: boolean;
     }
   | { type: "update-content-card"; cardId: string; title: string; notes: string }
+  | { type: "update-content-card-publish-info"; cardId: string; links: ContentLinks; transcript: string }
   | { type: "move-content-card"; cardId: string; targetColumnId: string; targetIndex: number }
   | { type: "delete-content-card"; cardId: string }
   | { type: "restore-content-card"; card: ContentCard; index: number }

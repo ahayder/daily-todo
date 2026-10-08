@@ -31,6 +31,11 @@ export type ContentBoard = {
   updatedAt: string;
 };
 
+export const CONTENT_PLATFORMS = ["youtube", "facebook", "tiktok", "instagram", "linkedin"] as const;
+export type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
+/** Where a published video lives, per platform. Every link is optional. */
+export type ContentLinks = Partial<Record<ContentPlatform, string>>;
+
 export type ContentCard = {
   id: string;
   columnId: string;
@@ -40,6 +45,10 @@ export type ContentCard = {
   updatedAt: string;
   /** When the card last entered Published (drives the weekly shipped count). */
   publishedAt?: string | null;
+  /** Published video links (optional, per platform). */
+  links?: ContentLinks;
+  /** The published video's transcript (optional). */
+  transcript?: string;
 };
 
 export type PlannerEvent = {

@@ -57,7 +57,7 @@ describe("workspace transfer", () => {
     );
 
     expect(imported?.contentCards).toEqual({});
-    expect(imported?.contentBoard.columns).toHaveLength(4);
+    expect(imported?.contentBoard.columns).toHaveLength(5);
     expect(imported && "contentIdeas" in imported).toBe(false);
   });
 });

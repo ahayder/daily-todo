@@ -169,6 +169,9 @@ export function Workspace({ forcedView }: Props) {
                   notes: cardNotes,
                 })
               }
+              onUpdatePublishInfo={(cardId, links, transcript) =>
+                dispatch({ type: "update-content-card-publish-info", cardId, links, transcript })
+              }
               onMoveCard={(cardId, targetColumnId, targetIndex) =>
                 dispatch({
                   type: "move-content-card",

@@ -31,6 +31,7 @@ import { SECTION_LABELS, STAGE_LABELS } from "./stage-labels";
 
 const COLLAPSED_STORAGE_KEY = "dailytodo.content-shelf.collapsed";
 const DEFAULT_COLLAPSED: Record<ConveyorStage, boolean> = {
+  editing: false,
   "shoot-next": false,
   develop: false,
   inbox: false,
@@ -326,7 +327,7 @@ export function CardMoveItems({
           Move to stage
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
-          {(["inbox", "develop", "shoot-next", "published"] as const)
+          {(["inbox", "develop", "shoot-next", "editing", "published"] as const)
             .filter((target) => target !== stage)
             .map((target) => (
               <DropdownMenuItem key={target} onClick={() => onMoveCard(card.id, getColumnForStage(target), 0)}>

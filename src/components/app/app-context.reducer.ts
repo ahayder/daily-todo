@@ -46,6 +46,7 @@ import {
   reorderContentColumns,
   updateContentColumnSubtitle,
   updateContentCard,
+  updateContentCardPublishInfo,
   updatePlannerPurposeInDay,
   selectTodoWorkspaceInState,
 } from "@/lib/store";
@@ -426,6 +427,13 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
       const contentCards = updateContentCard(state.contentCards, action.cardId, {
         title: action.title,
         notes: action.notes,
+      });
+      return contentCards === state.contentCards ? state : { ...state, contentCards };
+    }
+    case "update-content-card-publish-info": {
+      const contentCards = updateContentCardPublishInfo(state.contentCards, action.cardId, {
+        links: action.links,
+        transcript: action.transcript,
       });
       return contentCards === state.contentCards ? state : { ...state, contentCards };
     }

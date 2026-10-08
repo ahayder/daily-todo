@@ -139,6 +139,8 @@ const contentCardSchema = z.object({
   order: z.number().int().min(0),
   updatedAt: z.string(),
   publishedAt: z.string().nullable().optional().catch(null),
+  links: z.record(z.string(), z.string()).optional().catch({}),
+  transcript: z.string().optional().catch(""),
 });
 
 export const appStateSchema = z.object({
