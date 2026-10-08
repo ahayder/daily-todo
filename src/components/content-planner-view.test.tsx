@@ -252,7 +252,7 @@ describe("ContentPlannerView — Focus + Shelf", () => {
     expect(screen.queryByRole("navigation", { name: "Content cards" })).not.toBeInTheDocument();
   });
 
-  test("Copy for ChatGPT copies the stage prompt plus the clean idea", async () => {
+  test("Copy for ChatGPT copies the prompt plus labelled title and sections", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -261,9 +261,12 @@ describe("ContentPlannerView — Focus + Shelf", () => {
     await user.click(screen.getByRole("button", { name: "Copy for ChatGPT" }));
 
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining("Turn this Idea Note into my Shoot Card format"),
+      expect.stringContaining("Write the SHOOT CARD section"),
     );
-    expect(writeText.mock.calls[0][0]).toContain("Why I quit Notion\n\nAngle: tools as procrastination");
+    const payload = writeText.mock.calls[0][0];
+    expect(payload).toContain("Title: Why I quit Notion");
+    expect(payload).toContain("Original Thought:\nToo much setup.");
+    expect(payload).toContain("Idea Note:\nAngle: tools as procrastination");
     expect(await screen.findByText(/Copied — paste in ChatGPT/)).toBeInTheDocument();
   });
 });

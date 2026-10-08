@@ -172,20 +172,20 @@ describe("buildChatGptClipboard", () => {
       title: "Remote job websites",
       notes: "positioning is the bottleneck",
     });
-    expect(result).toContain("Turn this raw idea into my Idea Note format");
-    expect(result).toContain("Remote job websites");
-    expect(result).toContain("positioning is the bottleneck");
+    expect(result).toContain("Write the IDEA NOTE section");
+    expect(result).toContain("Title: Remote job websites");
+    expect(result).toContain("Original Thought:\npositioning is the bottleneck");
   });
 
-  it("builds a Shoot Card prompt from the Idea Note section in develop", () => {
+  it("sends title, Original Thought and Idea Note, labelled, in develop", () => {
     const result = buildChatGptClipboard(CONTENT_COLUMN_DEVELOP_ID, {
       title: "Remote job websites",
       notes: "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle and hook",
     });
-    expect(result).toContain("Turn this Idea Note into my Shoot Card format");
-    expect(result).toContain("Remote job websites");
-    expect(result).toContain("angle and hook");
-    expect(result).not.toContain("dump");
+    expect(result).toContain("Write the SHOOT CARD section");
+    expect(result).toContain("Title: Remote job websites");
+    expect(result).toContain("Original Thought:\ndump");
+    expect(result).toContain("Idea Note:\nangle and hook");
   });
 
   it("never leaks conveyor headings into the payload", () => {
@@ -197,12 +197,13 @@ describe("buildChatGptClipboard", () => {
     expect(result).toContain("positioning is the bottleneck");
   });
 
-  it("falls back to the original-thought body when the Idea Note is still empty", () => {
+  it("skips an empty Idea Note", () => {
     const result = buildChatGptClipboard(CONTENT_COLUMN_DEVELOP_ID, {
       title: "Remote job websites",
       notes: "## ORIGINAL THOUGHT\n\nspend 7 days watching randomly\n\n## IDEA NOTE\n",
     });
     expect(result).toContain("spend 7 days watching randomly");
+    expect(result).not.toContain("Idea Note:");
     expect(result).not.toContain("##");
   });
 

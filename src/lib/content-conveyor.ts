@@ -184,20 +184,20 @@ export function stripSectionHeadings(notes: string | undefined): string {
 
 type ChatGptPromptConfig = {
   prompt: string;
-  /** Section to send as source; null = the whole card. */
-  sourceSection: ConveyorSection | null;
+  /** Sections sent as labelled source, in order (empty ones are skipped). */
+  sourceSections: ConveyorSection[];
 };
 
 const CHATGPT_PROMPTS: Partial<Record<ConveyorStage, ChatGptPromptConfig>> = {
   inbox: {
     prompt:
-      "Turn this raw idea into my Idea Note format — angle, hook, talk points, risk. Keep it tight, don't write a script.",
-    sourceSection: null,
+      "Below are my Title and Original Thought. Write the IDEA NOTE section for this video — angle, hook, talk points, risk. Keep it tight, don't write a script.",
+    sourceSections: ["ORIGINAL THOUGHT"],
   },
   develop: {
     prompt:
-      "Turn this Idea Note into my Shoot Card format — beats, hook options, visual hook, title.",
-    sourceSection: "IDEA NOTE",
+      "Below are my Title, Original Thought and Idea Note. Write the SHOOT CARD section for this video — beats, hook options, visual hook, title.",
+    sourceSections: ["ORIGINAL THOUGHT", "IDEA NOTE"],
   },
 };
 
@@ -207,12 +207,18 @@ export function hasChatGptPrompt(columnId: string): boolean {
   return Boolean(stage && CHATGPT_PROMPTS[stage]);
 }
 
+function toSectionLabel(name: ConveyorSection): string {
+  return name
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 /**
- * Build the clipboard payload for "Copy for ChatGPT": the stage's hidden prompt,
- * the card title as a headline, then a clean idea body. The body never includes
- * conveyor `## SECTION` heading scaffolding, so pasting it into ChatGPT reads as
- * plain intent. The prompt is never shown on the card. Returns `null` when the
- * stage has no prompt.
+ * Build the clipboard payload for "Copy for ChatGPT": the stage's hidden prompt
+ * (naming the section to write), then the title and each source section under a
+ * plain `Label:` line. Conveyor `## SECTION` markdown never leaks into the
+ * payload. An unsectioned card's whole text counts as its Original Thought.
+ * Returns `null` when the stage has no prompt.
  */
 export function buildChatGptClipboard(
   columnId: string,
@@ -223,16 +229,17 @@ export function buildChatGptClipboard(
   const config = CHATGPT_PROMPTS[stage];
   if (!config) return null;
 
-  const source = config.sourceSection
-    ? getSectionBody(card.notes, config.sourceSection) ||
-      getSectionBody(card.notes, "ORIGINAL THOUGHT") ||
-      stripSectionHeadings(card.notes)
-    : getSectionBody(card.notes, "ORIGINAL THOUGHT") ||
-      stripSectionHeadings(card.notes);
+  const sectioned = hasConveyorSections(card.notes);
+  const blocks = [card.title.trim() ? `Title: ${card.title.trim()}` : ""];
+  for (const name of config.sourceSections) {
+    const body =
+      !sectioned && name === "ORIGINAL THOUGHT"
+        ? (card.notes ?? "").trim()
+        : getSectionBody(card.notes, name);
+    if (body) blocks.push(`${toSectionLabel(name)}:\n${body}`);
+  }
 
-  const idea = [card.title, source].filter(Boolean).join("\n\n");
-
-  return `${config.prompt}\n\n${idea}`.trim();
+  return [config.prompt, ...blocks].filter(Boolean).join("\n\n");
 }
 
 /** Canonical stage order, top of the shelf first (what to do soonest). */
