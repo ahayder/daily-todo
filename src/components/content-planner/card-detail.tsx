@@ -21,13 +21,15 @@ import {
   getShootCardIntent,
   getStageForColumn,
   hasChatGptPrompt,
+  isShootStage as isShootStageFor,
   notesToDraft,
   type CardDraftSections,
   type ConveyorSection,
 } from "@/lib/content-conveyor";
-import type { ContentCard } from "@/lib/types";
+import { CONTENT_PLATFORMS, type ContentCard, type ContentLinks } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CardMoveItems } from "./content-shelf";
+import { PLATFORM_LABELS, PublishInfo } from "./publish-info";
 import { ShootCardView } from "./shoot-card-view";
 import { SECTION_LABELS, SECTION_PLACEHOLDERS } from "./stage-labels";
 
@@ -39,17 +41,35 @@ function draftFromCard(card: ContentCard): Draft {
   return { title: card.title, sections: notesToDraft(card.notes) };
 }
 
+export type CardFocusTarget = ConveyorSection | "LINKS";
+
+/** Markdown copy of a card: title, notes, then links and transcript if any. */
+function cardToMarkdown(card: ContentCard, title: string, notes: string): string {
+  const links = CONTENT_PLATFORMS.filter((platform) => card.links?.[platform]).map(
+    (platform) => `- ${PLATFORM_LABELS[platform]}: ${card.links?.[platform]}`,
+  );
+  return [
+    title,
+    notes,
+    links.length > 0 ? `## LINKS\n\n${links.join("\n")}` : "",
+    card.transcript ? `## TRANSCRIPT\n\n${card.transcript}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export type CardDetailProps = {
   card: ContentCard;
   /** Position of the card within its stage (for Move up / Move to top). */
   index: number;
   /** `pane`: desktop right side. `sheet`: phone full screen with a Back button. */
   layout: "pane" | "sheet";
-  /** Section to focus once (e.g. right after "Develop this"). */
-  focusSection: ConveyorSection | null;
+  /** Field to focus once (a section after "Develop this", links after publishing). */
+  focusSection: CardFocusTarget | null;
   onFocusHandled: () => void;
   onBack?: () => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onUpdatePublishInfo: (cardId: string, links: ContentLinks, transcript: string) => void;
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onAdvance: (cardId: string, title: string, notes: string) => void;
   onDeleteCard: (cardId: string) => void;
@@ -68,6 +88,7 @@ export function CardDetail({
   onFocusHandled,
   onBack,
   onUpdateCard,
+  onUpdatePublishInfo,
   onMoveCard,
   onAdvance,
   onDeleteCard,
@@ -80,7 +101,8 @@ export function CardDetail({
   const nextStep = getNextStep(card.columnId);
   const sections = getEditorSections(card.columnId, card.notes);
   // From Shoot next on, the Shoot card leads; earlier sections fold away.
-  const isShootStage = stage === "shoot-next" || stage === "published";
+  const isShootStage = isShootStageFor(stage);
+  const firstLinkRef = useRef<HTMLInputElement | null>(null);
   const [shootEditing, setShootEditing] = useState(false);
   const [earlierOpen, setEarlierOpen] = useState(false);
 
@@ -133,7 +155,7 @@ export function CardDetail({
 
   useLayoutEffect(() => {
     if (!focusSection) return;
-    const target = sectionRefs.current[focusSection];
+    const target = focusSection === "LINKS" ? firstLinkRef.current : sectionRefs.current[focusSection];
     if (!target) return;
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -171,9 +193,7 @@ export function CardDetail({
     const payload =
       kind === "chatgpt"
         ? buildChatGptClipboard(card.columnId, { title, notes })
-        : notes
-          ? `${title}\n\n${notes}`
-          : title;
+        : cardToMarkdown(card, title, notes);
     if (!payload) return;
     try {
       await navigator.clipboard.writeText(payload);
@@ -324,6 +344,10 @@ export function CardDetail({
         ) : null}
 
         <div className="mt-4 flex flex-col gap-5">{leadSections.map(renderSectionField)}</div>
+
+        {stage === "published" ? (
+          <PublishInfo card={card} firstFieldRef={firstLinkRef} onSave={onUpdatePublishInfo} />
+        ) : null}
 
         {earlierSections.length > 0 ? (
           <section aria-labelledby={`card-${card.id}-earlier-label`} className="mt-6 border-t border-border pt-3">

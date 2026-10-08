@@ -5,6 +5,7 @@ export const STAGE_LABELS: Record<ConveyorStage, string> = {
   inbox: "Ideas",
   develop: "Develop",
   "shoot-next": "Shoot next",
+  editing: "Editing",
   published: "Published",
 };
 

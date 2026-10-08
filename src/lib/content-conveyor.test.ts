@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CONTENT_COLUMN_DEVELOP_ID,
+  CONTENT_COLUMN_EDITING_ID,
   CONTENT_COLUMN_INBOX_ID,
   CONTENT_COLUMN_PUBLISHED_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
@@ -14,6 +15,7 @@ import {
   draftToNotes,
   getEditorSections,
   getNextUpCard,
+  SHELF_STAGE_ORDER,
   getRowSnippet,
   getSectionFill,
   getShootIntent,
@@ -62,8 +64,13 @@ describe("getNextStep", () => {
     });
   });
 
-  it("advances shoot next → published without adding a section", () => {
+  it("advances shoot next → editing → published without adding a section", () => {
     expect(getNextStep(CONTENT_COLUMN_SHOOT_NEXT_ID)).toEqual({
+      label: "Start editing",
+      nextColumnId: CONTENT_COLUMN_EDITING_ID,
+      sectionToAdd: null,
+    });
+    expect(getNextStep(CONTENT_COLUMN_EDITING_ID)).toEqual({
       label: "Mark published",
       nextColumnId: CONTENT_COLUMN_PUBLISHED_ID,
       sectionToAdd: null,
@@ -183,6 +190,7 @@ describe("buildChatGptClipboard", () => {
       notes: "## ORIGINAL THOUGHT\n\ndump\n\n## IDEA NOTE\n\nangle and hook",
     });
     expect(result).toContain("Write the SHOOT CARD section");
+    expect(result).toContain("Always include a CTA (call to action) as its own numbered part");
     expect(result).toContain("Title: Remote job websites");
     expect(result).toContain("Original Thought:\ndump");
     expect(result).toContain("Idea Note:\nangle and hook");
@@ -259,9 +267,10 @@ describe("shelf helpers", () => {
     expect(getRowSnippet({ columnId: CONTENT_COLUMN_DEVELOP_ID, notes })).toBe("angle one · hook two");
     expect(getRowSnippet({ columnId: CONTENT_COLUMN_SHOOT_NEXT_ID, notes })).toBe("angle one · hook two");
     expect(getRowSnippet({ columnId: CONTENT_COLUMN_INBOX_ID, notes: "" })).toBe("");
+    expect(SHELF_STAGE_ORDER[0]).toBe("editing");
   });
 
-  it("getNextUpCard prefers the top of Shoot next, then Develop", () => {
+  it("getNextUpCard prefers the top of Editing, then Shoot next, then Develop", () => {
     const make = (id: string, columnId: string): ContentCard => ({
       id,
       columnId,
@@ -277,6 +286,8 @@ describe("shelf helpers", () => {
     expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("dev");
     byColumn[CONTENT_COLUMN_SHOOT_NEXT_ID] = [make("shoot", CONTENT_COLUMN_SHOOT_NEXT_ID)];
     expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("shoot");
+    byColumn[CONTENT_COLUMN_EDITING_ID] = [make("edit", CONTENT_COLUMN_EDITING_ID)];
+    expect(getNextUpCard((id) => byColumn[id] ?? [])?.id).toBe("edit");
     expect(getNextUpCard(() => [])).toBeNull();
   });
 

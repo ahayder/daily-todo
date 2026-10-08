@@ -16,14 +16,13 @@ import {
   getStageForColumn,
   SHELF_STAGE_ORDER,
   WEEKLY_SHIP_GOAL,
-  type ConveyorSection,
   type ConveyorStage,
 } from "@/lib/content-conveyor";
 import { CONTENT_FONT_SCALE_MAX, CONTENT_FONT_SCALE_MIN } from "@/lib/content-font-scale";
 import { CONTENT_COLUMN_INBOX_ID, CONTENT_COLUMN_PUBLISHED_ID, getContentCardsForColumn } from "@/lib/store";
-import type { ContentBoard, ContentCard } from "@/lib/types";
+import type { ContentBoard, ContentCard, ContentLinks } from "@/lib/types";
 import { CaptureBox } from "./capture-box";
-import { CardDetail } from "./card-detail";
+import { CardDetail, type CardFocusTarget } from "./card-detail";
 import { ContentEmptyState } from "./content-empty-state";
 import { ContentShelf } from "./content-shelf";
 import { IdeasReview } from "./ideas-review";
@@ -38,6 +37,7 @@ export type ContentPlannerViewProps = {
   onIncreaseFontScale?: () => void;
   onAddCard: (columnId: string, title: string, notes?: string, options?: { atTop?: boolean }) => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
+  onUpdatePublishInfo: (cardId: string, links: ContentLinks, transcript: string) => void;
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onDeleteCard: (cardId: string) => void;
   onRestoreCard: (card: ContentCard, index: number) => void;
@@ -58,6 +58,7 @@ export function ContentPlannerView({
   onIncreaseFontScale,
   onAddCard,
   onUpdateCard,
+  onUpdatePublishInfo,
   onMoveCard,
   onDeleteCard,
   onRestoreCard,
@@ -65,7 +66,7 @@ export function ContentPlannerView({
   const isSplit = useMediaQuery(MEDIA_QUERIES.split);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [focusRequest, setFocusRequest] = useState<{ cardId: string; section: ConveyorSection } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{ cardId: string; section: CardFocusTarget } | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const cardsByStage = useMemo(
@@ -124,15 +125,14 @@ export function ContentPlannerView({
       if (title !== card.title || nextNotes !== card.notes) onUpdateCard(cardId, title, nextNotes);
       onMoveCard(cardId, step.nextColumnId, 0);
 
-      if (step.nextColumnId === CONTENT_COLUMN_PUBLISHED_ID) {
-        // Shipped: let the open card hand over to whatever is next up.
-        if (options.focus) {
-          setSelectedId(null);
-          setIsSheetOpen(false);
-        }
-      } else if (options.focus) {
+      if (options.focus) {
         // Keep the card open as it moves stages.
         setSelectedId(cardId);
+      }
+      // Shipped: open on the link fields so they can be pasted right away.
+      if (step.nextColumnId === CONTENT_COLUMN_PUBLISHED_ID && (options.open || options.focus)) {
+        setFocusRequest({ cardId, section: "LINKS" });
+        if (options.open) selectCard(cardId);
       }
       // Show where to type next: open the card on its new, empty section.
       if (step.sectionToAdd && (options.open || options.focus)) {
@@ -178,6 +178,7 @@ export function ContentPlannerView({
       onFocusHandled={clearFocusRequest}
       onBack={isSplit ? undefined : () => setIsSheetOpen(false)}
       onUpdateCard={onUpdateCard}
+      onUpdatePublishInfo={onUpdatePublishInfo}
       onMoveCard={onMoveCard}
       onAdvance={(cardId, title, notes) => advanceCard(cardId, title, notes, { focus: true })}
       onDeleteCard={deleteCard}

@@ -32,6 +32,7 @@ import type {
   AppState,
   ContentBoard,
   ContentCard,
+  ContentLinks,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -40,6 +41,8 @@ import type {
   PlannerPreset,
   TodoWorkspace,
 } from "@/lib/types";
+
+import { CONTENT_PLATFORMS } from "@/lib/types";
 
 export { getSyncRecordValuesFromState } from "@/lib/sync-outbox";
 
@@ -105,6 +108,8 @@ type PocketBaseContentCardRecord = {
   notes?: string;
   position?: number;
   published_at?: string;
+  links?: unknown;
+  transcript?: string;
   updated?: string;
   updated_at_client?: string;
 };
@@ -190,6 +195,16 @@ function normalizePocketBaseDate(value: string | undefined): string | null {
   if (!value) return null;
   const time = Date.parse(value.replace(" ", "T"));
   return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+
+function normalizeContentLinks(value: unknown): ContentLinks | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const links: ContentLinks = {};
+  for (const platform of CONTENT_PLATFORMS) {
+    const url = (value as Record<string, unknown>)[platform];
+    if (typeof url === "string" && url.trim()) links[platform] = url.trim();
+  }
+  return Object.keys(links).length > 0 ? links : null;
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -694,6 +709,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
 
     for (const record of contentCards) {
       if (!record.card_id || !record.column_id || !record.title) continue;
+      const links = normalizeContentLinks(record.links);
       const value: ContentCard = {
         id: record.card_id,
         columnId: record.column_id,
@@ -702,6 +718,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         order: Math.max(0, Math.trunc(record.position ?? 0)),
         updatedAt: record.updated_at_client ?? record.updated ?? new Date(0).toISOString(),
         publishedAt: normalizePocketBaseDate(record.published_at),
+        // Only present when filled, so older cards keep their exact shape.
+        ...(links ? { links } : {}),
+        ...(record.transcript ? { transcript: record.transcript } : {}),
       };
       const key = `content_card:${record.card_id}`;
       values[key] = { key, kind: "content_card", value };
@@ -841,6 +860,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         position: record.value.order,
         // Empty string clears the optional date field in PocketBase.
         published_at: record.value.publishedAt ?? "",
+        links: record.value.links ?? {},
+        transcript: record.value.transcript ?? "",
         updated_at_client: updatedAtClient,
       };
       if (existing) {

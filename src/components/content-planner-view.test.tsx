@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -6,6 +7,7 @@ import { ContentPlannerView, type ContentPlannerViewProps } from "@/components/c
 import {
   CONTENT_COLUMN_DEVELOP_ID,
   CONTENT_COLUMN_INBOX_ID,
+  CONTENT_COLUMN_EDITING_ID,
   CONTENT_COLUMN_PUBLISHED_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
   createDefaultContentBoard,
@@ -73,6 +75,7 @@ function createProps(cards: ContentCard[], overrides: Partial<ContentPlannerView
     fontScale: 1,
     onAddCard: vi.fn(),
     onUpdateCard: vi.fn(),
+    onUpdatePublishInfo: vi.fn(),
     onMoveCard: vi.fn(),
     onDeleteCard: vi.fn(),
     onRestoreCard: vi.fn(),
@@ -182,9 +185,53 @@ describe("ContentPlannerView — Focus + Shelf", () => {
     expect(within(screen.getByRole("region", { name: "This week" })).getByText("1 of 4 shipped")).toBeInTheDocument();
   });
 
+  test("Start editing moves a Shoot next card to Editing", async () => {
+    const user = userEvent.setup();
+    const shot = makeCard("Shot one", CONTENT_COLUMN_SHOOT_NEXT_ID);
+    const props = createProps([shot]);
+    render(<ContentPlannerView {...props} />);
+
+    await user.click(within(screen.getByRole("article", { name: "Shot one" })).getByRole("button", { name: /Start editing/ }));
+
+    expect(props.onMoveCard).toHaveBeenCalledWith(shot.id, CONTENT_COLUMN_EDITING_ID, 0);
+  });
+
+  test("a Published card saves pasted links and a transcript", async () => {
+    const user = userEvent.setup();
+    const live = makeCard("Live one", CONTENT_COLUMN_PUBLISHED_ID);
+    const onUpdatePublishInfo = vi.fn();
+    // Keeps saved values like the real store does, so later saves build on them.
+    function Harness() {
+      const [card, setCard] = useState(live);
+      return (
+        <ContentPlannerView
+          {...createProps([card], {
+            onUpdatePublishInfo: (cardId, links, transcript) => {
+              onUpdatePublishInfo(cardId, links, transcript);
+              setCard((current) => ({ ...current, links, transcript }));
+            },
+          })}
+        />
+      );
+    }
+    render(<Harness />);
+    const props = { onUpdatePublishInfo };
+
+    await user.type(screen.getByLabelText("YouTube"), "https://youtu.be/abc");
+    await user.type(screen.getByLabelText("Transcript"), "hello");
+    await user.tab();
+
+    expect(props.onUpdatePublishInfo).toHaveBeenLastCalledWith(
+      live.id,
+      expect.objectContaining({ youtube: "https://youtu.be/abc" }),
+      "hello",
+    );
+    expect(screen.getByRole("link", { name: "Open on YouTube" })).toHaveAttribute("href", "https://youtu.be/abc");
+  });
+
   test("Mark published celebrates with the weekly count", async () => {
     const user = userEvent.setup();
-    const ready = makeCard("Ready one", CONTENT_COLUMN_SHOOT_NEXT_ID);
+    const ready = makeCard("Ready one", CONTENT_COLUMN_EDITING_ID);
     const props = createProps([ready]);
     render(<ContentPlannerView {...props} />);
 

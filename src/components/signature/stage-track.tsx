@@ -6,6 +6,7 @@ const STAGES: { id: ConveyorStage; label: string }[] = [
   { id: "inbox", label: "Ideas" },
   { id: "develop", label: "Develop" },
   { id: "shoot-next", label: "Shoot next" },
+  { id: "editing", label: "Editing" },
   { id: "published", label: "Published" },
 ];
 

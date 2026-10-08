@@ -1,5 +1,6 @@
 import {
   CONTENT_COLUMN_DEVELOP_ID,
+  CONTENT_COLUMN_EDITING_ID,
   CONTENT_COLUMN_INBOX_ID,
   CONTENT_COLUMN_PUBLISHED_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
@@ -10,14 +11,19 @@ import type { ContentCard } from "@/lib/types";
  * Content Conveyor helpers.
  *
  * The content planner models one canonical card per video that "grows" through
- * four fixed states. All of that knowledge lives here as pure functions so the
+ * five fixed states. All of that knowledge lives here as pure functions so the
  * UI stays thin and the behaviour is unit-testable. Card stages come from the
  * card's column id (never its user-editable title); section content lives as
  * markdown `##` headings inside the existing `notes` field, so nothing about
  * the persisted shape changes.
  */
 
-export type ConveyorStage = "inbox" | "develop" | "shoot-next" | "published";
+export type ConveyorStage = "inbox" | "develop" | "shoot-next" | "editing" | "published";
+
+/** Stages where the Shoot card leads the card (it is shot, or being shot). */
+export function isShootStage(stage: ConveyorStage | null): boolean {
+  return stage === "shoot-next" || stage === "editing" || stage === "published";
+}
 
 export const CONVEYOR_SECTIONS = [
   "ORIGINAL THOUGHT",
@@ -40,6 +46,7 @@ const COLUMN_TO_STAGE: Record<string, ConveyorStage> = {
   [CONTENT_COLUMN_INBOX_ID]: "inbox",
   [CONTENT_COLUMN_DEVELOP_ID]: "develop",
   [CONTENT_COLUMN_SHOOT_NEXT_ID]: "shoot-next",
+  [CONTENT_COLUMN_EDITING_ID]: "editing",
   [CONTENT_COLUMN_PUBLISHED_ID]: "published",
 };
 
@@ -69,6 +76,11 @@ const NEXT_STEP: Partial<Record<ConveyorStage, ConveyorNextStep>> = {
     sectionToAdd: "SHOOT CARD",
   },
   "shoot-next": {
+    label: "Start editing",
+    nextColumnId: CONTENT_COLUMN_EDITING_ID,
+    sectionToAdd: null,
+  },
+  editing: {
     label: "Mark published",
     nextColumnId: CONTENT_COLUMN_PUBLISHED_ID,
     sectionToAdd: null,
@@ -191,12 +203,12 @@ type ChatGptPromptConfig = {
 const CHATGPT_PROMPTS: Partial<Record<ConveyorStage, ChatGptPromptConfig>> = {
   inbox: {
     prompt:
-      "Below are my Title and Original Thought. Write the IDEA NOTE section for this video — angle, hook, talk points, risk. Keep it tight, don't write a script.",
+      "Below are my Title and Original Thought. Write the IDEA NOTE section for this video in my Idea Note format — angle, hook, talk points, risk. Keep it tight, don't write a script.",
     sourceSections: ["ORIGINAL THOUGHT"],
   },
   develop: {
     prompt:
-      "Below are my Title, Original Thought and Idea Note. Write the SHOOT CARD section for this video — beats, hook options, visual hook, title.",
+      "Below are my Title, Original Thought and Idea Note. Write the SHOOT CARD section for this video in my Shoot Card format — beats, hook options, visual hook, title. Always include a CTA (call to action) as its own numbered part: one clear action for the viewer, not just \"comment below\".",
     sourceSections: ["ORIGINAL THOUGHT", "IDEA NOTE"],
   },
 };
@@ -244,6 +256,7 @@ export function buildChatGptClipboard(
 
 /** Canonical stage order, top of the shelf first (what to do soonest). */
 export const SHELF_STAGE_ORDER: ConveyorStage[] = [
+  "editing",
   "shoot-next",
   "develop",
   "inbox",
@@ -254,6 +267,7 @@ const STAGE_TO_COLUMN: Record<ConveyorStage, string> = {
   inbox: CONTENT_COLUMN_INBOX_ID,
   develop: CONTENT_COLUMN_DEVELOP_ID,
   "shoot-next": CONTENT_COLUMN_SHOOT_NEXT_ID,
+  editing: CONTENT_COLUMN_EDITING_ID,
   published: CONTENT_COLUMN_PUBLISHED_ID,
 };
 
@@ -306,12 +320,12 @@ function toPlainSnippet(markdown: string, separator = " · "): string {
  */
 export function getRowSnippet(card: Pick<ContentCard, "columnId" | "notes">): string {
   const stage = getStageForColumn(card.columnId);
-  if (stage === "shoot-next" || stage === "published") {
+  if (isShootStage(stage)) {
     const intent = getShootIntent(card.notes);
     if (intent) return intent;
   }
   const preference: ConveyorSection[] =
-    stage === "shoot-next" || stage === "published"
+    isShootStage(stage)
       ? ["SHOOT CARD", "IDEA NOTE", "ORIGINAL THOUGHT"]
       : stage === "develop"
         ? ["IDEA NOTE", "ORIGINAL THOUGHT"]
@@ -398,6 +412,7 @@ const STAGE_SECTIONS: Record<ConveyorStage, ConveyorSection[]> = {
   inbox: ["ORIGINAL THOUGHT"],
   develop: ["ORIGINAL THOUGHT", "IDEA NOTE"],
   "shoot-next": ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"],
+  editing: ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"],
   published: ["ORIGINAL THOUGHT", "IDEA NOTE", "SHOOT CARD"],
 };
 
@@ -456,13 +471,15 @@ export function draftToNotes(
 }
 
 /**
- * The card to work on next: the top of Shoot next, else the top of Develop.
+ * The card to work on next: the top of Editing (finish what is shot), else the
+ * top of Shoot next, else the top of Develop.
  * `cardsByColumn` must already be sorted by order.
  */
 export function getNextUpCard(
   cardsByColumn: (columnId: string) => ContentCard[],
 ): ContentCard | null {
   return (
+    cardsByColumn(CONTENT_COLUMN_EDITING_ID)[0] ??
     cardsByColumn(CONTENT_COLUMN_SHOOT_NEXT_ID)[0] ??
     cardsByColumn(CONTENT_COLUMN_DEVELOP_ID)[0] ??
     null

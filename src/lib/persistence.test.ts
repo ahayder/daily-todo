@@ -30,6 +30,7 @@ describe("normalizeAppState", () => {
       "Inbox",
       "Develop",
       "Shoot next",
+      "Editing",
       "Published",
     ]);
     expect(state.contentCards).toEqual({});
@@ -74,7 +75,7 @@ describe("normalizeAppState", () => {
     expect(Object.keys(state.plannerPresets)).toHaveLength(1);
     expect(state.noteFolders[DEFAULT_NOTES_FOLDER_ID]).toBeDefined();
     expect(state.notesDocs.note_1.folderId).toBe(DEFAULT_NOTES_FOLDER_ID);
-    expect(state.contentBoard.columns).toHaveLength(4);
+    expect(state.contentBoard.columns).toHaveLength(5);
     expect(state.todoWorkspaces[DEFAULT_TODO_WORKSPACE_ID].name).toBe("Main");
   });
 
@@ -216,7 +217,7 @@ describe("normalizeAppState", () => {
       status: "finished",
       estimatedMinutes: null,
     });
-    expect(state.contentBoard.columns).toHaveLength(4);
+    expect(state.contentBoard.columns).toHaveLength(5);
   });
 
   test("rejects fractional card positions in persisted state", () => {
@@ -263,6 +264,7 @@ describe("normalizeAppState", () => {
       "Capture the specific thought, not just the topic.",
       "Ideas worth keeping",
       "Ready to record — max 5",
+      "Shot — now cutting it",
       "Done and live",
     ]);
   });
