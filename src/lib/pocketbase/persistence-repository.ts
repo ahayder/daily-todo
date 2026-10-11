@@ -32,6 +32,7 @@ import type {
   AppState,
   ContentBoard,
   ContentCard,
+  ContentSeries,
   ContentLinks,
   DailyPage,
   NoteDoc,
@@ -95,6 +96,7 @@ type PocketBaseContentBoardRecord = {
   id: string;
   owner: string;
   columns_json?: unknown;
+  series_json?: unknown;
   updated?: string;
   updated_at_client?: string;
 };
@@ -110,6 +112,7 @@ type PocketBaseContentCardRecord = {
   published_at?: string;
   links?: unknown;
   transcript?: string;
+  series_id?: string;
   updated?: string;
   updated_at_client?: string;
 };
@@ -205,6 +208,23 @@ function normalizeContentLinks(value: unknown): ContentLinks | null {
     if (typeof url === "string" && url.trim()) links[platform] = url.trim();
   }
   return Object.keys(links).length > 0 ? links : null;
+}
+
+function normalizeContentSeries(value: unknown): ContentSeries[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const { id, title, about, createdAt } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || !id || typeof title !== "string" || !title.trim()) return [];
+    return [
+      {
+        id,
+        title: title.trim(),
+        about: typeof about === "string" ? about : "",
+        createdAt: typeof createdAt === "string" ? createdAt : new Date(0).toISOString(),
+      },
+    ];
+  });
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -691,8 +711,11 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     }
 
     if (contentBoard) {
+      const series = normalizeContentSeries(contentBoard.series_json);
       const value: ContentBoard = {
         columns: safeArray(contentBoard.columns_json),
+        // Only present when the user has series, so older boards keep their shape.
+        ...(series.length > 0 ? { series } : {}),
         updatedAt:
           contentBoard.updated_at_client ?? contentBoard.updated ?? new Date(0).toISOString(),
       };
@@ -721,6 +744,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         // Only present when filled, so older cards keep their exact shape.
         ...(links ? { links } : {}),
         ...(record.transcript ? { transcript: record.transcript } : {}),
+        ...(record.series_id ? { seriesId: record.series_id } : {}),
       };
       const key = `content_card:${record.card_id}`;
       values[key] = { key, kind: "content_card", value };
@@ -841,6 +865,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       const payload = {
         owner: userId,
         columns_json: record.value.columns,
+        series_json: record.value.series ?? [],
         updated_at_client: updatedAtClient,
       };
       if (existing) {
@@ -862,6 +887,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         published_at: record.value.publishedAt ?? "",
         links: record.value.links ?? {},
         transcript: record.value.transcript ?? "",
+        // Empty string clears the optional field (card left its series).
+        series_id: record.value.seriesId ?? "",
         updated_at_client: updatedAtClient,
       };
       if (existing) {

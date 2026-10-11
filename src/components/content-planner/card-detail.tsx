@@ -26,8 +26,9 @@ import {
   type CardDraftSections,
   type ConveyorSection,
 } from "@/lib/content-conveyor";
-import { CONTENT_PLATFORMS, type ContentCard, type ContentLinks } from "@/lib/types";
+import { CONTENT_PLATFORMS, type ContentCard, type ContentLinks, type ContentSeries } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CardSeriesPicker } from "./card-series-picker";
 import { CardMoveItems } from "./content-shelf";
 import { PLATFORM_LABELS, PublishInfo } from "./publish-info";
 import { ShootCardView } from "./shoot-card-view";
@@ -73,6 +74,12 @@ export type CardDetailProps = {
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onAdvance: (cardId: string, title: string, notes: string) => void;
   onDeleteCard: (cardId: string) => void;
+  /** All series, and the one this card is in (null when none). */
+  seriesList: ContentSeries[];
+  cardSeries: ContentSeries | null;
+  onSetSeries: (cardId: string, seriesId: string | null) => void;
+  onNewSeries: (cardId: string) => void;
+  onOpenSeries: (seriesId: string) => void;
 };
 
 /**
@@ -92,6 +99,11 @@ export function CardDetail({
   onMoveCard,
   onAdvance,
   onDeleteCard,
+  seriesList,
+  cardSeries,
+  onSetSeries,
+  onNewSeries,
+  onOpenSeries,
 }: CardDetailProps) {
   const [draft, setDraft] = useState<Draft>(() => draftFromCard(card));
   const [copied, setCopied] = useState<"chatgpt" | "markdown" | null>(null);
@@ -192,7 +204,7 @@ export function CardDetail({
     const notes = currentNotes();
     const payload =
       kind === "chatgpt"
-        ? buildChatGptClipboard(card.columnId, { title, notes })
+        ? buildChatGptClipboard(card.columnId, { title, notes }, cardSeries)
         : cardToMarkdown(card, title, notes);
     if (!payload) return;
     try {
@@ -335,6 +347,17 @@ export function CardDetail({
           }}
           className="field-sizing-content w-full resize-none rounded-lg bg-transparent font-heading text-[1.5625em] font-bold leading-snug text-foreground outline-none focus-visible:bg-muted/50"
         />
+
+        <div className="mt-2">
+          <CardSeriesPicker
+            cardTitle={card.title}
+            current={cardSeries}
+            series={seriesList}
+            onSelect={(seriesId) => onSetSeries(card.id, seriesId)}
+            onNewSeries={() => onNewSeries(card.id)}
+            onOpenSeries={onOpenSeries}
+          />
+        </div>
 
         {intent ? (
           <div className="mt-3 rounded-xl bg-brand-subtle px-4 py-3 text-brand-subtle-foreground animate-enter">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ArrowUpToLine, ChevronDown, MoreHorizontal, MoveRight, Trash2 } from "lucide-react";
+import { ArrowUp, ArrowUpToLine, ChevronDown, Layers, MoreHorizontal, MoveRight, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useSyncExternalStore, type KeyboardEvent } from "react";
 import { SoftCapBadge } from "@/components/signature/stage-track";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,8 @@ type ContentShelfProps = {
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onDeleteCard: (cardId: string) => void;
   onReviewIdeas: () => void;
+  /** Series names by id, for the quiet series line on each row. */
+  seriesNames: Map<string, string>;
 };
 
 /**
@@ -120,6 +122,7 @@ export function ContentShelf({
   onMoveCard,
   onDeleteCard,
   onReviewIdeas,
+  seriesNames,
 }: ContentShelfProps) {
   const [collapsed, toggleCollapsed] = useCollapsedGroups();
   const now = new Date();
@@ -196,6 +199,7 @@ export function ContentShelf({
                       index={index}
                       isSelected={card.id === selectedCardId}
                       shipped={stage === "published" ? shippedLabel(card.publishedAt, now) : null}
+                      seriesName={card.seriesId ? (seriesNames.get(card.seriesId) ?? null) : null}
                       onSelect={() => onSelectCard(card.id)}
                       onMoveCard={onMoveCard}
                       onDelete={() => onDeleteCard(card.id)}
@@ -217,12 +221,13 @@ type ShelfRowProps = {
   index: number;
   isSelected: boolean;
   shipped: string | null;
+  seriesName: string | null;
   onSelect: () => void;
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onDelete: () => void;
 };
 
-function ShelfRow({ card, stage, index, isSelected, shipped, onSelect, onMoveCard, onDelete }: ShelfRowProps) {
+function ShelfRow({ card, stage, index, isSelected, shipped, seriesName, onSelect, onMoveCard, onDelete }: ShelfRowProps) {
   const snippet = getRowSnippet(card);
   const fill = getSectionFill(card.notes);
   const filledLabels = GROWTH_SECTIONS.filter((name) => fill[name]).map((name) => SECTION_LABELS[name]);
@@ -264,6 +269,13 @@ function ShelfRow({ card, stage, index, isSelected, shipped, onSelect, onMoveCar
             {filledLabels.length > 0 ? `Written: ${filledLabels.join(", ")}` : "Nothing written yet"}
           </span>
           {shipped ? <span>{shipped}</span> : null}
+          {seriesName ? (
+            <span className="flex min-w-0 items-center gap-1">
+              <Layers aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="sr-only">Series:</span>
+              <span className="truncate">{seriesName}</span>
+            </span>
+          ) : null}
         </span>
       </button>
       <RowMenu card={card} stage={stage} index={index} onMoveCard={onMoveCard} onDelete={onDelete} />

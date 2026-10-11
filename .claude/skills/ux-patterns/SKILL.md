@@ -35,7 +35,7 @@ description: Use when building forms, validation, loading states, errors, empty 
   showUndoToast({ title: "Task deleted", onUndo: () => dispatch({ type: "restore-todo", workspaceId, date, todo: snapshot, index }) });
   ```
   Always use `showUndoToast` (8s timeout, closes after Undo) — don't hand-roll `toast.add` for deletes. Snapshot the item, its index and its workspace/date before deleting so Undo restores it exactly (see `deleteTodoWithUndo` in `todos-view.tsx`). Side effects the delete caused (e.g. a stopped focus timer) are not restored — mention it if relevant.
-- Standard, big (workspace, folder, note, column): `ConfirmDialog` — title `Delete "{name}"?`, one consequence sentence, `Cancel` + `Delete {noun}`. Say "Delete", not "Remove". Never `window.confirm`.
+- Standard, big (workspace, folder, note, column, content series — its cards stay): `ConfirmDialog` — title `Delete "{name}"?`, one consequence sentence, `Cancel` + `Delete {noun}`. Say "Delete", not "Remove". Never `window.confirm`.
 - Allowed exception: Review inbox "tap again to delete" (fast triage).
 - Ask: whether the todo status-change confirmation stays; any delete that can't be undone and isn't in the list above.
 

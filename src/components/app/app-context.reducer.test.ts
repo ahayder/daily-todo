@@ -253,3 +253,49 @@ describe("content cards", () => {
     expect(appReducer(restored, { type: "restore-content-card", card, index: 1 })).toBe(restored);
   });
 });
+
+describe("content series", () => {
+  test("creates a series and links a card in one step, then unlinks on delete without deleting cards", () => {
+    let state = createInitialState("2026-03-10");
+    state = appReducer(state, { type: "create-content-card", columnId: CONTENT_COLUMN_INBOX_ID, title: "Budget" });
+    const [card] = getContentCardsForColumn(state.contentCards, CONTENT_COLUMN_INBOX_ID);
+
+    state = appReducer(state, { type: "create-content-series", seriesId: "money", title: "Money basics", cardId: card.id });
+    expect(state.contentBoard.series?.map((series) => series.title)).toEqual(["Money basics"]);
+    expect(state.contentCards[card.id].seriesId).toBe("money");
+
+    state = appReducer(state, { type: "update-content-series", seriesId: "money", title: "Money 101", about: "Students" });
+    expect(state.contentBoard.series?.[0]).toMatchObject({ title: "Money 101", about: "Students" });
+
+    state = appReducer(state, { type: "delete-content-series", seriesId: "money" });
+    expect(state.contentBoard.series).toBeUndefined();
+    expect(state.contentCards[card.id]).toBeDefined();
+    expect(state.contentCards[card.id].seriesId).toBeUndefined();
+  });
+
+  test("new ideas can start inside a series; unknown series ids are ignored", () => {
+    let state = createInitialState("2026-03-10");
+    state = appReducer(state, { type: "create-content-series", seriesId: "money", title: "Money basics" });
+    state = appReducer(state, {
+      type: "create-content-card",
+      columnId: CONTENT_COLUMN_INBOX_ID,
+      title: "In series",
+      atTop: true,
+      seriesId: "money",
+    });
+    state = appReducer(state, {
+      type: "create-content-card",
+      columnId: CONTENT_COLUMN_INBOX_ID,
+      title: "Ghost series",
+      seriesId: "gone",
+    });
+    const byTitle = Object.fromEntries(Object.values(state.contentCards).map((card) => [card.title, card]));
+    expect(byTitle["In series"].seriesId).toBe("money");
+    expect(byTitle["Ghost series"].seriesId).toBeUndefined();
+
+    const before = state;
+    expect(appReducer(before, { type: "set-content-card-series", cardId: byTitle["Ghost series"].id, seriesId: "gone" })).toBe(before);
+    const linked = appReducer(before, { type: "set-content-card-series", cardId: byTitle["Ghost series"].id, seriesId: "money" });
+    expect(linked.contentCards[byTitle["Ghost series"].id].seriesId).toBe("money");
+  });
+});

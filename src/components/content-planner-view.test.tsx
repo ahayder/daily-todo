@@ -79,6 +79,10 @@ function createProps(cards: ContentCard[], overrides: Partial<ContentPlannerView
     onMoveCard: vi.fn(),
     onDeleteCard: vi.fn(),
     onRestoreCard: vi.fn(),
+    onCreateSeries: vi.fn(),
+    onUpdateSeries: vi.fn(),
+    onDeleteSeries: vi.fn(),
+    onSetCardSeries: vi.fn(),
     ...overrides,
   };
 }
@@ -315,5 +319,45 @@ describe("ContentPlannerView — Focus + Shelf", () => {
     expect(payload).toContain("Original Thought:\nToo much setup.");
     expect(payload).toContain("Idea Note:\nAngle: tools as procrastination");
     expect(await screen.findByText(/Copied — paste in ChatGPT/)).toBeInTheDocument();
+  });
+});
+
+describe("ContentPlannerView — series", () => {
+  const board = {
+    ...createDefaultContentBoard(new Date("2026-07-29T00:00:00.000Z")),
+    series: [{ id: "money", title: "Money basics", about: "", createdAt: "2026-07-01T00:00:00.000Z" }],
+  };
+  const shipped = makeCard("Budget in 5", CONTENT_COLUMN_PUBLISHED_ID, { seriesId: "money" });
+  const planned = makeCard("Saving tips", CONTENT_COLUMN_DEVELOP_ID, { seriesId: "money" });
+
+  test("shows each series with its headline count and the series on its rows", () => {
+    render(<ContentPlannerView {...createProps([shipped, planned, idea], { board })} />);
+
+    const strip = screen.getByRole("region", { name: "Series" });
+    expect(within(strip).getByRole("button", { name: "Money basics, 1 shipped" })).toBeInTheDocument();
+    expect(screen.getAllByText("Money basics").length).toBeGreaterThan(0);
+  });
+
+  test("opens a series with its counts, and adds a new idea straight into it", async () => {
+    const user = userEvent.setup();
+    const onAddCard = vi.fn();
+    render(<ContentPlannerView {...createProps([shipped, planned], { board, onAddCard })} />);
+
+    await user.click(screen.getByRole("button", { name: "Money basics, 1 shipped" }));
+    const dialog = await screen.findByRole("dialog", { name: "Money basics" });
+    expect(within(dialog).getByText("1 shipped · 1 on the way")).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText("Add an idea to this series…"), "Debt snowball{Enter}");
+    expect(onAddCard).toHaveBeenCalledWith(CONTENT_COLUMN_INBOX_ID, "Debt snowball", undefined, {
+      atTop: true,
+      seriesId: "money",
+    });
+  });
+
+  test("with no series, the strip invites one small step", () => {
+    render(<ContentPlannerView {...createProps([idea])} />);
+    const strip = screen.getByRole("region", { name: "Series" });
+    expect(within(strip).getByText("Group videos that belong together.")).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: "New series" })).toBeInTheDocument();
   });
 });

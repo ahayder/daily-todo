@@ -17,6 +17,12 @@ one obvious next step. Components: `src/components/content-planner/`; logic: `sr
 - **Delete:** instant, 8 s Undo toast (`restore-content-card` puts it back at its index).
 - **Review** (`ideas-review.tsx`, Ideas header when 2+ ideas): one card at a time — Develop this / Keep for later / Delete; queue fixed on open so "N left" only goes down.
 - **Empty state** (`content-empty-state.tsx`): StageTrack + one illustrative, never-saved card.
+- **Series** (built 2026-10-11, not yet deployed): group videos; a card is in at most one series; open-ended, no episode order. Quiet by design — no effect on Next up, ship meter or stages; no per-series color.
+  - `series-strip.tsx` under This week: neutral chips "▤ Name · 5 shipped" (one count from `getSeriesHeadline`: shipped → on the way → ideas → "new"), ordered by `sortSeriesByActivity`, + ghost "New series" (`series-name-dialog.tsx`, opens the new series right away).
+  - `series-detail.tsx` (centered dialog ≥1024px, full-screen sheet below): editable name + "about" (400 ms autosave), stats (`formatSeriesStats`: "2 shipped · 3 on the way · 1 idea"; shipped = Published, on the way = Develop/Shoot next/Editing, ideas = Inbox), `InlineComposer` adds a linked idea at the top of Ideas, cards by stage (`getSeriesCardsByStage`), ⋯ Delete series via `ConfirmDialog` (videos stay, they just leave).
+  - `card-series-picker.tsx`: chip under the card title in `card-detail.tsx` — pick / New series… / Open series / Leave series. Shelf rows show a muted "▤ Name" line.
+  - Logic: `src/lib/content-series.ts`; store helpers `createContentSeries` / `addContentSeries` / `updateContentSeries` / `deleteContentSeries` / `setContentCardSeries` / `unlinkContentSeriesCards` in `src/lib/store.ts`. Actions: `create-content-series { seriesId, title, about?, cardId? }` (caller makes the id with `makeId("content-series")`), `update-content-series`, `delete-content-series` (unlinks cards — updates only, never deletes cards), `set-content-card-series { cardId, seriesId | null }` (unknown ids ignored); `create-content-card` takes optional `seriesId`.
+  - Copy for ChatGPT adds "Series: Name" + about after the Title line (`buildChatGptClipboard(columnId, card, series?)`).
 - A-/A+ reading size scales card text (em-based) via root `fontSize`.
 
 ## Persistence
@@ -24,9 +30,13 @@ one obvious next step. Components: `src/components/content-planner/`; logic: `sr
 - `publishedAt` (`content_cards.published_at`, non-required) is set by `moveContentCard` on entering Published, cleared on leaving. Older published cards have none and don't count.
 - `ensureContentPlannerState` normalizes to exactly the five stages in order (keeps custom titles/subtitles; older 4-stage boards gain Editing) and folds legacy/custom columns away: their cards go to the end of Inbox (by old column, then position). Idempotent.
 - `links` (json) and `transcript` (text, `max: 200000`) are non-required and only present when filled.
+- Series list lives on the board record as `content_boards.series_json` (json, non-required; same pattern as `todo_workspaces_json`, avoids a new sync record kind). `ContentBoard.series` is **absent** when empty (`deleteContentSeries` drops the key, matching how the server reads it back). Cards: `content_cards.series_id` (text, non-required, `""` = none) ↔ `ContentCard.seriesId` (only present when set). Mapping in `src/lib/pocketbase/persistence-repository.ts` (`normalizeContentSeries` drops entries without id/title); Zod in `src/lib/schema.ts`.
 
 ## Gotchas
-- Intentionally narrow: no column editing, tags, scoring, scheduling, filters or AI generation. Column reducer actions (`add-/rename-/update-…-subtitle/reorder-/delete-content-column`) still exist with tests but aren't in the UI.
+- Board-rebuilding helpers must spread the board (`...board`) or `series` is lost — fixed in `ensureContentPlannerState` and the column helpers in `src/lib/store.ts`.
+- A stale `seriesId` (series deleted) is kept on purpose (non-destructive normalization); the UI treats it as "no series" via `getCardSeries`.
+- Series fields need the prod schema applied (`pnpm pocketbase:schema:apply`) **before** shipping the code, or PocketBase silently drops them. As of 2026-10-11 applied to the local test DB only.
+- Intentionally narrow: no column editing, tags (series are the one exception), scoring, scheduling, filters or AI generation. Column reducer actions (`add-/rename-/update-…-subtitle/reorder-/delete-content-column`) still exist with tests but aren't in the UI.
 - Removed for good: Board/Gallery views, per-card collapse, move dialog, Markdown rendering of cards.
 - Selection, sheet state, review position and focus requests are ephemeral component state.
 - Changes to conveyor behavior need the user's product judgment; see [decisions.md](decisions.md).

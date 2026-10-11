@@ -6,6 +6,7 @@ import type {
   ContentCard,
   ContentColumn,
   ContentLinks,
+  ContentSeries,
   DailyPage,
   NoteDoc,
   NoteFolder,
@@ -636,6 +637,7 @@ export function createContentCard(input: {
   title: string;
   notes?: string;
   order: number;
+  seriesId?: string;
 }): ContentCard | null {
   const title = input.title.trim();
   if (!title || !input.columnId) {
@@ -649,6 +651,7 @@ export function createContentCard(input: {
     notes: input.notes?.trim() ?? "",
     order: Math.max(0, Math.trunc(input.order)),
     updatedAt: new Date().toISOString(),
+    ...(input.seriesId ? { seriesId: input.seriesId } : {}),
   };
 }
 
@@ -663,6 +666,7 @@ export function addContentColumn(
   }
 
   return {
+    ...board,
     columns: [...board.columns, column],
     updatedAt: new Date().toISOString(),
   };
@@ -680,6 +684,7 @@ export function renameContentColumn(
   }
 
   return {
+    ...board,
     columns: board.columns.map((candidate) =>
       candidate.id === columnId ? { ...candidate, title: normalizedTitle } : candidate,
     ),
@@ -699,6 +704,7 @@ export function updateContentColumnSubtitle(
   }
 
   return {
+    ...board,
     columns: board.columns.map((candidate) =>
       candidate.id === columnId
         ? { ...candidate, subtitle: normalizedSubtitle }
@@ -724,6 +730,7 @@ export function reorderContentColumns(
   columns.splice(overIndex, 0, activeColumn);
 
   return {
+    ...board,
     columns,
     updatedAt: new Date().toISOString(),
   };
@@ -743,6 +750,7 @@ export function deleteContentColumn(
   }
 
   return {
+    ...board,
     columns: board.columns.filter((column) => column.id !== columnId),
     updatedAt: new Date().toISOString(),
   };
@@ -884,6 +892,79 @@ export function updateContentCardPublishInfo(
   if (Object.keys(links).length === 0) delete next.links;
   if (!transcript) delete next.transcript;
   return { ...cards, [cardId]: next };
+}
+
+/** A new series, or null when the title is blank. */
+export function createContentSeries(input: {
+  id?: string;
+  title: string;
+  about?: string;
+}): ContentSeries | null {
+  const title = input.title.trim();
+  if (!title) return null;
+  return {
+    id: input.id || makeId("content-series"),
+    title,
+    about: input.about?.trim() ?? "",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function addContentSeries(board: ContentBoard, series: ContentSeries): ContentBoard {
+  if ((board.series ?? []).some((candidate) => candidate.id === series.id)) return board;
+  return { ...board, series: [...(board.series ?? []), series], updatedAt: new Date().toISOString() };
+}
+
+/** Rename a series or change what it is about; blank titles and no-ops are ignored. */
+export function updateContentSeries(
+  board: ContentBoard,
+  seriesId: string,
+  updates: { title: string; about: string },
+): ContentBoard {
+  const title = updates.title.trim();
+  const about = updates.about.trim();
+  const current = board.series?.find((series) => series.id === seriesId);
+  if (!current || !title || (current.title === title && current.about === about)) return board;
+  return {
+    ...board,
+    series: (board.series ?? []).map((series) => (series.id === seriesId ? { ...series, title, about } : series)),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Drop a series from the board. Its cards are kept — see `unlinkContentSeriesCards`. */
+export function deleteContentSeries(board: ContentBoard, seriesId: string): ContentBoard {
+  if (!board.series?.some((series) => series.id === seriesId)) return board;
+  const series = board.series.filter((candidate) => candidate.id !== seriesId);
+  // No empty list: a board without series matches how PocketBase reads it back.
+  const next: ContentBoard = { ...board, series, updatedAt: new Date().toISOString() };
+  if (series.length === 0) delete next.series;
+  return next;
+}
+
+/** Put a card in a series, or take it out (`null`). One series per card. */
+export function setContentCardSeries(
+  cards: Record<string, ContentCard>,
+  cardId: string,
+  seriesId: string | null,
+): Record<string, ContentCard> {
+  const card = cards[cardId];
+  if (!card || (card.seriesId ?? null) === seriesId) return cards;
+  // Only present when set, matching how PocketBase records are read.
+  const next: ContentCard = { ...card, updatedAt: new Date().toISOString() };
+  if (seriesId) next.seriesId = seriesId;
+  else delete next.seriesId;
+  return { ...cards, [cardId]: next };
+}
+
+/** Take every card out of a series (cards are updated, never deleted). */
+export function unlinkContentSeriesCards(
+  cards: Record<string, ContentCard>,
+  seriesId: string,
+): Record<string, ContentCard> {
+  return Object.values(cards)
+    .filter((card) => card.seriesId === seriesId)
+    .reduce((current, card) => setContentCardSeries(current, card.id, null), cards);
 }
 
 export function deleteContentCard(
@@ -1269,6 +1350,7 @@ export function ensureContentPlannerState(state: AppState): AppState {
     ...state,
     contentBoard: columnsChanged
       ? {
+          ...state.contentBoard,
           columns,
           updatedAt: repairTimestamp,
         }
