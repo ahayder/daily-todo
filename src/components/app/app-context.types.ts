@@ -70,12 +70,26 @@ export type AppAction =
       notes?: string;
       /** Insert at the top of the column instead of the bottom. */
       atTop?: boolean;
+      /** Start the card inside this series. */
+      seriesId?: string;
     }
   | { type: "update-content-card"; cardId: string; title: string; notes: string }
   | { type: "update-content-card-publish-info"; cardId: string; links: ContentLinks; transcript: string }
   | { type: "move-content-card"; cardId: string; targetColumnId: string; targetIndex: number }
   | { type: "delete-content-card"; cardId: string }
   | { type: "restore-content-card"; card: ContentCard; index: number }
+  | {
+      type: "create-content-series";
+      /** Made by the caller, so it can open or link the new series right away. */
+      seriesId: string;
+      title: string;
+      about?: string;
+      /** Put this card in the new series. */
+      cardId?: string;
+    }
+  | { type: "update-content-series"; seriesId: string; title: string; about: string }
+  | { type: "delete-content-series"; seriesId: string }
+  | { type: "set-content-card-series"; cardId: string; seriesId: string | null }
   | { type: "create-planner-preset"; name?: string }
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }

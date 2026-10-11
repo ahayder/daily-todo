@@ -5,7 +5,7 @@ import {
   CONTENT_COLUMN_PUBLISHED_ID,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
 } from "@/lib/store";
-import type { ContentCard } from "@/lib/types";
+import type { ContentCard, ContentSeries } from "@/lib/types";
 
 /**
  * Content Conveyor helpers.
@@ -229,12 +229,15 @@ function toSectionLabel(name: ConveyorSection): string {
  * Build the clipboard payload for "Copy for ChatGPT": the stage's hidden prompt
  * (naming the section to write), then the title and each source section under a
  * plain `Label:` line. Conveyor `## SECTION` markdown never leaks into the
- * payload. An unsectioned card's whole text counts as its Original Thought.
+ * payload. An unsectioned card's whole text counts as its Original Thought. A
+ * card in a series also sends the series name and what it is about.
  * Returns `null` when the stage has no prompt.
  */
 export function buildChatGptClipboard(
   columnId: string,
   card: Pick<ContentCard, "title" | "notes">,
+  /** The card's series, sent as context so the video fits it. */
+  series?: Pick<ContentSeries, "title" | "about"> | null,
 ): string | null {
   const stage = getStageForColumn(columnId);
   if (!stage) return null;
@@ -243,6 +246,10 @@ export function buildChatGptClipboard(
 
   const sectioned = hasConveyorSections(card.notes);
   const blocks = [card.title.trim() ? `Title: ${card.title.trim()}` : ""];
+  if (series?.title.trim()) {
+    const about = series.about.trim();
+    blocks.push(`Series: ${series.title.trim()}${about ? `\n${about}` : ""}`);
+  }
   for (const name of config.sourceSections) {
     const body =
       !sectioned && name === "ORIGINAL THOUGHT"

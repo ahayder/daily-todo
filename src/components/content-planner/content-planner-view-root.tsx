@@ -19,13 +19,23 @@ import {
   type ConveyorStage,
 } from "@/lib/content-conveyor";
 import { CONTENT_FONT_SCALE_MAX, CONTENT_FONT_SCALE_MIN } from "@/lib/content-font-scale";
-import { CONTENT_COLUMN_INBOX_ID, CONTENT_COLUMN_PUBLISHED_ID, getContentCardsForColumn } from "@/lib/store";
+import {
+  getCardSeries,
+  getSeriesCardsByStage,
+  getSeriesList,
+  getSeriesStats,
+  sortSeriesByActivity,
+} from "@/lib/content-series";
+import { CONTENT_COLUMN_INBOX_ID, CONTENT_COLUMN_PUBLISHED_ID, getContentCardsForColumn, makeId } from "@/lib/store";
 import type { ContentBoard, ContentCard, ContentLinks } from "@/lib/types";
 import { CaptureBox } from "./capture-box";
 import { CardDetail, type CardFocusTarget } from "./card-detail";
 import { ContentEmptyState } from "./content-empty-state";
 import { ContentShelf } from "./content-shelf";
 import { IdeasReview } from "./ideas-review";
+import { SeriesDetail } from "./series-detail";
+import { SeriesNameDialog } from "./series-name-dialog";
+import { SeriesStrip } from "./series-strip";
 import { WeekStrip } from "./week-strip";
 
 export type ContentPlannerViewProps = {
@@ -35,12 +45,21 @@ export type ContentPlannerViewProps = {
   fontScale?: number;
   onDecreaseFontScale?: () => void;
   onIncreaseFontScale?: () => void;
-  onAddCard: (columnId: string, title: string, notes?: string, options?: { atTop?: boolean }) => void;
+  onAddCard: (
+    columnId: string,
+    title: string,
+    notes?: string,
+    options?: { atTop?: boolean; seriesId?: string },
+  ) => void;
   onUpdateCard: (cardId: string, title: string, notes: string) => void;
   onUpdatePublishInfo: (cardId: string, links: ContentLinks, transcript: string) => void;
   onMoveCard: (cardId: string, targetColumnId: string, targetIndex: number) => void;
   onDeleteCard: (cardId: string) => void;
   onRestoreCard: (card: ContentCard, index: number) => void;
+  onCreateSeries: (seriesId: string, title: string, cardId?: string) => void;
+  onUpdateSeries: (seriesId: string, title: string, about: string) => void;
+  onDeleteSeries: (seriesId: string) => void;
+  onSetCardSeries: (cardId: string, seriesId: string | null) => void;
 };
 
 /**
@@ -62,12 +81,19 @@ export function ContentPlannerView({
   onMoveCard,
   onDeleteCard,
   onRestoreCard,
+  onCreateSeries,
+  onUpdateSeries,
+  onDeleteSeries,
+  onSetCardSeries,
 }: ContentPlannerViewProps) {
   const isSplit = useMediaQuery(MEDIA_QUERIES.split);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState<{ cardId: string; section: CardFocusTarget } | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [openSeriesId, setOpenSeriesId] = useState<string | null>(null);
+  /** Naming a new series; `cardId` joins it right away (from a card's picker). */
+  const [newSeriesFor, setNewSeriesFor] = useState<{ cardId?: string } | null>(null);
 
   const cardsByStage = useMemo(
     () =>
@@ -80,6 +106,20 @@ export function ContentPlannerView({
   const shippedThisWeek = countShippedThisWeek(cardList, new Date());
   const nextUpCard = getNextUpCard((columnId) => cardsByStage[getStageForColumn(columnId) ?? "inbox"] ?? []);
   const hasColumns = board.columns.length > 0;
+  const seriesList = getSeriesList(board);
+  const sortedSeries = useMemo(
+    () =>
+      sortSeriesByActivity(getSeriesList(board), cardList).map((series) => ({
+        series,
+        stats: getSeriesStats(series.id, cardList),
+      })),
+    [board, cardList],
+  );
+  const seriesNames = useMemo(
+    () => new Map(getSeriesList(board).map((series) => [series.id, series.title])),
+    [board],
+  );
+  const openSeries = seriesList.find((series) => series.id === openSeriesId) ?? null;
 
   // Wide screens always show a card: the chosen one, else the Next up card,
   // else the first card on the shelf.
@@ -182,6 +222,11 @@ export function ContentPlannerView({
       onMoveCard={onMoveCard}
       onAdvance={(cardId, title, notes) => advanceCard(cardId, title, notes, { focus: true })}
       onDeleteCard={deleteCard}
+      seriesList={seriesList}
+      cardSeries={getCardSeries(board, selectedCard)}
+      onSetSeries={onSetCardSeries}
+      onNewSeries={(cardId) => setNewSeriesFor({ cardId })}
+      onOpenSeries={setOpenSeriesId}
     />
   ) : null;
 
@@ -218,6 +263,11 @@ export function ContentPlannerView({
           onSelectCard={selectCard}
           onAdvanceCard={(cardId) => advanceStoredCard(cardId, { open: true })}
         />
+        <SeriesStrip
+          series={sortedSeries}
+          onOpenSeries={setOpenSeriesId}
+          onNewSeries={() => setNewSeriesFor({})}
+        />
         <CaptureBox
           onCapture={(title, notes) => {
             if (hasColumns) onAddCard(CONTENT_COLUMN_INBOX_ID, title, notes, { atTop: true });
@@ -237,6 +287,7 @@ export function ContentPlannerView({
                 onMoveCard={onMoveCard}
                 onDeleteCard={deleteCard}
                 onReviewIdeas={() => setIsReviewOpen(true)}
+                seriesNames={seriesNames}
               />
             </nav>
             {isSplit ? <div className="min-h-0">{detail}</div> : null}
@@ -257,6 +308,41 @@ export function ContentPlannerView({
           </DialogPrimitive.Portal>
         </DialogPrimitive.Root>
       ) : null}
+
+      <SeriesDetail
+        series={openSeries}
+        stats={openSeries ? getSeriesStats(openSeries.id, cardList) : { shipped: 0, onTheWay: 0, ideas: 0 }}
+        groups={openSeries ? getSeriesCardsByStage(openSeries.id, cardsByStage) : []}
+        layout={isSplit ? "dialog" : "sheet"}
+        typographyStyle={typographyStyle}
+        onClose={() => setOpenSeriesId(null)}
+        onUpdate={onUpdateSeries}
+        onAddIdea={(seriesId, title) => {
+          if (hasColumns) onAddCard(CONTENT_COLUMN_INBOX_ID, title, undefined, { atTop: true, seriesId });
+        }}
+        onOpenCard={(cardId) => {
+          setOpenSeriesId(null);
+          selectCard(cardId);
+        }}
+        onDelete={(seriesId) => {
+          onDeleteSeries(seriesId);
+          setOpenSeriesId(null);
+        }}
+      />
+
+      <SeriesNameDialog
+        open={newSeriesFor !== null}
+        onOpenChange={(open) => {
+          if (!open) setNewSeriesFor(null);
+        }}
+        onCreate={(title) => {
+          const seriesId = makeId("content-series");
+          const cardId = newSeriesFor?.cardId;
+          onCreateSeries(seriesId, title, cardId);
+          // From the strip, open the new series so its "about" can be written.
+          if (!cardId) setOpenSeriesId(seriesId);
+        }}
+      />
 
       <IdeasReview
         open={isReviewOpen}

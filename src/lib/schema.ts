@@ -126,8 +126,16 @@ const contentColumnSchema = z.object({
   subtitle: z.string().catch(""),
 });
 
+const contentSeriesSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1),
+  about: z.string().catch(""),
+  createdAt: z.string(),
+});
+
 const contentBoardSchema = z.object({
   columns: z.array(contentColumnSchema).min(1),
+  series: z.array(contentSeriesSchema).optional().catch([]),
   updatedAt: z.string(),
 });
 
@@ -141,6 +149,7 @@ const contentCardSchema = z.object({
   publishedAt: z.string().nullable().optional().catch(null),
   links: z.record(z.string(), z.string()).optional().catch({}),
   transcript: z.string().optional().catch(""),
+  seriesId: z.string().optional().catch(undefined),
 });
 
 export const appStateSchema = z.object({

@@ -159,6 +159,7 @@ export function Workspace({ forcedView }: Props) {
                   title,
                   notes: cardNotes,
                   atTop: options?.atTop,
+                  seriesId: options?.seriesId,
                 })
               }
               onUpdateCard={(cardId, title, cardNotes) =>
@@ -183,6 +184,16 @@ export function Workspace({ forcedView }: Props) {
               onDeleteCard={(cardId) => dispatch({ type: "delete-content-card", cardId })}
               onRestoreCard={(card, index) =>
                 dispatch({ type: "restore-content-card", card, index })
+              }
+              onCreateSeries={(seriesId, title, cardId) =>
+                dispatch({ type: "create-content-series", seriesId, title, cardId })
+              }
+              onUpdateSeries={(seriesId, title, about) =>
+                dispatch({ type: "update-content-series", seriesId, title, about })
+              }
+              onDeleteSeries={(seriesId) => dispatch({ type: "delete-content-series", seriesId })}
+              onSetCardSeries={(cardId, seriesId) =>
+                dispatch({ type: "set-content-card-series", cardId, seriesId })
               }
             />
           ) : (

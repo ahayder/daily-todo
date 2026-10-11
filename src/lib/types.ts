@@ -26,8 +26,19 @@ export type ContentColumn = {
   subtitle: string;
 };
 
+/** A group of videos that belong together. Open-ended: no target count, no order. */
+export type ContentSeries = {
+  id: string;
+  title: string;
+  /** What the series is about (optional). */
+  about: string;
+  createdAt: string;
+};
+
 export type ContentBoard = {
   columns: ContentColumn[];
+  /** The user's series (stored on the board record). Absent on older boards. */
+  series?: ContentSeries[];
   updatedAt: string;
 };
 
@@ -49,6 +60,8 @@ export type ContentCard = {
   links?: ContentLinks;
   /** The published video's transcript (optional). */
   transcript?: string;
+  /** The series this video belongs to (at most one). Only present when set. */
+  seriesId?: string;
 };
 
 export type PlannerEvent = {

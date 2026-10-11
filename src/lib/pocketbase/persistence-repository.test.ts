@@ -63,6 +63,7 @@ vi.mock("@/lib/pocketbase/client", () => ({
 }));
 
 const { createPocketBasePersistenceRepository } = await import("@/lib/pocketbase/persistence-repository");
+const { createDefaultContentBoard } = await import("@/lib/store");
 
 const OWNER = "user_1";
 const MAIN = "todo-workspace-main";
@@ -194,5 +195,53 @@ describe("PocketBase repository (server-first)", () => {
 
     expect(writes).toEqual(["create:daily_pages"]);
     expect(db.daily_pages[0]).toMatchObject({ owner: OWNER, workspace_id: MAIN, markdown: "Carried over" });
+  });
+});
+
+describe("Content series (PocketBase mapping)", () => {
+  const COLUMNS = createDefaultContentBoard().columns;
+  const SERIES = { id: "money", title: "Money basics", about: "For students", createdAt: "2026-10-01T00:00:00.000Z" };
+
+  test("reads series from the board and series_id from cards; empty values stay absent", async () => {
+    db.content_boards = [
+      { id: "board_1", owner: OWNER, columns_json: COLUMNS, series_json: [SERIES, { id: "", title: "broken" }], updated_at_client: "2026-10-07 08:00:00.000Z" },
+    ];
+    db.content_cards = [
+      { id: "c1", owner: OWNER, card_id: "in", column_id: "content-column-inbox", title: "In", position: 0, series_id: "money", updated_at_client: "2026-10-07 08:00:00.000Z" },
+      { id: "c2", owner: OWNER, card_id: "out", column_id: "content-column-inbox", title: "Out", position: 1, series_id: "", updated_at_client: "2026-10-07 08:00:00.000Z" },
+    ];
+    const repository = createPocketBasePersistenceRepository();
+
+    const result = await repository.loadServer({ userId: OWNER, now: new Date("2026-10-07T12:00:00Z") });
+
+    expect(result.state.contentBoard.series).toEqual([SERIES]);
+    expect(result.state.contentCards.in.seriesId).toBe("money");
+    expect("seriesId" in result.state.contentCards.out).toBe(false);
+  });
+
+  test("a board without series_json loads without a series list", async () => {
+    db.content_boards = [{ id: "board_1", owner: OWNER, columns_json: COLUMNS, updated_at_client: "2026-10-07 08:00:00.000Z" }];
+    const repository = createPocketBasePersistenceRepository();
+
+    const result = await repository.loadServer({ userId: OWNER, now: new Date("2026-10-07T12:00:00Z") });
+
+    expect(result.state.contentBoard.series ?? []).toEqual([]);
+  });
+
+  test("writes series_json and series_id (empty string when a card has no series)", async () => {
+    const repository = createPocketBasePersistenceRepository();
+    const card = { id: "in", columnId: "content-column-inbox", title: "In", notes: "", order: 0, updatedAt: "x" };
+    const board = { columns: [], series: [SERIES], updatedAt: "x" };
+
+    await repository.applyOps({
+      userId: OWNER,
+      ops: [
+        { key: "content_board:self", kind: "content_board", type: "upsert", record: { key: "content_board:self", kind: "content_board", value: board }, base: null, baseUpdatedAtClient: null, updatedAtClient: "2026-10-07T12:00:00.000Z" },
+        { key: "content_card:in", kind: "content_card", type: "upsert", record: { key: "content_card:in", kind: "content_card", value: card }, base: null, baseUpdatedAtClient: null, updatedAtClient: "2026-10-07T12:00:00.000Z" },
+      ] as SyncOp[],
+    });
+
+    expect(db.content_boards[0].series_json).toEqual([SERIES]);
+    expect(db.content_cards[0].series_id).toBe("");
   });
 });

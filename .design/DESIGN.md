@@ -125,6 +125,7 @@ Primitives in `src/components/ui/` use **Base UI**: `render` prop, not `asChild`
 - **Input / Textarea:** `bg-background`, 1px `input` border, `rounded-lg`; placeholder in voice ("Add a must-do task…").
 - **Navigation:** top pill track on `card` (rim in dark); active pill = `primary` fill; sync pill (dot + "Saved · 2 min ago") is the only global status. Sidebar active day = `card` with a `primary` count.
 - **Badge:** `chip` (card + border, muted text) and `sticker-1/2/3` (pastel + `-on` text); 13px, rounded-full.
+- **Series chip (Content Planner):** a neutral chip (border + `card`/`background`, muted text) with a lucide `Layers` icon and the series name — never a per-series color (no fourth pastel), never lilac. Counts are kind and only count what exists ("5 shipped · 2 on the way"), never what's missing. Used on the series strip, the card's series picker and as a muted meta line on shelf rows.
 - **Checkbox (task check):** 20px, `rounded-sm`, 2px `input` border, hover border `ring`; done fills with the group's sticker hue + `-on` check.
 - **Toast:** `src/components/ui/toast.tsx` (Base UI Toast, mounted once in `Providers`): inverted pill (`bg-foreground text-background`), message + tinted "Undo" action + dismiss, 44px targets on touch, safe-area bottom offset. Used for undoable deletes, not autosave.
 - **Page date (Todos):** heading font 30px; the day number sits on a butter (`--p2`) sticker tilted −2°. Only here.
@@ -140,14 +141,14 @@ Live in `src/components/signature/`. Inventory and usage: `.claude/skills/ui-cus
 | `NowCard` (`block` / `task` / `mini`) | "This is the one thing right now" — `now-bg` block, 60px ring timer (`--now-bar`), label, title (heading font), time left in DM Mono, next up; lilac rim + `--surface-shadow` | Planner NOW, Focus-mode timer, optional mini chip | lists, cards, settings; never a second one per screen; no warning color when over time |
 | `PriorityTab` | "How much this matters" — pastel sticker pill (`--pN` + `-on`) with symbol + word (`!! Must do`, `! Should do`, `~ Could do`, or the active label set) over a `--pN-soft` group wash | todo group headers, priority filters | task text, buttons, anything not a priority |
 | `WashiTag` | "This came with you" — butter washi tape (`--washi`), torn edges (clip-path), tilted 2°, text "From yesterday" / "3 days waiting" | todo rows, focus card, "Worth a look" review | finished tasks (hidden); more than one per row; never red, grows in weight (700 at 3+ days), not color |
-| `StageTrack` | "Where this idea is" — `Ideas › Develop › Shoot next › Published` (the Inbox stage reads as "Ideas"); current = primary-filled stamp with a 2px offset shadow, past = solid outline, future = dashed | content card detail, empty state | todos/planner; never keyed on editable column titles (use stage ids from `content-conveyor.ts`) |
+| `StageTrack` | "Where this idea is" — `Ideas › Develop › Shoot next › Editing › Published` (the Inbox stage reads as "Ideas"); current = primary-filled stamp with a 2px offset shadow, past = solid outline, future = dashed | content card detail, empty state | todos/planner; never keyed on editable column titles (use stage ids from `content-conveyor.ts`) |
 | `SoftCapBadge` | "Nudge, don't nag" — `N/5` chip in DM Mono that tints past the cap | Shoot next header | anything that blocks, modals, red; `aria-label="3 of 5"` |
 
 ## UX patterns
 
 How-to with components: `.claude/skills/ux-patterns`.
 
-- **Destructive:** small, recoverable items (a todo, a content card) → act instantly + Undo toast. Big deletes (workspace, folder, column, note) → `ConfirmDialog`: title "Delete '{name}'?", one consequence sentence, "Cancel" + destructive "Delete {noun}". Say "Delete", not "Remove". Never `window.confirm`. Review-inbox "tap again to delete" is an allowed triage exception.
+- **Destructive:** small, recoverable items (a todo, a content card) → act instantly + Undo toast. Big deletes (workspace, folder, column, note, content series) → `ConfirmDialog`: title "Delete '{name}'?", one consequence sentence, "Cancel" + destructive "Delete {noun}". Say "Delete", not "Remove". Never `window.confirm`. Review-inbox "tap again to delete" is an allowed triage exception.
 - **Loading:** cache-first — no spinner over a page; skeleton lines only on first load; spinners only inside buttons.
 - **Errors:** sync pill is the only global status; `InlineAlert` (warn/info) says what is safe first ("Saved on this device") then the fix. No toasts for autosave.
 - **Empty:** `EmptyState` = icon, title, one-line body, one action; teach by doing (Content Conveyor empty state is the model). Copy: "A fresh page. What's one thing for today?"

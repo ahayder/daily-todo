@@ -28,6 +28,12 @@ import {
   deleteTodoWorkspaceFromState,
   deletePlannerPurposeFromDay,
   deleteContentCard,
+  addContentSeries,
+  createContentSeries,
+  deleteContentSeries,
+  setContentCardSeries,
+  unlinkContentSeriesCards,
+  updateContentSeries,
   restoreContentCard,
   deleteContentColumn,
   DEFAULT_NOTES_FOLDER_ID,
@@ -411,6 +417,9 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
         title: action.title,
         notes: action.notes,
         order: getContentCardsForColumn(state.contentCards, action.columnId).length,
+        seriesId: state.contentBoard.series?.some((series) => series.id === action.seriesId)
+          ? action.seriesId
+          : undefined,
       });
       if (!card) {
         return state;
@@ -451,6 +460,42 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
     }
     case "delete-content-card": {
       const contentCards = deleteContentCard(state.contentCards, action.cardId);
+      return contentCards === state.contentCards ? state : { ...state, contentCards };
+    }
+    case "create-content-series": {
+      const series = createContentSeries({ id: action.seriesId, title: action.title, about: action.about });
+      if (!series) return state;
+      const contentBoard = addContentSeries(state.contentBoard, series);
+      if (contentBoard === state.contentBoard) return state;
+      return {
+        ...state,
+        contentBoard,
+        contentCards: action.cardId
+          ? setContentCardSeries(state.contentCards, action.cardId, series.id)
+          : state.contentCards,
+      };
+    }
+    case "update-content-series": {
+      const contentBoard = updateContentSeries(state.contentBoard, action.seriesId, {
+        title: action.title,
+        about: action.about,
+      });
+      return contentBoard === state.contentBoard ? state : { ...state, contentBoard };
+    }
+    case "delete-content-series": {
+      const contentBoard = deleteContentSeries(state.contentBoard, action.seriesId);
+      if (contentBoard === state.contentBoard) return state;
+      return {
+        ...state,
+        contentBoard,
+        contentCards: unlinkContentSeriesCards(state.contentCards, action.seriesId),
+      };
+    }
+    case "set-content-card-series": {
+      if (action.seriesId && !state.contentBoard.series?.some((series) => series.id === action.seriesId)) {
+        return state;
+      }
+      const contentCards = setContentCardSeries(state.contentCards, action.cardId, action.seriesId);
       return contentCards === state.contentCards ? state : { ...state, contentCards };
     }
     case "restore-content-card": {

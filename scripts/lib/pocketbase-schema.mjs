@@ -253,6 +253,12 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           required: false,
         },
         {
+          // NOT required: most boards have no series; [] is a valid state.
+          name: "series_json",
+          type: "json",
+          required: false,
+        },
+        {
           name: "updated_at_client",
           type: "date",
           required: true,
@@ -334,6 +340,12 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
           type: "text",
           required: false,
           max: 200000,
+        },
+        {
+          // NOT required: a card is in at most one series, usually none ("").
+          name: "series_id",
+          type: "text",
+          required: false,
         },
         {
           name: "updated_at_client",
