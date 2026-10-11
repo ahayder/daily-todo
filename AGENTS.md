@@ -22,6 +22,10 @@ Keep this file short and delegating only. Update `AGENTS.md` only when delegatio
 
 Do not update `AGENTS.md` for normal project-guidance/content changes; those belong in `CLAUDE.md`.
 
+## Knowledge Base
+
+Detailed project knowledge lives in `docs/kb/` (rules: `docs/kb/README.md`). Never read it in the main context — ask a subagent (Claude: `.claude/agents/kb-keeper.md`; other tools: any subagent told to follow `docs/kb/README.md`) for a brief before planning, and send it what you learned after finishing. See `CLAUDE.md` → "Knowledge base".
+
 ## Local Skill Reference
 
 Skill documentation is discoverable from the canonical source and local paths:
