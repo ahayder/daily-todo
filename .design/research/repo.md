@@ -1,143 +1,147 @@
-# Repo research — DailyTodo (checked 2026-10-01, branch `dev`, after revert aa86b68)
+# Repo research — DailyTodo (update run)
 
-Current look = **Warm Minimalism** (CLAUDE.md:128). The Ember Journal files (`.design/DESIGN.md`, `rollout.md`, `directions/`) are deleted (confident — `git show --stat aa86b68`).
+Checked 2026-10-14 · mode `repo`, variant **update** (compared against v1 brain: AGENTS.md block `ui-ux-pro:brain:start v1`, `.design/scaffold.md` updated 2026-10-01, no `.brain/`).
 
 ## 1. Stack
 
-| Area | Fact | Evidence |
-|---|---|---|
-| Framework | Next.js 16.1.6 App Router, React 19.2.3, TS 5, **static export** (`output: "export"`) | package.json; next.config.ts:8 |
-| Desktop | Tauri 2 (`@tauri-apps/api` 2.10, updater, process) | package.json |
-| Package mgr | pnpm 8.7.1 | package.json `packageManager` |
-| Styling | Tailwind v4.2 (`@tailwindcss/postcss`), `tw-animate-css`, `shadcn/tailwind.css`; one 4,845-line `globals.css` | src/app/globals.css:1-3 |
-| Components | shadcn v4 CLI, style `base-nova` (Base UI primitives, not Radix), baseColor neutral, no extra registries | components.json |
-| Icons | lucide-react 0.577 (19 files). `@tabler/icons-react` installed but **0 imports** | grep |
-| Editor | Tiptap 3.20 + tiptap-markdown; Excalidraw 0.18; tippy.js | package.json |
-| DnD | @dnd-kit core/sortable (content planner) | package.json |
-| Markdown view | react-markdown 10 + remark-gfm | package.json |
-| State/data | useReducer + Context, PocketBase 0.26, idb, zod 4, date-fns 4 | CLAUDE.md; package.json |
-| Forms | none (hand-rolled inputs) | grep |
-| Motion | tw-animate-css + 3 custom keyframes (`fadeIn`, `slideUp`, `scaleIn`) + `bubble-in`, `dtb-in`; canvas-confetti | globals.css:94-126, 2615, 2782 |
-| Tests | Vitest 4 + Testing Library + jsdom; 12 component tests in `src/components/*.test.tsx` | ls |
-| Storybook | none | ls |
-
-## 2. Design-system inventory
-
-### Primitives (`src/components/ui`, all Base UI-backed)
-| Primitive | Files using it (non-test) |
+| Area | Fact |
 |---|---|
-| tooltip | 12 (TooltipTrigger ~100 uses, no IconButton wrapper) |
-| alert-dialog | 6 (planner, updater, sidebar, content-planner, notes, todos) |
-| button | 6 — but `<Button>` only 22 uses vs **~108 raw `<button>`** (content-planner 36, todos 20, sidebar 18) |
-| input | 3 (`<Input>` 8 uses) vs raw `<input>/<textarea>` in 7 files |
-| popover, scroll-area | 2 each |
-| badge, dialog, select | 1 each |
-| checkbox | 0 (unused) |
+| Framework | Next.js 16.1.6 App Router, React 19.2.3, TS 5 (confident — package.json) |
+| Platforms | Web + Tauri 2 desktop shell, `@tauri-apps/plugin-updater` (confident — package.json) |
+| Package manager | pnpm 8.7.1 (confident — package.json `packageManager`) |
+| Styling | Tailwind v4 (`@tailwindcss/postcss` ^4.2.1), `tw-animate-css`, one 5,012-line `src/app/globals.css` (confident) |
+| Components | shadcn ^4 on `@base-ui/react` ^1.2 (not Radix) (confident — package.json) |
+| Icons | lucide-react only (36 import sites; no tabler/heroicons) (confident — grep) |
+| Fonts | Baloo Da 2, Nunito, DM Mono via next/font (confident — src/app/layout.tsx:2) |
+| Editor | Tiptap 3 + Excalidraw 0.18; dnd-kit; canvas-confetti (confident) |
+| State/data | useReducer + Context, PocketBase 0.26, idb, zod 4 (confident) |
+| Tests | Vitest + Testing Library + jsdom; no Storybook (confident) |
 
-Missing that screens hand-build: dropdown/menu (3 `role="menu"` impls), tabs/segmented toggle, textarea, separator, skeleton, sheet.
+## 2. Design system inventory (usage = non-test files importing it)
 
-### Higher-level/reused components
-None shared. Every view is a monolith: `content-planner-view-root.tsx` 2,601 lines, `todos-view.tsx` 2,047, `sidebar.tsx` 922, `planner-view.tsx` 681. No `src/hooks/` (components.json alias points to it but dir missing).
+| Kind | Item | Uses | Where |
+|---|---|---|---|
+| block | `ConfirmDialog` | 1 | content-planner/series-detail |
+| block | `InlineComposer` | 1 | series-detail |
+| block | `PageHeader` | 1 | content-planner-view-root |
+| block | `EmptyState` | **0** | — |
+| block | `InlineAlert` | **0** | — |
+| block | `SegmentedControl` | **0** | — |
+| signature | `StageTrack` / `SoftCapBadge` | 3 / 1 | content planner |
+| signature | `NowCard` · `PriorityTab` · `WashiTag` | **0 · 0 · 0** | — |
+| ui | `IconButton` | 7 | all content-planner |
+| ui | `DropdownMenu` · `Dialog` | 4 · 4 | content-planner |
+| ui | `AlertDialog` (direct) | 5 screens | planner, notes, todos, sidebar, desktop-update |
+| ui | `Tooltip` | 13 | everywhere |
+| ui | `Skeleton` · `Checkbox` · `Select` · `Separator` | **0** each | — |
+| ui | toast `showUndoToast` | 2 | todos-view:1483, content-planner-view-root:150 |
+| hook | `useMediaQuery` | 1 | content-planner-view-root |
 
-### Layout / shell
-`workspace/workspace.tsx` (sidebar + main, `isPlanner`/content-planner full-width branches), `top-navbar.tsx` (nav pills), `sidebar.tsx` (dates/notes tree + profile menu), `.app-shell` in CSS.
-
-### Tokens (`globals.css`)
-| Group | Names | Notes |
-|---|---|---|
-| Legacy custom (hex) | `--ink-900/700`, `--paper`, `--paper-strong`, `--line`, `--brand`, `--brand-soft`, `--warn`, `--surface-shadow` | used ~600x via `bg-[var(--…)]` arbitrary classes |
-| Priority | `--priority-1/2/3` + `-soft` | |
-| Planner | `--planner-teal/gold/rose/sage/lavender/track` | |
-| shadcn (oklch) | `--background … --sidebar-ring`, `--chart-1..5` (default blue, unused), `--radius: .625rem` | bridged in `@theme inline` (globals.css:4793) |
-| Scale vars | `--content-planner-font-xs/sm/micro`, `--content-planner-leading-6`, `--content-planner-card-max-height` | A-/A+ font-scale |
-
-The two systems are **not linked**: `--paper` (#faf8f4) and `--background` (oklch .95) are separate values; light `--primary` is near-black, while the product accent is `--brand` teal (confident — globals.css:8-61).
-
-### Fonts
-Source Sans 3 via `next/font` → `--font-body` (layout.tsx:2-9). JetBrains Mono referenced only as a CSS stack string, not loaded (globals.css:1278). `font-family` restated 9x in CSS.
-
-### Dark mode
-`.dark` class, `@custom-variant dark`. `themeMode` light/dark/system (default **"dark"**, store.ts:997), applied client-side (use-app-persistence-state.ts:680-705). `layout.tsx:24` hardcodes `className="dark"` → light users get a dark flash before hydration. Dark palette is cool blue-gray (oklch hue 247-252), 40 `.dark .x` override selectors.
-
-### Motion utilities
-Durations in CSS: 150ms ×80, 180 ×12, 120 ×10, 200 ×7; TSX `duration-150` ×54. `prefers-reduced-motion` handled in only 2 CSS blocks + planner-tour.
+Tokens: `src/app/globals.css` (`:root`, `.dark`, `@theme inline`); names match DESIGN.md (core shadcn + `--p1..3*`, `--now-*`, `--washi`, `--rule`, `--rim`, `--card-shadow`, `--duration-ui`). Dark default (`dark` class on `<html>` in layout.tsx:39). Motion utilities: `animate-enter/settle/stamp`, `press`.
 
 ## 3. Screens
 
-| Route | Component | Rating | Why |
-|---|---|---|---|
-| `/todos` (core) | todos-view.tsx | **legacy** | 2k lines; mixes 69 globals.css classes + 142 arbitrary Tailwind values; raw buttons |
-| `/notes` | notes-view.tsx | ok | small (230), CSS classes; `.empty-view` repeated 5x |
-| `/planner` | planner-view.tsx | ok → near target | recent Tailwind rewrite, uses AlertDialog/Tooltip; ~1,580 lines of now-dead planner CSS remain |
-| `/content-planner` | content-planner-view-root.tsx | ok | newest, feature-rich, but 431 arbitrary values, 36 raw buttons, 12 matchMedia calls |
-| Auth gate (any route) | auth-gate.tsx | ok | Tailwind + `rgb()`; sibling screens use `.auth-card` CSS |
-| `/auth/reset`, verification | password-reset-screen / verification-pending-screen | legacy | BEM CSS classes |
-| `/`, `/daily` | redirects → `/todos` | — | |
+| Route | Rating | Why |
+|---|---|---|
+| `/content-planner` | **ok → near target** | Rebuilt after 10-01 with PageHeader, IconButton, StageTrack, DropdownMenu, showUndoToast; still 6 raw `<button>` |
+| `/planner` | legacy | 76 `[var(--…)]`; no NowCard/SegmentedControl; "Remove this block?" copy (planner-view.tsx:525) |
+| `/todos` | legacy | 2,071 lines, 104 `[var(--…)]`, hand-built dialogs, `window.confirm` (todos-view.tsx:1495) |
+| `/notes` | legacy | hand-built `.empty-view` empty states (notes-view.tsx:112–198), legacy vars |
+| shell (top-navbar, sidebar) | legacy | `text-[var(--ink-900)]`, `bg-[var(--brand)]`, `text-xs` tooltips |
+| auth / `/auth/reset` | legacy | 58 legacy vars in auth-gate |
+| `/`, `/daily` | redirect | both redirect to `/todos` |
 
-Shell (top-navbar, sidebar): legacy (CSS classes, raw buttons).
+Validation candidates: **`/notes`** (small, clarity problem: hand-built empty states, delete confirm), **`/planner`** (should get NowCard + SegmentedControl), `/todos` (largest, riskiest).
 
-**Validation-screen candidates:** 1) `/todos` — the product's heart, most legacy, has priority groups/inline add/empty state. 2) `/notes` — small, renderable, exercises editor + empty state. 3) `/planner` NOW — cleanest code; good for checking the signature card.
+## 4. Repeated patterns done by hand (block candidates)
 
-## 4. Repeated hand-built patterns (block candidates)
+- **Confirm dialogs via raw AlertDialog** instead of `ConfirmDialog`: notes-view.tsx:91,167 · planner-view.tsx:525 · todos-view.tsx:829,1189 · sidebar.tsx:865 · desktop-update-provider.tsx:470.
+- **Empty states not using `EmptyState`**: notes-view.tsx:112,123,189,198 · content-planner/content-empty-state.tsx (custom, OK as signature teaching state but not documented).
+- **Horizontal pill/chip strips**: week-strip.tsx, series-strip.tsx (both new, raw `<button>` + `shadow-[var(--rim)]`) — possible shared "ChipStrip".
 
-| Pattern | Where |
-|---|---|
-| Confirm-delete dialog (AlertDialog composed inline) | planner-view, sidebar, notes-view, todos-view, content-planner-view-root, desktop-update-provider |
-| Icon button + Tooltip + aria-label | todos (19 triggers), content-planner (25), top-navbar (11), sidebar (9), planner (5), notes (5), drawing/editor toolbars |
-| Empty state | notes-view:112-206 (`.empty-view` ×5), todos-view:1498 + `.task-empty`:2034, content-planner pristine empty state, planner "Free — your call" |
-| Loading spinner (`LoaderCircle` + `animate-spin`) | auth-gate, verification-pending, password-reset, top-navbar, sidebar, desktop-update-provider, todos-view |
-| Overflow/“three-dot” menu (hand-rolled `role="menu"`) | sidebar (profile menu), content-planner (card + column menus) |
-| Inline editable title/text input | planner-view, sidebar (rename), notes-view (title), todos-view, content-planner (column titles, cards) |
-| Segmented toggle (Now/Set up, Board/Gallery, Todos/Daily note, weekday tabs) | planner-view, content-planner-view-root, todos-view (guess — by feature description in CLAUDE.md) |
-| Viewport/pointer media queries (no hook) | content-planner (12), top-navbar (2), use-app-persistence-state |
-
-## 5. Consistency problems
+## 5. Consistency problems (whole app, tsx non-test)
 
 | Issue | Count | Top files |
 |---|---|---|
-| Arbitrary `-[…]` classes in TSX | 1,008 | content-planner-root 431, planner 144, todos 142, auth-gate 88 |
-| …of which token-via-arbitrary (`text-[var(--ink-900)]` etc.) | ~600 | same |
-| Hex in CSS / `rgba()` in CSS | 45 / 50 | globals.css |
-| Hex/rgb in TSX | 13 / 10 | drawing-toolbar, confetti, auth-gate, todos, planner |
-| Raw palette classes | `text-white` 10, `bg-white` 2, `bg-black` 2 | components |
-| Text <13px (violates no-text-below-13px goal) | 60 `text-xs`, 6 `text-[11px]`, 1 `text-[10px]`; ~60 CSS font-sizes 10–12.5px | todos, content-planner, sidebar CSS |
-| Border-radius values in CSS | 15 distinct (4,6,7,8,9,10,11,12,14,18,20,24,999px…) | globals.css |
-| Tailwind radius | `rounded-lg` 70, `-2xl` 36, `-full` 34, `-xl` 6, plus `[9px] [24px] [28px] [4px]` | components |
-| Unlayered CSS in globals.css | ~4,000 of ~4,300 non-blank lines outside `@layer` (awk count) — contradicts CLAUDE.md's own "NEVER unlayered" rule | globals.css:76-4257, 4700-4790 |
-| Dead CSS | ~148 of 358 class selectors unreferenced in components; 137/145 `.planner-*` | globals.css:2871-4700 |
-| Dead code | `planner-tour.tsx` never imported; `@tabler/icons-react` unused; `ui/checkbox.tsx` unused | grep |
-| Mixed icon sets | none in code (lucide only) | — |
+| `[var(--…)]` arbitrary classes | 299 | todos-view 104, planner-view 76, auth-gate 58, notes-view 16 |
+| legacy vars (`--paper/ink/brand/line/warn/priority/planner`) | 322 | same |
+| `text-xs` / `text-[11px]` | 46 | incl. primitives: ui/tooltip.tsx:70, ui/dropdown-menu.tsx:67,243, ui/select.tsx:105, ui/dialog.tsx:56 |
+| raw `<button>` | 78 | todos, sidebar, top-navbar (5), content-planner (6) |
+| `duration-N` | 19 | legacy screens |
+| hex in tsx | 12 · `text-white/bg-black/bg-white` 6 | (guess — legacy screens; not traced) |
+| `.planner-*` lines in globals.css | 368 matches | globals.css |
 
 ## 6. Instruction files
 
-| File | What it says about UI |
-|---|---|
-| `CLAUDE.md` (227 lines) | Warm Minimalism: 5 pillars, token table, Source Sans only, radius/spacing scale, hover/AlertDialog/Tooltip rules, motion 150–200ms, focus `2px var(--brand)`, Styling Removal Rule, Tailwind layer rule. "Brain file" with mandatory update rule. |
-| `AGENTS.md` | Delegates wholly to CLAUDE.md; says skills live in `./.agents/skills/`. |
-| `.claude/skills/design-system/SKILL.md` | Identical copy of `.agents/skills/design-system/SKILL.md` (diff = same). Checklist restating tokens. |
-| `.agents/skills/{state-persistence,tauri-desktop,tiptap-editor,vitest-testing}` | Non-visual, except tiptap-editor: floating menus use `var(--paper-strong)`/`var(--line)`, "match Warm Minimalism". Not mirrored into `.claude/skills/`. |
-| `.cursor/`, `.github/copilot-instructions.md` | absent |
-| `.design/scaffold.md` | scaffold state only (phase: research) |
-
-**Rules that conflict with a design-system approach / with the code:**
-- Skill: “Typical Tailwind usage: `bg-[var(--paper)]` … `text-[var(--ink-900)]`” — institutionalises arbitrary-value tokens instead of semantic utilities (`bg-background`); root cause of the ~600 arbitrary token classes.
-- Skill: “Tiptap stays content-first with no visible toolbar” — but `markdown-editor.tsx:121` renders `<EditorToolbar>`.
-- CLAUDE.md: “No serifs anywhere” / “One font family … across ALL roles” — hard-locks typography; any new direction must rewrite it.
-- Token values in CLAUDE.md/skill ≠ code: `--paper-strong` doc `#ffffff` vs code `#eee7dc`; `--line` `#d9d1c5` vs `#d6ccbd`; dark `--brand` `#3d8c7f` (doc) vs `#5ea89d` (code). Skill claims "Dark mode … never true black" and warm, but dark tokens are cool blue-gray.
-- CLAUDE.md focus ring `var(--brand)` vs shadcn primitives using `ring-ring/50` — two focus styles.
-- Token values are restated in 3 places (globals.css, CLAUDE.md, two skill copies) → guaranteed drift.
+| File | UI content | Conflicts with brain |
+|---|---|---|
+| `CLAUDE.md` | Styling Removal, Tailwind layers, device-local UI state, defers UI to DESIGN.md | "New shadcn components: `npx shadcn@latest add`" vs ui-components "`pnpm exec shadcn add` … run `shadcn diff` first" (minor) |
+| `AGENTS.md` | v1 ui-ux-pro block, lines 35–88 | none; precedence clause gives UI to block + DESIGN.md |
+| `.claude/skills/{ui-system,ui-components,ux-patterns,ui-custom-elements}` | brain skills (`ui-ux-pro:skill v1`) | — |
+| `.agents/skills/tiptap-editor` | points to DESIGN.md tokens | none |
+| `.agents/skills/tauri-desktop` §3 | traffic-light / navbar alignment | none |
+| `.agents/skills/{state-persistence,vitest-testing}` | local-only UI state; test helpers | none |
+| `.claude/agents/kb-keeper.md` + `docs/kb/` (incl. `ui-design.md`) | KB; `ui-design.md` is pointers only (Last verified 2026-10-11) | none — defers to DESIGN.md |
+| `.cursor/`, `.github/copilot-instructions.md`, `.claude/commands/`, `.brain/` | absent | — |
 
 ## 7. Can it render?
 
-- Dev: `pnpm dev` → `next dev --webpack -p 5005`; `.claude/launch.json` has config `dev` on 5005.
-- Env: `NEXT_PUBLIC_POCKETBASE_URL`, `NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION` (`.env.local`); `pnpm dev` targets **production** PocketBase (CLAUDE.md).
-- Auth wall: yes (`AuthGate`). **Bypass for screenshots:** on localhost, "Open local dev workspace" button or `?devWorkspace=1` enables a browser-only workspace (src/lib/dev-mode.ts:3,46-55; auth-gate.tsx:358) — no credentials, no prod data. Safer alternative: `pnpm dev:test` against local PocketBase.
-- Screenshot path: preview_start `dev` → navigate `http://localhost:5005/todos?devWorkspace=1` (also `/notes`, `/planner`, `/content-planner`). Theme defaults to dark; toggle via sidebar profile menu.
+- `pnpm dev` → :5005 (**production PocketBase — real data**); `pnpm dev:test` → :5005 with local PB at 127.0.0.1:8090 (confident — package.json, .claude/launch.json).
+- No-login local workspace: `http://localhost:5005/<route>?devWorkspace=1` (confident — AGENTS.md; src/lib/dev-mode.ts). Env: `.env.local`, `.env.test.local` exist.
+- Screenshot: preview_start `dev-test` (or reuse a running :5005), open `/notes?devWorkspace=1`, 375px + 1280px, toggle `dark` class.
+
+## 8. Similar helpers
+
+| Path | What it does | Overlaps | Overlap | Worth keeping |
+|---|---|---|---|---|
+| `.claude/agents/kb-keeper.md` + `docs/kb/` (14 pages, INDEX/README/decisions) | Project knowledge base; ask mode before planning, record mode after; main agents must not read `docs/kb/` | `brain` | **full** (same job: project memory, self-maintained by an agent) | Strong: CLAUDE.md + AGENTS.md + KB README all wire agents to it; decisions.md log; "trust code over page"; safety gotchas (prod PB, server-first sync) |
+| `docs/kb/ui-design.md` | UI pointer page | `brain` (UI slice) | partial | already defers to DESIGN.md |
+| `.agents/skills/vitest-testing` §3 "UI Interaction Standards" | test conventions | `ui-qa` | partial (unit tests, not visual/usability QA) | test helpers in `src/test/repositories.ts` |
+| any UI QA / a11y review agent | — | `ui-qa` | none found | — |
+
+## Drift
+
+**In code, not in skills**
+- Content-planner components added since 10-01 (series-strip, card-series-picker, series-detail, series-name-dialog, publish-info, week-strip, shoot-card-view, capture-box, ideas-review, content-shelf) — none in `ui-components`; Series chip is in DESIGN.md → Components but not in `ui-custom-elements`.
+- `content-planner/content-empty-state.tsx` (the "model" empty state per ux-patterns) is not listed as a block/signature.
+- `/daily` route (redirect) undocumented (trivial).
+
+**In skills, not (really) in code**
+- `ui-components` "Example screen" claims are false: `EmptyState` (notes, todo groups), `InlineAlert` (auth, note load errors), `SegmentedControl` (planner, content planner), `PageHeader` (todos pane, planner), `ConfirmDialog` (todos workspace menu, notes) — actual uses are 0/0/0/content-planner-only/series-detail-only.
+- `NowCard`, `PriorityTab`, `WashiTag` have 0 uses; `ui-custom-elements` says they appear in Planner, todo groups, todo rows.
+- `Skeleton`, `Checkbox`, `Select`, `Separator` unused.
+
+**Dead paths:** none — every path in AGENTS block, skills and DESIGN.md → Files exists (confident — ls). `.design/directions/_source/` referenced (not verified in depth).
+
+**Token values outside DESIGN.md:** `ui-system` restates `--radius 0.875rem` (SKILL.md:47) and `300ms` cap (:66); `ux-patterns` "~200ms" (:18). Small but against DESIGN.md's own "never restate values" note.
+
+**Internal DESIGN.md inconsistencies**
+- NowCard row says "`--surface-shadow`" (a legacy alias) — Product tokens say `shadow-card`.
+- Color rule says dark rims = `inset … var(--rule)`; product table defines `--rim` used as `shadow-[var(--rim)]`.
+- Legacy vs target still says "Target-ready: none yet"; Content Planner now near target and not listed.
+- `--warning` is "sync issue, offline", but the new offline-readonly sync pill uses `text-destructive` (top-navbar.tsx:~205).
+
+**Hardcoded values in UI changed since 2026-10-01** (20 tsx files): 0 hex/rgb/oklch, 0 `text-white`. Remaining: legacy `[var(--ink-900|brand|brand-soft|warn)]` ×5 in top-navbar.tsx:272,369,371,385 (touched in f026d02, only partly migrated); `text-xs` tooltips top-navbar.tsx:266,389,418,440 + workspace.tsx:106; raw `<button>` ×6 in content-planner; `duration-[1000ms]` now-card.tsx:65 (documented exception); `dark:shadow-[…]` override stage-track.tsx:39 (ui-system says no `dark:` overrides). `text-[0.8125rem]` ×34 = sanctioned 13px.
+
+**Rule conflicts elsewhere:** CLAUDE.md shadcn command vs ui-components (above). Primitives themselves (`ui/tooltip.tsx:70` etc.) use `text-xs`, contradicting "no `text-xs`".
+
+**Size budget**
+| File | Lines | Budget | Status |
+|---|---|---|---|
+| AGENTS.md brain block | 54 (lines 35–88) | ≤ 15 | **over ×3.6** |
+| ui-system / ui-components / ux-patterns / ui-custom-elements | 66 / 70 / 58 / 50 | ≤ 150 | ok |
+| DESIGN.md | 208 | ~3-min read | ok-ish |
+
+**Missing clarity rules:** no "Every screen must be obvious" section in the AGENTS block; no Clarity section in `ux-patterns`. Live clarity issues: codebase jargon "PocketBase" in sync pill text (top-navbar.tsx:212,224,239); "Remove" vs "Delete" (planner-view.tsx:525).
+
+**Quick card:** DESIGN.md has **no Quick card** (opens with Direction/Language/Personality lines, then Principles) and no "Read more" task→section map.
+
+**Format drift:** v1 markers `ui-ux-pro:*` and state file `.design/scaffold.md` (current format uses ui-brain markers / `.design/setup.md`).
 
 ## Open questions
 
-1. Token source of truth: (a) collapse legacy `--paper/--ink/--brand` into shadcn names and delete aliases, (b) keep both with legacy aliasing shadcn, (c) keep as-is.
-2. globals.css: (a) migrate BEM CSS to Tailwind per screen as it's touched, (b) wrap existing CSS in `@layer components` now and delete dead planner CSS, (c) both.
-3. Dark mode default: (a) keep "dark" default, (b) switch to "system" + pre-hydration script, (c) light default.
-4. Editor toolbar: (a) keep visible toolbar and fix the rule, (b) remove toolbar per rule.
-5. Minimum text size: (a) enforce 13px (touches 60+ `text-xs`), (b) allow 12px for meta labels only.
+1. kb-keeper vs `brain`: (a) keep kb-keeper and connect it (recommended — wired into CLAUDE.md, AGENTS.md, KB README) · (b) merge into one · (c) replace with ui-brain's · (d) keep both.
+2. AGENTS block over budget: (a) trim to ≤15 lines, move detail to skills (recommended) · (b) keep as is.
+3. Offline sync pill color: (a) switch to `warning` per DESIGN.md · (b) keep destructive and update DESIGN.md.
+4. Unused blocks/signatures (EmptyState, InlineAlert, SegmentedControl, NowCard, PriorityTab, WashiTag): (a) keep, fix skill examples to say "not adopted yet" (recommended) · (b) adopt on next touch of Notes/Planner/Todos · (c) remove.
+5. Fix `text-xs` in shadcn primitives (tooltip, dropdown, select, dialog): (a) yes, routine compliance · (b) leave until touched.

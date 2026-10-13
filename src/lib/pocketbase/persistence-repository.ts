@@ -378,7 +378,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       try {
         results.push(await this.applyOp(userId, op));
       } catch (error) {
-        const errorMessage = describeWriteError(error) ?? "Couldn’t reach PocketBase.";
+        const errorMessage = describeWriteError(error) ?? "Couldn’t reach the server.";
         if (isNetworkError(error)) {
           for (const remaining of ops.slice(index)) {
             results.push({
@@ -593,7 +593,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         markdown,
         updatedAtClient,
         status: "offline",
-        notice: "PocketBase is unavailable, so your changes are saved on this device.",
+        notice: "Can’t reach the server, so your changes are saved on this device.",
         errorMessage: "Sync is offline right now.",
       };
     }

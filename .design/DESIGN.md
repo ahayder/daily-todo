@@ -1,8 +1,9 @@
 # DailyTodo design language
 
 <!-- The single source of truth for how DailyTodo looks, moves, and sounds.
-     Read before any UI work; it overrides ui-ux-pro defaults and replaces CLAUDE.md "Warm Minimalism".
+     Read before any UI work; it overrides ui-brain defaults and replaces CLAUDE.md "Warm Minimalism".
      Token VALUES live only here and in src/app/globals.css — never restate them in CLAUDE.md, AGENTS.md or skills.
+     Keep the Quick card in sync: when a section below changes, update the card in the same edit.
      Rationale: .design/strategy.md ("B2 revision"). Plan: .design/plan.md. Preview: .design/directions/B2-pocket-stickers-deep.html. -->
 
 **Direction:** B2 "Pocket Stickers — Deep" — a near-black plum night notebook with pastel sticker tabs, washi-tape carryover and a ring-timer Now card.
@@ -10,6 +11,20 @@
 **Personality:** Caregiver (+ Sage) · feel: calm, friendly, focused, encouraging · never: busy, judgy, childish
 **Sliders:** Serious 4/5 Playful · Classic 3/5 Modern · Calm 2/5 Energetic · Premium 3/5 Accessible · Dense 4/5 Airy
 **Theme:** dark is designed first and is the default; light must work equally well.
+
+## Quick card
+
+Read this first; open a section below only when the task needs it.
+- **Feel:** calm plum night notebook; pastel stickers only on the edges (tabs, washi tape, date sticker, Now card); task and note text stays plain.
+- **Colors:** semantic utilities only (`bg-card`, `text-muted-foreground`, `bg-p1-soft`, `bg-now`) — never `bg-[var(--…)]`, hex, `rgb()`, `text-white`. One filled lilac (`primary`) button per view.
+- **Priorities:** fixed hues 1 peach · 2 butter · 3 mint, always with symbol + word. Carryover and over-time are never red or amber.
+- **Status colors:** `destructive` = deletes and errors only · `warning` = sync issue / offline · `success` = saved / installed.
+- **Type:** Nunito body, Baloo Da 2 headings, DM Mono + `tabular-nums` for numbers. Nothing below 13px (`text-[0.8125rem]`), no `text-xs`. Bengali note text line-height ≥ 1.7.
+- **Shape:** pills (`rounded-full`) for buttons, chips, nav; `rounded-lg` inputs/rows/menus; `rounded-xl` cards; `rounded-2xl` panes. Dark depth = surface steps + `--rim`; `shadow-card` only on Now card, popovers, toast.
+- **Motion:** subtle; use `animate-enter` / `animate-settle` / `animate-stamp` / `press` and plain `transition` (token duration). No custom durations, springs or loops.
+- **Components:** Base UI primitives (`render` prop); `IconButton` for icon-only; `ConfirmDialog` for confirms; Undo toast for small deletes; `EmptyState` for empty.
+- **Voice:** friendly, sentence case, verb-first buttons, "Delete" not "Remove", no "overdue", no tech words like "PocketBase".
+- **Read more:** colors/tokens → Color · fonts/sizes → Typography · radius/spacing/layout → Shape, depth & layout · animation → Motion · a specific component → Components · stickers/Now card/washi/stage track → Custom design elements · deletes/loading/errors/empty → UX patterns · copy → Voice · what's legacy → Legacy vs target.
 
 ## Principles
 
@@ -23,7 +38,7 @@
 ## Color
 
 Tokens live in `src/app/globals.css` (`:root` = light, `.dark` = dark, mapped in `@theme inline`). Accent/status values come from:
-`node ~/.claude/skills/ui-ux-pro/skills/brand-design/scripts/palette.mjs "oklch(0.78 0.1 295)" --keep-seed --tint 0.022 --json` (dark) and `… palette.mjs "oklch(0.52 0.15 295)" --tint 0.022 --json` (light). Neutrals and product tokens (`--p*`, `--now-*`, `--rule`) are hand-tuned in `.design/directions/_source/build-tokens.mjs` (entry `B2`, output `tokens.json`); all text pairs pass WCAG AA in both themes. Rerun `contrast-audit.mjs` after any change.
+`node ~/.claude/skills/ui-ux-pro/kit/scripts/palette.mjs "oklch(0.78 0.1 295)" --keep-seed --tint 0.022 --json` (dark) and `… palette.mjs "oklch(0.52 0.15 295)" --tint 0.022 --json` (light). Neutrals and product tokens (`--p*`, `--now-*`, `--rule`) are hand-tuned in `.design/directions/_source/build-tokens.mjs` (entry `B2`, output `tokens.json`); all text pairs pass WCAG AA in both themes. Rerun `contrast-audit.mjs` after any change.
 
 ### Core (shadcn names — use these in new code)
 
@@ -80,7 +95,7 @@ Rules:
 - Priority hues are fixed: priority 1 = peach, 2 = butter, 3 = mint, whatever label set (Normal / ADHD 1 / ADHD 2) is active. No fourth pastel.
 - Pastels are surfaces (tabs, washes, tape, stickers); text on them uses the matching `-on` token. Pastel-colored text uses `-ink`.
 - Carryover age, time left and over-time never use `destructive` or `warning`.
-- Dark depth = surface steps + `--rule` rims (`box-shadow: inset 0 0 0 1px var(--rule)`) on panes, the nav pill track and group blocks; not big shadows. Neutrals are plum-tinted (hue 300), never cool slate or pure black.
+- Dark depth = surface steps + `--rim` hairlines (`shadow-[var(--rim)]`) on panes, the nav pill track and group blocks; not big shadows. Neutrals are plum-tinted (hue 300), never cool slate or pure black.
 
 ## Typography
 
@@ -98,7 +113,7 @@ Rules:
 ## Shape, depth & layout
 
 - Radius (`--radius: 0.875rem`): checkboxes `rounded-sm` (~8px, 2px border) · inputs, task rows, menus `rounded-lg` (14px) · cards `rounded-xl` (~20px) · priority group blocks, page panes, toast `rounded-2xl` (~25px) · Now card `rounded-3xl` · buttons, nav pills, chips, segmented controls, stage stamps `rounded-full`.
-- Borders: 1px `border` for cards and dividers; `--rule` rim instead of a border on dark panes; dashed `--rule`/`input` for "future" things (unstarted stage, free time).
+- Borders: 1px `border` for cards and dividers; `--rim` instead of a border on dark panes; dashed `--rule`/`input` for "future" things (unstarted stage, free time).
 - Depth: dark — surface steps (bg 0.145 → card 0.175 → popover 0.20 → muted 0.215) + rims; `shadow-card` only on the Now card, popovers and toast. Light — `shadow-card` on the Now card and popovers.
 - Density: airy. 4px rhythm; pane padding 24–28px desktop, 16px phone; 14px gap between panes; task rows 9px × 8px padding. Touch targets ≥ 44px on coarse pointers.
 - Layout: Todos and Notes keep the 228px sidebar; Planner and Content Planner are full-width. Todos panes (note / tasks) become a `Todos` / `Daily note` switcher below 900px.
@@ -138,7 +153,7 @@ Live in `src/components/signature/`. Inventory and usage: `.claude/skills/ui-cus
 
 | Element | What it expresses | Where it belongs | Never in |
 |---|---|---|---|
-| `NowCard` (`block` / `task` / `mini`) | "This is the one thing right now" — `now-bg` block, 60px ring timer (`--now-bar`), label, title (heading font), time left in DM Mono, next up; lilac rim + `--surface-shadow` | Planner NOW, Focus-mode timer, optional mini chip | lists, cards, settings; never a second one per screen; no warning color when over time |
+| `NowCard` (`block` / `task` / `mini`) | "This is the one thing right now" — `now-bg` block, 60px ring timer (`--now-bar`), label, title (heading font), time left in DM Mono, next up; lilac rim + `shadow-card` | Planner NOW, Focus-mode timer, optional mini chip | lists, cards, settings; never a second one per screen; no warning color when over time |
 | `PriorityTab` | "How much this matters" — pastel sticker pill (`--pN` + `-on`) with symbol + word (`!! Must do`, `! Should do`, `~ Could do`, or the active label set) over a `--pN-soft` group wash | todo group headers, priority filters | task text, buttons, anything not a priority |
 | `WashiTag` | "This came with you" — butter washi tape (`--washi`), torn edges (clip-path), tilted 2°, text "From yesterday" / "3 days waiting" | todo rows, focus card, "Worth a look" review | finished tasks (hidden); more than one per row; never red, grows in weight (700 at 3+ days), not color |
 | `StageTrack` | "Where this idea is" — `Ideas › Develop › Shoot next › Editing › Published` (the Inbox stage reads as "Ideas"); current = primary-filled stamp with a 2px offset shadow, past = solid outline, future = dashed | content card detail, empty state | todos/planner; never keyed on editable column titles (use stage ids from `content-conveyor.ts`) |
@@ -195,14 +210,14 @@ Traits: friendly, not childish · encouraging, not pushy · light, not silly
 
 This document is the **target**. Areas that don't follow it yet are legacy — never a reference for new work.
 
-- Target-ready: none yet. Once the foundation (tokens + fonts + aliases) lands, colors and fonts change app-wide, but layouts and component code stay legacy.
-- Near target: `/planner` (NOW + Set up; Tailwind, AlertDialog/Tooltip) — needs `NowCard`, `SegmentedControl`, semantic utilities.
+- Foundation (tokens + fonts + aliases) is in, so colors and fonts follow the target app-wide; layouts and component code are what differ.
+- Near target: `/content-planner` (blocks, signature elements, semantic utilities — the best reference in the app). `/planner` (NOW + Set up) still needs `NowCard`, `SegmentedControl`, semantic utilities.
 - Legacy: `/todos` (`todos/todos-view.tsx`, most legacy; validation screen), shell (`workspace/top-navbar.tsx`, `workspace/sidebar.tsx`), `/notes`, auth reset/verification (BEM CSS), `AuthGate`.
 - Legacy code patterns: ~600 `bg-[var(--paper|ink|brand|line)]` classes, ~108 raw `<button>`, hand-built dialogs/menus/segmented toggles, `text-xs`/`text-[11px]`, 150ms durations, ~4,000 unlayered lines and ~1,580 dead `.planner-*` lines in `globals.css`, `window.confirm`.
-- New UI follows the target; UI touched for a change is brought up to it (only the touched part — including moving its CSS out of unlayered `globals.css`); untouched legacy stays as is; an explicit redesign applies the target fully. Major layout/navigation/hierarchy/workflow changes need the user's approval first (see AGENTS.md).
+- New UI follows the target; UI touched for a change is brought up to it (only the touched part — including moving its CSS out of unlayered `globals.css`); untouched legacy stays as is; an explicit redesign applies the target fully. Major layout/navigation/hierarchy/workflow changes need the user's approval first (see the `ux-patterns` skill).
 
 ## Files
 
 - Tokens: `src/app/globals.css` (`:root`, `.dark`, `@theme inline`) · Fonts: `src/app/layout.tsx` · Primitives: `src/components/ui/` · Blocks: `src/components/blocks/` · Signature: `src/components/signature/` · Hooks: `src/hooks/`
-- Agent rules: `AGENTS.md` (ui-ux-pro block) · Operational skills: `.claude/skills/{ui-system,ui-components,ux-patterns,ui-custom-elements}`
-- Decisions and progress: `.design/scaffold.md` · Research: `.design/brief.md`, `.design/strategy.md`, `.design/research/`, `.design/plan.md` · Token source: `.design/directions/_source/tokens.json` (`B2`)
+- Agent rules: `AGENTS.md` (ui-brain block) · QA helper: `.claude/agents/ui-qa.md` · Project knowledge: `kb-keeper` / `docs/kb/` · Operational skills: `.claude/skills/{ui-system,ui-components,ux-patterns,ui-custom-elements}`
+- Decisions and progress: `.design/setup.md` · Research: `.design/brief.md`, `.design/strategy.md`, `.design/research/`, `.design/plan.md` · Token source: `.design/directions/_source/tokens.json` (`B2`)

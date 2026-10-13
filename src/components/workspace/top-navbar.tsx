@@ -202,14 +202,15 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
       return {
         label: "Offline · read-only",
         detail: sync.notice ?? "Can’t reach the server. Editing unlocks when it’s back.",
-        tone: "text-destructive",
+        tone: "text-foreground",
+        dot: "bg-warning",
       };
     }
 
     if (sync.indicator === "saving") {
       return {
         label: "Saving…",
-        detail: sync.notice ?? "Your latest changes will be saved to PocketBase automatically.",
+        detail: sync.notice ?? "Your latest changes are being saved to the cloud.",
         tone: "text-primary",
       };
     }
@@ -221,7 +222,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
         detail:
           sync.errorMessage ??
           sync.notice ??
-          "Saved on this device. It will be sent as soon as PocketBase is reachable.",
+          "Saved on this device. It will reach the cloud as soon as the server is reachable.",
         tone: "text-muted-foreground",
       };
     }
@@ -230,13 +231,14 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
       return {
         label: "Sync issue",
         detail: sync.errorMessage ?? sync.notice ?? "We couldn’t verify your sync state right now.",
-        tone: "text-destructive",
+        tone: "text-foreground",
+        dot: "bg-warning",
       };
     }
 
     return {
       label: formatRelativeLastSaved(sync.lastSavedAt),
-      detail: sync.notice ?? "Your current workspace state is saved to PocketBase.",
+      detail: sync.notice ?? "Everything is saved to the cloud.",
       tone: "text-muted-foreground",
     };
   }, [sync.errorMessage, sync.indicator, sync.lastSavedAt, sync.notice, sync.pendingCount]);
@@ -263,13 +265,13 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                 <SidebarIcon className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
+            <TooltipContent side="bottom" className="text-[0.8125rem]">
               {state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
             </TooltipContent>
           </Tooltip>
         ) : null}
         <div className="app-logo" aria-hidden="true" />
-        <span className="text-[15px] font-semibold tracking-wide text-[var(--ink-900)]">
+        <span className="text-[15px] font-semibold tracking-wide text-foreground">
           DailyTodo
         </span>
       </div>
@@ -323,6 +325,9 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
           )}
           title={syncPresentation.detail}
         >
+          {"dot" in syncPresentation ? (
+            <span aria-hidden="true" className={cn("mr-1.5 size-2 rounded-full", syncPresentation.dot)} />
+          ) : null}
           <span>{syncPresentation.label}</span>
         </div>
 
@@ -366,9 +371,9 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                 aria-label={desktopUpdateLabel}
                 className={cn(
                   "theme-cycle-btn relative",
-                  desktopUpdate.isUpdateAvailable && "bg-[var(--brand-soft)] text-[var(--brand)]",
+                  desktopUpdate.isUpdateAvailable && "bg-brand-subtle text-brand-subtle-foreground",
                   desktopUpdate.phase === "error" &&
-                    "bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] text-[var(--warn)]",
+                    "bg-destructive/10 text-destructive",
                 )}
               >
                 <DesktopUpdateIcon
@@ -382,11 +387,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                   )}
                 />
                 {desktopUpdate.isUpdateAvailable ? (
-                  <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[var(--brand)]" />
+                  <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary" />
                 ) : null}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
+            <TooltipContent side="bottom" className="text-[0.8125rem]">
               {desktopUpdateLabel}
             </TooltipContent>
           </Tooltip>
@@ -415,7 +420,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
+            <TooltipContent side="bottom" className="text-[0.8125rem]">
               Decrease font size
             </TooltipContent>
           </Tooltip>
@@ -437,7 +442,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
                 </span>
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
+            <TooltipContent side="bottom" className="text-[0.8125rem]">
               Increase font size
             </TooltipContent>
           </Tooltip>

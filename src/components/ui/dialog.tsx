@@ -53,7 +53,7 @@ function DialogContent({
           >
             <X className="size-4" />
           </TooltipTrigger>
-          <TooltipContent side="left" className="text-xs">
+          <TooltipContent side="left" className="text-[0.8125rem]">
             Close
           </TooltipContent>
         </Tooltip>

@@ -106,9 +106,9 @@ describe("PlannerView (NOW + Setup)", () => {
     await user.click(screen.getByRole("button", { name: "Set up" }));
     expect(screen.getAllByLabelText("Block name")).toHaveLength(3);
 
-    await user.click(screen.getAllByRole("button", { name: "Remove block" })[1]);
-    expect(screen.getByRole("alertdialog", { name: "Remove this block?" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getAllByRole("button", { name: /^Delete block / })[1]);
+    expect(screen.getByRole("alertdialog", { name: /^Delete ".*"\?$/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete block" }));
 
     expect(screen.getAllByLabelText("Block name")).toHaveLength(2);
     expect(screen.queryByDisplayValue("Deep work")).not.toBeInTheDocument();

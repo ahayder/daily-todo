@@ -95,7 +95,7 @@ describe("Sidebar", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete Balanced Week" }));
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    expect(screen.getByText("Delete Balanced Week?")).toBeInTheDocument();
+    expect(screen.getByText('Delete "Balanced Week"?')).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
   });
 

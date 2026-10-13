@@ -14,7 +14,7 @@ Read this first, then open only the pages that matter for the task.
 | [auth.md](auth.md) | PocketBase auth, dev workspace, dev auto-login, account menu, super-admin | Login, accounts, dev/test tools |
 | [desktop.md](desktop.md) | Tauri shell, updater, releases | Desktop app or releases |
 | [testing.md](testing.md) | Vitest, how to check UI in the browser | Writing tests or verifying UI |
-| [ui-design.md](ui-design.md) | Pointers to the design system and UI skills, Tailwind v4 layer trap | Any UI change |
+| [ui-design.md](ui-design.md) | Pointers to DESIGN.md, UI skills (inventory), ui-qa agent, ConfirmDialog, sync pill, Tailwind v4 layer trap | Any UI change |
 | [decisions.md](decisions.md) | Product decisions the user made (and what they declined) | Before adding features or changing behavior |
 | [dev-environment.md](dev-environment.md) | Git identity, scripts, env files | Committing, pushing, running scripts |
 

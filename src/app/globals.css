@@ -2015,26 +2015,6 @@ select {
   line-height: 1.3;
 }
 
-.note-delete-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.4rem;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-700);
-  cursor: pointer;
-  transition: all 150ms ease;
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-
-.note-delete-trigger:hover {
-  opacity: 1;
-  color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 8%, transparent);
-}
 
 .notes-folder-empty-state {
   justify-content: flex-start;

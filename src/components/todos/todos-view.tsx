@@ -19,16 +19,7 @@ import {
   groupTodosByPriority,
 } from "@/lib/store";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -823,39 +814,26 @@ function EditableTaskItem({
         </li>
       </Popover>
 
-      <AlertDialog open={isStatusConfirmOpen} onOpenChange={setIsStatusConfirmOpen}>
-        <AlertDialogContent className="alert-dialog-content">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
-              Change task status?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[var(--ink-700)]">
-              {pendingStatusMeta
-                ? `This will update "${todo.text}" to ${pendingStatusMeta.label.toLowerCase()}.`
-                : "Confirm the next status for this task."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              className="alert-dialog-cancel"
-              onClick={() => setPendingStatus(null)}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                if (pendingStatus) {
-                  handleStatusChange(pendingStatus, event.currentTarget);
-                }
-                setPendingStatus(null);
-                setIsStatusConfirmOpen(false);
-              }}
-            >
-              Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        variant="default"
+        open={isStatusConfirmOpen}
+        onOpenChange={(open) => {
+          setIsStatusConfirmOpen(open);
+          if (!open) setPendingStatus(null);
+        }}
+        title="Change task status?"
+        description={
+          pendingStatusMeta
+            ? `This will update "${todo.text}" to ${pendingStatusMeta.label.toLowerCase()}.`
+            : "Confirm the next status for this task."
+        }
+        confirmLabel="Change status"
+        onConfirm={(event) => {
+          if (pendingStatus) {
+            handleStatusChange(pendingStatus, event.currentTarget);
+          }
+        }}
+      />
 
       {isSubtaskDropTarget ? (
         <div className="task-subtask-drop-hint" role="status">
@@ -1178,44 +1156,24 @@ function TodoWorkspaceControl({
         </PopoverContent>
       </Popover>
 
-      <AlertDialog
+      <ConfirmDialog
         open={Boolean(pendingDeleteWorkspace)}
         onOpenChange={(open) => {
           if (!open) setWorkspacePendingDelete(null);
         }}
-      >
-        <AlertDialogContent className="alert-dialog-content">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
-              Delete {pendingDeleteWorkspace?.name}?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[var(--ink-700)]">
-              This permanently removes every Todo list and Daily Note saved in this workspace.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-[var(--line)] bg-transparent text-[var(--ink-700)] hover:bg-[var(--paper)]">
-              Keep workspace
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[var(--warn)] text-white hover:bg-[color-mix(in_srgb,var(--warn)_88%,black)]"
-              onClick={() => {
-                if (pendingDeleteWorkspace) {
-                  dispatch({
-                    type: "delete-todo-workspace",
-                    workspaceId: pendingDeleteWorkspace.id,
-                    date,
-                  });
-                }
-                setWorkspacePendingDelete(null);
-              }}
-            >
-              Delete workspace
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`Delete "${pendingDeleteWorkspace?.name ?? ""}"?`}
+        description="Every todo list and daily note in this workspace will be deleted too."
+        confirmLabel="Delete workspace"
+        onConfirm={() => {
+          if (pendingDeleteWorkspace) {
+            dispatch({
+              type: "delete-todo-workspace",
+              workspaceId: pendingDeleteWorkspace.id,
+              date,
+            });
+          }
+        }}
+      />
     </>
   );
 }

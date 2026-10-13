@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +22,14 @@ type ConfirmDialogProps = {
   /** Verb + noun, e.g. "Delete folder". Never "OK" / "Yes". */
   confirmLabel: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  /** `destructive` (default) for deletes; `default` for confirms that don't destroy anything. */
+  variant?: "destructive" | "default";
+  onConfirm: (event: MouseEvent<HTMLButtonElement>) => void;
 };
 
 /**
- * Confirmation for big, hard-to-undo deletes (workspace, folder, note, column).
+ * Confirmation for big, hard-to-undo deletes (workspace, folder, note, column),
+ * or — with `variant="default"` — any other step the user must confirm.
  * Small recoverable deletes (a todo, a card) act instantly with an Undo toast instead.
  */
 export function ConfirmDialog({
@@ -36,6 +39,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   cancelLabel = "Cancel",
+  variant = "destructive",
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -48,10 +52,10 @@ export function ConfirmDialog({
         <AlertDialogFooter>
           <AlertDialogCancel className="pointer-coarse:h-11">{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            variant="destructive"
+            variant={variant}
             className="pointer-coarse:h-11"
-            onClick={() => {
-              onConfirm();
+            onClick={(event) => {
+              onConfirm(event);
               onOpenChange(false);
             }}
           >
