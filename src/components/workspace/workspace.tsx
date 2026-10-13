@@ -103,7 +103,7 @@ export function Workspace({ forcedView }: Props) {
                 <X className="h-6 w-6" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="text-xs">
+            <TooltipContent side="left" className="text-[0.8125rem]">
               Close Focus Mode
             </TooltipContent>
           </Tooltip>

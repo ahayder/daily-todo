@@ -24,17 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { toISODate } from "@/lib/date";
 import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
 import type { AppAction } from "@/components/app/app-context";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth/auth-context";
@@ -585,6 +575,8 @@ function NotesTree({
 
 export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   const [activeDraggedNoteId, setActiveDraggedNoteId] = useState<string | null>(null);
+  const [presetToDelete, setPresetToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isPresetDeleteOpen, setIsPresetDeleteOpen] = useState(false);
   const { session } = useAuth();
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -846,44 +838,36 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                   >
                     <span className="note-item-title">{preset.name}</span>
                   </button>
-                  <AlertDialog>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <AlertDialogTrigger
-                          className="sidebar-row-action sidebar-row-action--danger"
-                          aria-label={`Delete ${preset.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </AlertDialogTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        Delete plan
-                      </TooltipContent>
-                    </Tooltip>
-                    <AlertDialogContent className="alert-dialog-content">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="font-semibold text-[var(--ink-900)]">
-                          Delete {preset.name}?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-[var(--ink-700)]">
-                          This permanently removes the planner and all of its weekday rhythms.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="alert-dialog-destructive"
-                          onClick={() =>
-                            dispatch({ type: "delete-planner-preset", presetId: preset.id })
-                          }
-                        >
-                          Delete planner
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="sidebar-row-action sidebar-row-action--danger"
+                        aria-label={`Delete ${preset.name}`}
+                        onClick={() => {
+                          setPresetToDelete({ id: preset.id, name: preset.name });
+                          setIsPresetDeleteOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-[0.8125rem]">
+                      Delete plan
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               ))}
+              <ConfirmDialog
+                open={isPresetDeleteOpen}
+                onOpenChange={setIsPresetDeleteOpen}
+                title={`Delete "${presetToDelete?.name ?? ""}"?`}
+                description="All of its weekday rhythms will be deleted too."
+                confirmLabel="Delete plan"
+                onConfirm={() => {
+                  if (presetToDelete) dispatch({ type: "delete-planner-preset", presetId: presetToDelete.id });
+                }}
+              />
             </div>
           ) : (
             <div className="notes-list">

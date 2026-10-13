@@ -1,5 +1,5 @@
 # Dev environment
-Last verified: 2026-10-11
+Last verified: 2026-10-14
 
 ## How it works
 - pnpm. Dev server: `pnpm dev` on port 5005 (production DB!) or `pnpm dev:test` (local PocketBase). Lint: `pnpm lint`.
@@ -8,4 +8,5 @@ Last verified: 2026-10-11
 - Branches: work on `dev`; `main` is the PR base.
 
 ## Gotchas
+- `pnpm lint` on the whole repo scans `src-tauri/target/**` build output and fails with ~860 parse errors. Run eslint on just the changed files instead.
 - A fresh clone inherits the work identity unless the local user values are re-set.

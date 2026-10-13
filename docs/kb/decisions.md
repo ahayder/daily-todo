@@ -1,7 +1,9 @@
 # Product decisions
-Last verified: 2026-10-11
+Last verified: 2026-10-14
 
 Decisions the user made. Don't undo or re-propose without asking. Newest first.
+
+- **2026-10-14 — One project memory.** kb-keeper + `docs/kb/` stay the only project memory. When upgrading the UI brain to v2, the user chose not to install ui-brain's `.brain/`, `brain` agent and Stop hook (avoids two competing memories).
 
 - **2026-10-11 — Content Planner series.** User wanted to group videos into series, note the series idea, and see published counts per series. Chose: open-ended (no target episode count), no episode order, a card in at most one series, counts also on the main page. Series stay quiet — they don't change Next up, the ship meter or stages. Relaxes the "no tags" narrowness only for series.
 - **2026-10-08 — Content Planner Editing stage + publish info.** User asked for Editing after Shoot next ("Start editing") and optional per-platform links + transcript on Published — "nothing mandatory". They praised Focus + Shelf as natural and intuitive: keep its feel.

@@ -150,7 +150,7 @@ export class SplitPersistenceRepository implements PersistenceRepository {
         markdown,
         updatedAtClient,
         status: "offline",
-        notice: "PocketBase is unavailable, so your changes are saved on this device.",
+        notice: "Can’t reach the server, so your changes are saved on this device.",
         errorMessage: "Sync is offline right now.",
       };
     }

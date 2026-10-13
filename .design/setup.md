@@ -1,9 +1,10 @@
 ---
 phase: done
-next: "Commit (on user yes); future: /ui-ux-pro:scaffold update"
+next: "Run /ui-brain:doctor after the next big UI change"
 waiting_for: ""
-brain_version: 1
-updated: 2026-10-01
+brain_version: 2
+updated: 2026-10-14
+last_checked: 2026-10-14
 ---
 
 <!--
@@ -37,7 +38,9 @@ Visual direction: new — via makeover directions (Tiimo-like, dark-first, Benga
 
 <!-- Filled in phase 5; update mode compares against this list. -->
 - `.design/DESIGN.md` — source of truth (B2 tokens, type, shape, motion, UX patterns, custom elements, legacy vs target)
-- `AGENTS.md` (ui-ux-pro block) — always-loaded rules, skills index, ask-first list
+- `AGENTS.md` (ui-brain v2 block, ≤15 lines) — always-loaded rules; long rules live in `ux-patterns`
+- `.claude/agents/ui-qa.md` — UI/UX QA helper (report only)
+- Project knowledge: `kb-keeper` + `docs/kb/` (user's own; no `.brain/`)
 - `CLAUDE.md` — `@AGENTS.md` import; Warm Minimalism section replaced by a pointer + Styling Removal / Tailwind layer rules
 - `.claude/skills/ui-system`, `ui-components`, `ux-patterns`, `ui-custom-elements`
 - Removed: `.claude/skills/design-system`, `.agents/skills/design-system`; `.agents/skills/tiptap-editor` now points at DESIGN.md
@@ -58,6 +61,12 @@ Visual direction: new — via makeover directions (Tiimo-like, dark-first, Benga
 - 2026-10-01 — Scaffold built; check-brain OK (0 warnings); design review fixed contrast/focus/toast/segmented issues
 - 2026-10-01 — Validation run: brain guided the agent well; 3 small brain fixes applied (undo helper, verify steps, touched-part definition)
 - 2026-10-01 — User kept the undo-delete feature; scaffold done
+- 2026-10-14 Doctor: 9 findings (check only, no fixes applied)
+- 2026-10-14 — Similar helper `.claude/agents/kb-keeper.md` (+ `docs/kb/`): user chose **Keep yours and connect it** — no `.brain/`, no `brain` agent, no Stop hook; block points to kb-keeper
+- 2026-10-14 — Similar helper `.agents/skills/vitest-testing` partly overlaps `ui-qa` (unit tests vs usability): kept both
+- 2026-10-14 — Upgraded v1 → v2: renamed markers + `scaffold.md` → `setup.md`; block cut 54 → 11 lines (long rules moved to `ux-patterns` / `ui-system`); added Clarity, DESIGN.md Quick card, `ui-qa`; fixed 4 DESIGN.md contradictions; inventory +11 content-planner pieces, Series chip, "not adopted yet" marks
+- 2026-10-14 — Offline sync pill: user chose `warning` (amber) per DESIGN.md
+- 2026-10-14 — App-code fixes approved: top bar cleanup, `text-xs` in shadcn primitives, raw AlertDialog → `ConfirmDialog` (new `variant` prop)
 
 ## Validation notes
 

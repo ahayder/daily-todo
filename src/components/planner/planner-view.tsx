@@ -8,17 +8,7 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AppAction } from "@/components/app/app-context";
 import {
@@ -438,6 +428,7 @@ function EventRow({
   onDelete: () => void;
 }) {
   const [title, setTitle] = useState(event.title);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -508,31 +499,27 @@ function EventRow({
           ))}
         </select>
       </div>
-      <AlertDialog>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AlertDialogTrigger
-                aria-label="Remove block"
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--ink-700)] transition-colors duration-150 hover:bg-[var(--paper)] hover:text-[var(--warn)] sm:order-3 sm:h-[2.25em] sm:w-[2.25em] ${FOCUS_RING}`}
-              >
-                <Trash2 className="h-[1em] w-[1em]" />
-              </AlertDialogTrigger>
-            </TooltipTrigger>
-            <TooltipContent>Remove block</TooltipContent>
-          </Tooltip>
-          <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[var(--ink-900)]">Remove this block?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[var(--ink-700)]">
-              “{event.title}” ({formatRange(event)}) will be removed from this day.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete}>Remove</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Delete block ${event.title || "Untitled block"}`}
+            onClick={() => setIsDeleteOpen(true)}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-destructive sm:order-3 sm:h-[2.25em] sm:w-[2.25em] ${FOCUS_RING}`}
+          >
+            <Trash2 className="h-[1em] w-[1em]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Delete block</TooltipContent>
+      </Tooltip>
+      <ConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title={`Delete "${event.title || "Untitled block"}"?`}
+        description={`This ${formatRange(event)} block will be deleted from the plan.`}
+        confirmLabel="Delete block"
+        onConfirm={onDelete}
+      />
     </div>
   );
 }

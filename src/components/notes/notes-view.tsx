@@ -1,23 +1,13 @@
 "use client";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { IconButton } from "@/components/ui/icon-button";
 import type { AppState } from "@/lib/types";
 import type { AppAction } from "@/components/app/app-context";
 import { DEFAULT_NOTES_FOLDER_ID } from "@/lib/store";
 import { FileText, FolderOpen, Trash2 } from "lucide-react";
-import type { Dispatch } from "react";
+import { useState, type Dispatch } from "react";
 
 type Props = {
   state: AppState;
@@ -35,6 +25,7 @@ export function NotesView({ state, dispatch, notes }: Props) {
   const folderId = state.uiState.selectedNoteFolderId;
   const folder = folderId ? state.noteFolders[folderId] : null;
   const isDeletableFolder = Boolean(folder && folder.id !== DEFAULT_NOTES_FOLDER_ID);
+  const [confirmDelete, setConfirmDelete] = useState<"folder" | "note" | null>(null);
 
   if (!note || !noteId) {
     if (folder && folderId) {
@@ -72,40 +63,23 @@ export function NotesView({ state, dispatch, notes }: Props) {
             </div>
 
             {isDeletableFolder && (
-              <AlertDialog>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AlertDialogTrigger
-                      aria-label={`Delete folder ${folder.name}`}
-                      className="note-delete-trigger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </AlertDialogTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    Delete folder
-                  </TooltipContent>
-                </Tooltip>
-                <AlertDialogContent className="alert-dialog-content">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-[var(--ink-900)] font-semibold">
-                      Delete this folder?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="text-[var(--ink-700)]">
-                      This permanently removes the folder, its subfolders, and any notes inside them.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="alert-dialog-destructive"
-                      onClick={() => dispatch({ type: "delete-note-folder", folderId })}
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <>
+                <IconButton
+                  label="Delete folder"
+                  icon={<Trash2 />}
+                  tooltipSide="bottom"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => setConfirmDelete("folder")}
+                />
+                <ConfirmDialog
+                  open={confirmDelete === "folder"}
+                  onOpenChange={(open) => setConfirmDelete(open ? "folder" : null)}
+                  title={`Delete "${folder.name || "Untitled Folder"}"?`}
+                  description="Its subfolders and every note inside them will be deleted too."
+                  confirmLabel="Delete folder"
+                  onConfirm={() => dispatch({ type: "delete-note-folder", folderId })}
+                />
+              </>
             )}
           </div>
 
@@ -148,40 +122,21 @@ export function NotesView({ state, dispatch, notes }: Props) {
           }
         />
 
-        <AlertDialog>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AlertDialogTrigger
-                aria-label={`Delete ${note.title || "Untitled Note"}`}
-                className="note-delete-trigger"
-              >
-                <Trash2 className="h-4 w-4" />
-              </AlertDialogTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Delete note
-            </TooltipContent>
-          </Tooltip>
-          <AlertDialogContent className="alert-dialog-content">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-[var(--ink-900)] font-semibold">
-                Delete this note?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-[var(--ink-700)]">
-                This action permanently removes the note and its drawing data.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="alert-dialog-cancel">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className="alert-dialog-destructive"
-                onClick={() => dispatch({ type: "delete-note", noteId })}
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <IconButton
+          label="Delete note"
+          icon={<Trash2 />}
+          tooltipSide="bottom"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={() => setConfirmDelete("note")}
+        />
+        <ConfirmDialog
+          open={confirmDelete === "note"}
+          onOpenChange={(open) => setConfirmDelete(open ? "note" : null)}
+          title={`Delete "${note.title || "Untitled Note"}"?`}
+          description="Its text and drawing will be deleted too."
+          confirmLabel="Delete note"
+          onConfirm={() => dispatch({ type: "delete-note", noteId })}
+        />
       </div>
 
       <div className="editor-layer">

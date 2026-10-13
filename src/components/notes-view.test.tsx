@@ -60,8 +60,8 @@ describe("NotesView", () => {
 
     render(<NotesView state={state} dispatch={dispatch} notes={notes} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete Quick Notes" }));
-    expect(screen.getByText("Delete this note?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Delete note" }));
+    expect(screen.getByText('Delete "Quick Notes"?')).toBeInTheDocument();
 
     const confirmButton = document.querySelector('[data-slot="alert-dialog-action"]');
     expect(confirmButton).toBeInstanceOf(HTMLButtonElement);
@@ -101,8 +101,8 @@ describe("NotesView", () => {
     render(<NotesView state={state} dispatch={dispatch} notes={notes} />);
 
     expect(screen.getByDisplayValue("Projects")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Delete folder Projects" }));
-    expect(screen.getByText("Delete this folder?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Delete folder" }));
+    expect(screen.getByText('Delete "Projects"?')).toBeInTheDocument();
 
     const confirmButton = document.querySelector('[data-slot="alert-dialog-action"]');
     expect(confirmButton).toBeInstanceOf(HTMLButtonElement);

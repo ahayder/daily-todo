@@ -2,11 +2,17 @@
 name: ui-system
 description: Use when styling any UI in DailyTodo — colors, typography, spacing, radius, shadows, dark mode, icons, or animation. Lists the project's real design tokens, theme setup, fonts, and motion primitives, with where they live and how to use them.
 ---
-<!-- ui-ux-pro:skill v1 -->
+<!-- ui-brain:skill v1 -->
 
 # DailyTodo UI system
 
 Values and rules come from `.design/DESIGN.md` (B2 "Pocket Stickers — Deep"). This skill says **where things are and how to use them**. Don't copy values here — link to the file.
+
+## Project rules
+
+- Semantic utilities only (`bg-card`, `text-muted-foreground`, `bg-p1-soft`) — never `bg-[var(--…)]`, legacy `--paper`, `--ink-*`, `--brand` vars, hex or `text-white`. (`shadow-[var(--rim)]` is the one allowed arbitrary value.)
+- Primitives are **Base UI**, not Radix: compose with `render={<Button …/>}`; `asChild` exists only on `PopoverTrigger` / `TooltipTrigger`.
+- Icon-only buttons use `IconButton`. Text ≥ 13px (no `text-xs`); Bengali must read well (note text line-height ≥ 1.7).
 
 ## Tokens
 
@@ -44,7 +50,7 @@ Values and rules come from `.design/DESIGN.md` (B2 "Pocket Stickers — Deep"). 
 ## Spacing, radius, depth
 
 - Spacing: Tailwind 4px scale; airy — pane padding `p-6` desktop / `p-4` phone, gaps `gap-2`–`gap-4`.
-- Radius (`--radius` 0.875rem): `rounded-sm` checkbox · `rounded-lg` inputs, rows, menus · `rounded-xl` cards · `rounded-2xl` group blocks, panes, toast · `rounded-3xl` Now card · `rounded-full` buttons, chips, pills, segmented controls.
+- Radius (base `--radius`, value in DESIGN.md → Shape): `rounded-sm` checkbox · `rounded-lg` inputs, rows, menus · `rounded-xl` cards · `rounded-2xl` group blocks, panes, toast · `rounded-3xl` Now card · `rounded-full` buttons, chips, pills, segmented controls.
 - Depth: dark = surface steps (`background` → `card` → `popover` → `muted`) + rim; `shadow-card` only on floating/signature surfaces.
 
 ## Icons
@@ -63,4 +69,4 @@ Values and rules come from `.design/DESIGN.md` (B2 "Pocket Stickers — Deep"). 
 | `press` | scale 0.97 on custom clickable surfaces (`Button` has it built in) |
 | `transition` / `transition-colors` | plain state changes — default duration/easing are the tokens (`--duration-ui`, `--ease-ui`) |
 
-- Don't write `duration-150` or custom durations; never > 300ms (the NowCard ring's linear progress is the one exception). Reduced motion is handled inside the primitives; for ad-hoc motion add `motion-reduce:` variants. No springs, bounce, loops or pulses.
+- Don't write `duration-150` or custom durations; stay under DESIGN.md's motion ceiling (→ Motion; the NowCard ring's linear progress is the one exception). Reduced motion is handled inside the primitives; for ad-hoc motion add `motion-reduce:` variants. No springs, bounce, loops or pulses.
