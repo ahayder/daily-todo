@@ -24,7 +24,9 @@ npx @modelcontextprotocol/inspector   # optional: try the tools in a UI
 It runs as a Coolify app in the DailyTodo project, built from GitHub `ahayder/daily-todo`, branch `main`:
 - Build pack: Dockerfile. Base directory: `/`. Dockerfile: `/mcp-server/Dockerfile`. Port: `8787`.
 - Domain: `https://mcp.ahayder.me`. The `*.ahayder.me` DNS already points at the VPS, and Coolify handles HTTPS.
-- Environment variables: the ones in `env.example`. Use the **prod** `POCKETBASE_URL`. Enter `POCKETBASE_USER_PASSWORD` yourself in the Coolify UI.
+- Environment variables: the ones in `env.example`, with the **prod** `POCKETBASE_URL`. For the login, use `POCKETBASE_USER_TOKEN`, not a password. Create the token with `pnpm mcp:token [email] [days]`. It prints only the token, so pipe it straight into Coolify:
+  `coolify app env create <app-uuid> --key POCKETBASE_USER_TOKEN --value "$(pnpm -s mcp:token)"`
+  Then redeploy, because Coolify only applies settings on a deploy. The token stops working when it expires (365 days by default). To revoke it early, change the user's token key in PocketBase. That also signs out the app on every device.
 
 Check it with `curl https://mcp.ahayder.me/health`, which should return `ok`.
 

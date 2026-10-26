@@ -99,17 +99,39 @@ function isNotFound(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { status?: unknown }).status === 404;
 }
 
+/** The user id inside a PocketBase auth token, or null when it isn't one. */
+export function tokenUserId(token: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+    return typeof payload.id === "string" && payload.type === "auth" ? payload.id : null;
+  } catch {
+    return null;
+  }
+}
+
+export type PocketBaseAuth = { token: string } | { email: string; password: string };
+
 /**
  * PocketBase store signed in as the app user (never a superuser), so the
  * collections' `owner = @request.auth.id` rules keep it to that user's data.
+ * Prefer a long-lived impersonation token (no password stored on the server);
+ * email + password is the fallback.
  */
-export function createPocketBaseStore(options: { url: string; email: string; password: string }): ContentStore {
+export function createPocketBaseStore(options: { url: string; auth: PocketBaseAuth }): ContentStore {
   const pb = new PocketBase(options.url);
   pb.autoCancellation(false);
+  const { auth } = options;
+  const tokenOwner = "token" in auth ? tokenUserId(auth.token) : null;
+  if ("token" in auth && !tokenOwner) throw new Error("POCKETBASE_USER_TOKEN is not a PocketBase user token");
 
   async function ownerId(): Promise<string> {
+    if ("token" in auth) {
+      pb.authStore.save(auth.token);
+      if (!pb.authStore.isValid) throw new Error("POCKETBASE_USER_TOKEN has expired; create a new one");
+      return tokenOwner!;
+    }
     if (!pb.authStore.isValid || !pb.authStore.record) {
-      await pb.collection("users").authWithPassword(options.email, options.password);
+      await pb.collection("users").authWithPassword(auth.email, auth.password);
     }
     return pb.authStore.record!.id;
   }

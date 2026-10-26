@@ -205,10 +205,12 @@ function notFound(res: ServerResponse) {
 export function startServer() {
   const secret = requiredEnv("MCP_SECRET");
   if (secret.length < 32) throw new Error("MCP_SECRET must be at least 32 characters");
+  const token = process.env.POCKETBASE_USER_TOKEN?.trim();
   const store = createPocketBaseStore({
     url: requiredEnv("POCKETBASE_URL"),
-    email: requiredEnv("POCKETBASE_USER_EMAIL"),
-    password: requiredEnv("POCKETBASE_USER_PASSWORD"),
+    auth: token
+      ? { token }
+      : { email: requiredEnv("POCKETBASE_USER_EMAIL"), password: requiredEnv("POCKETBASE_USER_PASSWORD") },
   });
   const port = Number(process.env.PORT ?? 8787);
 
