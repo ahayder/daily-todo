@@ -19,22 +19,16 @@ pnpm mcp:dev                   # http://127.0.0.1:8787/mcp/<MCP_SECRET>
 npx @modelcontextprotocol/inspector   # optional: try the tools in a UI
 ```
 
-## Deploy to the VPS
+## Deploy (Coolify)
 
-1. On your machine, build: `pnpm mcp:build`. This produces `mcp-server/dist/server.mjs`, one file with no dependencies.
-2. Copy `mcp-server/Dockerfile` and `mcp-server/dist/` to the VPS, then build and run the container:
-   ```bash
-   docker build -t dailytodo-mcp .
-   docker run -d --name dailytodo-mcp --restart unless-stopped --env-file .env -p 127.0.0.1:8787:8787 dailytodo-mcp
-   ```
-   Use a `.env` that holds the **prod** `POCKETBASE_URL` and your login (see `env.example`). Without Docker, `node --env-file=.env server.mjs` under systemd works too.
-3. Point DNS for `mcp.ahayder.me` at the VPS, and reverse-proxy HTTPS to `127.0.0.1:8787` (use the same proxy as PocketBase). With Caddy:
-   ```
-   mcp.ahayder.me {
-     reverse_proxy 127.0.0.1:8787
-   }
-   ```
-4. Check it with `curl https://mcp.ahayder.me/health`, which should return `ok`.
+It runs as a Coolify app in the DailyTodo project, built from GitHub `ahayder/daily-todo`, branch `main`:
+- Build pack: Dockerfile. Base directory: `/`. Dockerfile: `/mcp-server/Dockerfile`. Port: `8787`.
+- Domain: `https://mcp.ahayder.me`. The `*.ahayder.me` DNS already points at the VPS, and Coolify handles HTTPS.
+- Environment variables: the ones in `env.example`. Use the **prod** `POCKETBASE_URL`. Enter `POCKETBASE_USER_PASSWORD` yourself in the Coolify UI.
+
+Check it with `curl https://mcp.ahayder.me/health`, which should return `ok`.
+
+To build the image by hand instead, run `docker build -f mcp-server/Dockerfile .` from the repo root.
 
 Your connector URL is `https://mcp.ahayder.me/mcp/<MCP_SECRET>`. **Treat this URL like a password.** Anyone who has it can edit your board. To revoke it, change `MCP_SECRET` and restart the server.
 
