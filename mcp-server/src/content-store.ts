@@ -1,0 +1,170 @@
+import PocketBase from "pocketbase";
+import { CONTENT_PLATFORMS } from "@/lib/types";
+import type { ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
+
+/**
+ * Where the MCP tools read and write Content Planner data. Writes are one
+ * record at a time (server-first sync): nothing is ever deleted or replaced
+ * wholesale, so a device's missing data can never wipe the server.
+ */
+export type ContentStore = {
+  /** The board, or null when the user has never opened the Content Planner. */
+  loadBoard(): Promise<ContentBoard | null>;
+  loadCards(): Promise<Record<string, ContentCard>>;
+  saveBoard(board: ContentBoard): Promise<void>;
+  saveCard(card: ContentCard): Promise<void>;
+};
+
+type Row = Record<string, unknown> & { id: string };
+
+// Mirrors the readers in src/lib/pocketbase/persistence-repository.ts so the
+// app and the MCP server see records the same way.
+function normalizeDate(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const time = Date.parse(value.replace(" ", "T"));
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+
+function normalizeLinks(value: unknown): ContentLinks | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const links: ContentLinks = {};
+  for (const platform of CONTENT_PLATFORMS) {
+    const url = (value as Record<string, unknown>)[platform];
+    if (typeof url === "string" && url.trim()) links[platform] = url.trim();
+  }
+  return Object.keys(links).length > 0 ? links : null;
+}
+
+function normalizeSeries(value: unknown): ContentSeries[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const { id, title, about, createdAt } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || !id || typeof title !== "string" || !title.trim()) return [];
+    return [
+      {
+        id,
+        title: title.trim(),
+        about: typeof about === "string" ? about : "",
+        createdAt: typeof createdAt === "string" ? createdAt : new Date(0).toISOString(),
+      },
+    ];
+  });
+}
+
+export function rowToBoard(row: Row): ContentBoard {
+  const series = normalizeSeries(row.series_json);
+  return {
+    columns: Array.isArray(row.columns_json) ? row.columns_json : [],
+    ...(series.length > 0 ? { series } : {}),
+    updatedAt: String(row.updated_at_client ?? row.updated ?? new Date(0).toISOString()),
+  };
+}
+
+export function rowToCard(row: Row): ContentCard | null {
+  if (!row.card_id || !row.column_id || !row.title) return null;
+  const links = normalizeLinks(row.links);
+  return {
+    id: String(row.card_id),
+    columnId: String(row.column_id),
+    title: String(row.title),
+    notes: typeof row.notes === "string" ? row.notes : "",
+    order: Math.max(0, Math.trunc(Number(row.position ?? 0))),
+    updatedAt: String(row.updated_at_client ?? row.updated ?? new Date(0).toISOString()),
+    publishedAt: normalizeDate(row.published_at),
+    ...(links ? { links } : {}),
+    ...(typeof row.transcript === "string" && row.transcript ? { transcript: row.transcript } : {}),
+    ...(typeof row.series_id === "string" && row.series_id ? { seriesId: row.series_id } : {}),
+  };
+}
+
+export function cardToPayload(card: ContentCard, owner: string) {
+  return {
+    owner,
+    card_id: card.id,
+    column_id: card.columnId,
+    title: card.title,
+    notes: card.notes,
+    position: card.order,
+    // Empty strings clear optional fields in PocketBase.
+    published_at: card.publishedAt ?? "",
+    links: card.links ?? {},
+    transcript: card.transcript ?? "",
+    series_id: card.seriesId ?? "",
+    updated_at_client: card.updatedAt,
+  };
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { status?: unknown }).status === 404;
+}
+
+/**
+ * PocketBase store signed in as the app user (never a superuser), so the
+ * collections' `owner = @request.auth.id` rules keep it to that user's data.
+ */
+export function createPocketBaseStore(options: { url: string; email: string; password: string }): ContentStore {
+  const pb = new PocketBase(options.url);
+  pb.autoCancellation(false);
+
+  async function ownerId(): Promise<string> {
+    if (!pb.authStore.isValid || !pb.authStore.record) {
+      await pb.collection("users").authWithPassword(options.email, options.password);
+    }
+    return pb.authStore.record!.id;
+  }
+
+  async function findOne(collection: string, filter: string): Promise<Row | null> {
+    try {
+      return await pb.collection(collection).getFirstListItem<Row>(filter);
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  return {
+    async loadBoard() {
+      const owner = await ownerId();
+      const row = await findOne("content_boards", pb.filter("owner = {:owner}", { owner }));
+      return row ? rowToBoard(row) : null;
+    },
+
+    async loadCards() {
+      const owner = await ownerId();
+      const rows = await pb
+        .collection("content_cards")
+        .getFullList<Row>({ filter: pb.filter("owner = {:owner}", { owner }) });
+      const cards: Record<string, ContentCard> = {};
+      for (const row of rows) {
+        const card = rowToCard(row);
+        if (card) cards[card.id] = card;
+      }
+      return cards;
+    },
+
+    async saveBoard(board) {
+      const owner = await ownerId();
+      const existing = await findOne("content_boards", pb.filter("owner = {:owner}", { owner }));
+      const payload = {
+        owner,
+        columns_json: board.columns,
+        series_json: board.series ?? [],
+        updated_at_client: board.updatedAt,
+      };
+      if (existing) await pb.collection("content_boards").update(existing.id, payload);
+      else await pb.collection("content_boards").create(payload);
+    },
+
+    async saveCard(card) {
+      const owner = await ownerId();
+      const existing = await findOne(
+        "content_cards",
+        pb.filter("owner = {:owner} && card_id = {:cardId}", { owner, cardId: card.id }),
+      );
+      const payload = cardToPayload(card, owner);
+      if (existing) await pb.collection("content_cards").update(existing.id, payload);
+      else await pb.collection("content_cards").create(payload);
+    },
+  };
+}
