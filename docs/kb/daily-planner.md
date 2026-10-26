@@ -1,5 +1,5 @@
 # Daily Planner
-Last verified: 2026-10-11
+Last verified: 2026-10-14
 
 `/planner` is a calm, full-width, ADHD-first page with two modes: **Now** (daily, read-only) and
 **Set up** (rare editing). No sidebar.
@@ -14,6 +14,7 @@ Last verified: 2026-10-11
 - Only `monday`/`saturday`/`sunday` are read; `tuesday`–`friday` are ignored (no write-mirroring).
 - Purposes, budgets, roles and extra presets stay in data/storage but are unused by the UI (no migration). Storage unchanged: subtitle/creation metadata share `days_json`; purposes live inside their day.
 - The planner-preset branch in `sidebar.tsx` and `planner-tour.tsx` are dead but harmless.
+- The user doesn't use this page today (empty blocks, forgets it exists); see [user-needs.md](user-needs.md).
 
 ## Related
-[decisions.md](decisions.md)
+[user-needs.md](user-needs.md), [decisions.md](decisions.md)

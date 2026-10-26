@@ -1,5 +1,5 @@
 # Todos & daily pages
-Last verified: 2026-10-11
+Last verified: 2026-10-14
 
 `/todos` shows one day: a Daily note (markdown) beside tasks grouped by priority. Days live in
 Todo workspaces; unfinished work carries forward to the next day automatically.
@@ -18,6 +18,7 @@ Todo workspaces; unfinished work carries forward to the next day automatically.
 - Changes to carryover behavior need the user's product judgment.
 - Daily pages are never deleted (see [sync-persistence.md](sync-persistence.md)).
 - To test carryover without waiting a day: super-admin "Simulate next day" (see [auth.md](auth.md)).
+- The user finds this page cluttered and rarely opens it; read [user-needs.md](user-needs.md) before redesigning it.
 
 ## Related
-[sync-persistence.md](sync-persistence.md), [auth.md](auth.md), [decisions.md](decisions.md)
+[user-needs.md](user-needs.md), [sync-persistence.md](sync-persistence.md), [auth.md](auth.md), [decisions.md](decisions.md)
