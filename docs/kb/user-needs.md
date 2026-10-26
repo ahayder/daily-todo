@@ -1,8 +1,9 @@
 # User needs & Today redesign (proposal)
-Last verified: 2026-10-14
+Last verified: 2026-10-27
 
-How the user actually works, from a user interview on 2026-10-14. Use this before redesigning
-Todos, Daily Planner or the home screen. **Nothing here is built yet; the proposal is not approved.**
+How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
+(2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
+**Nothing here is built yet.**
 
 ## Pain points
 - Too many choices (decision paralysis), losing the thread mid-day (shiny things), time
@@ -24,13 +25,33 @@ Todos, Daily Planner or the home screen. **Nothing here is built yet; the propos
 - Gentle nudges (desktop pings) are welcome.
 - Leftovers (unfinished tasks): no preference.
 
-## Proposal under discussion (not approved — ask before building)
-Merge Todos + Daily Planner into one **"Today"** home: Now card + guideline timeline + Shelf.
-Link Content Planner via a "Do today" action. Add gentle pings, "Paused at / Next" breadcrumbs,
-and a quick-capture hotkey.
+## Life areas (2026-10-26)
+Three: **day job** (Velox for the Astra team, a skills repo), **content** (YouTube + a product
+sold through content), **personal**.
+
+## Redesign direction: "chat captures, the app shows" (2026-10-27, mockups only, nothing built)
+- ChatGPT/Claude save tasks, decisions (status Agreed / Proposed / Yours + source), ideas,
+  repeats/routines and meeting summaries through the MCP server. The app is for seeing where
+  you are and trusting AI changes. Agreed parts are in [decisions.md](decisions.md).
+- Mockups: https://claude.ai/artifact/6aszsDDcxexqxFf33KH1KK. Technical plan (outside the repo):
+  `/Users/ahayder/.claude/plans/yes-look-it-up-warm-hinton.md` — `tasks` + `change_log`
+  collections, MCP task/history tools, a `withHistory` wrapper.
+- Screens: **Today** (Todos + Daily Planner merged: Now card + guideline timeline + Shelf),
+  **Memory** (search → project cards → decisions), **Content**.
+- UI review (ui-qa) outcomes already in the mockups: timeline rows show time + task only
+  (details on expand); "Do today" opens a block picker; Now card has a "Not now" button; no
+  D-codes in the UI; reuse the NowCard ring and WashiTag ("N days waiting"); headings ≤30px;
+  free time copy is "Free — your call".
+- **Office Companion fold-in:** the user's folder `/Users/ahayder/Documents/Work/AlisOfficeCompanion`
+  (meeting transcripts, CURRENT, DECISIONS D01–D18, TIMELINE, 16:00 Asia/Dhaka standup agendas;
+  Brian joins Mon/Wed/Fri) is to move into DailyTodo. Its rules — "reported ≠ verified",
+  "proposal ≠ approved", "protect personal time and weekends", "one small step" — go into the
+  MCP server instructions.
 
 ## Gotchas
 - Merging pages, changing navigation or carryover needs the user's OK (see [decisions.md](decisions.md)).
+- **Privacy:** work transcripts would live on a personal server. Store summaries, not raw
+  transcripts, unless the employer allows it.
 - The user declined auto-pick / "pick for me" and hard caps in Content Planner; don't assume they want them in Today.
 
 ## Related

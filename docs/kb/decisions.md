@@ -1,12 +1,14 @@
 # Product decisions
-Last verified: 2026-10-26
+Last verified: 2026-10-27
 
 Decisions the user made. Don't undo or re-propose without asking. Newest first.
+
+- **2026-10-27 — "Chat captures, the app shows" redesign (mockups only, not built).** AI chat saves tasks/decisions/ideas/routines/meeting summaries via MCP; the app shows where you are. Chose: nav = **Today · Memory · Content**; Todos + Daily Planner merge into Today; projects are cards at the top of Memory (no Projects tab); life areas (job / content / personal) shown as neutral word + icon chips, **not** priority colors; undo of an AI change = soft delete with "Bring back", plus a History page listing every AI change (trust); gentle desktop pings: yes; tasks become their own records and **workspaces are dropped**; the Decisions log comes later. Office Companion folder folds into DailyTodo. Details, plan and privacy caution: [user-needs.md](user-needs.md).
 
 - **2026-10-26 — App notes.** User wanted a quick way to jot ideas/improvements/bugs about the app itself. Chose: text + type (Idea / Improvement / Bug); entry point is a top-bar icon (the sidebar isn't on every screen) + ⌘⇧I; scope = capture + simple list + MCP tools; **delete is always soft**. User explicitly OK'd a soft-delete MCP tool (`delete_app_note`) — this narrows the earlier "no delete tools" rule to "no hard deletes anywhere". See [app-notes.md](app-notes.md).
 - **2026-10-26 — Content Planner MCP server.** User wanted to edit the Content Planner from ChatGPT/Claude chat. Chose: hosted online (ChatGPT needs a public URL), on the same VPS as PocketBase (Coolify, `mcp.ahayder.me`), auth by secret URL path instead of OAuth (simple, single user), powers = read/add/edit only — **no hard-delete tools** (safety; soft delete of app notes allowed since the App notes decision above). Server logs in with a 365-day impersonation token rather than a stored password (user prefers not storing the password; password login also kept failing). See [mcp-server.md](mcp-server.md).
 
-- **2026-10-14 — Todos/Planner interview (no decision yet).** User wants a "Now + timeline" view on sit-down, welcomes gentle desktop pings, wants the Daily Planner as a guideline (not a strict schedule), and has no preference on leftovers. A "Today" home merging Todos + Daily Planner is only a proposal — not approved. Details: [user-needs.md](user-needs.md).
+- **2026-10-14 — Todos/Planner interview (no decision yet).** User wants a "Now + timeline" view on sit-down, welcomes gentle desktop pings, wants the Daily Planner as a guideline (not a strict schedule), and has no preference on leftovers. The "Today" merge was later agreed on 2026-10-27 (above). Details: [user-needs.md](user-needs.md).
 - **2026-10-14 — One project memory.** kb-keeper + `docs/kb/` stay the only project memory. When upgrading the UI brain to v2, the user chose not to install ui-brain's `.brain/`, `brain` agent and Stop hook (avoids two competing memories).
 
 - **2026-10-11 — Content Planner series.** User wanted to group videos into series, note the series idea, and see published counts per series. Chose: open-ended (no target episode count), no episode order, a card in at most one series, counts also on the main page. Series stay quiet — they don't change Next up, the ship meter or stages. Relaxes the "no tags" narrowness only for series.
