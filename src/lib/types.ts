@@ -207,3 +207,130 @@ export type AppState = {
   appNotes: Record<string, AppNote>;
   uiState: UIState;
 };
+
+// ---- External brain: records saved from chat (MCP) and shown in the app ----
+// None of these are ever hard-deleted: deleting sets `deletedAt`.
+
+export const LIFE_AREAS = ["job", "content", "personal"] as const;
+export type LifeArea = (typeof LIFE_AREAS)[number];
+
+export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+export type Weekday = (typeof WEEKDAYS)[number];
+
+/** Fields every external-brain record has. */
+export type MemoryRecordBase = {
+  id: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type Task = MemoryRecordBase & {
+  title: string;
+  notes: string;
+  area: LifeArea | null;
+  status: "open" | "done";
+  /** YYYY-MM-DD, or null = on the Shelf (no day yet). */
+  day: string | null;
+  /** A PlannerEvent id (a time block of the Daily Planner). */
+  blockId: string | null;
+  projectId: string | null;
+  link: string;
+  whyDecisionId: string | null;
+  /** Set when this row is a completed (or scheduled) instance of a repeat. */
+  repeatId: string | null;
+  contentCardId: string | null;
+  /** "app" or "chat:<name>". */
+  source: string;
+  doneAt: string | null;
+};
+
+export const DECISION_STATUSES = ["agreed", "proposed", "yours"] as const;
+export type DecisionStatus = (typeof DECISION_STATUSES)[number];
+
+export type Decision = MemoryRecordBase & {
+  title: string;
+  why: string;
+  status: DecisionStatus;
+  /** Where it came from, e.g. "Standup · Brian". */
+  source: string;
+  people: string[];
+  projectId: string | null;
+  replacesId: string | null;
+  replacedById: string | null;
+  revisitOn: string | null;
+  decidedOn: string | null;
+};
+
+export type Project = MemoryRecordBase & {
+  name: string;
+  area: LifeArea | null;
+  /** Where it stands. */
+  state: string;
+  nextStep: string;
+  status: "active" | "paused" | "done";
+};
+
+export type Meeting = MemoryRecordBase & {
+  title: string;
+  date: string;
+  projectId: string | null;
+  /** Markdown summary. */
+  summary: string;
+  people: string[];
+  /** Raw transcript, only when the user asked to keep it. Usually "". */
+  transcript: string;
+};
+
+export type FollowUp = MemoryRecordBase & {
+  what: string;
+  who: string;
+  since: string;
+  projectId: string | null;
+  status: "waiting" | "done";
+  doneAt: string | null;
+};
+
+export type Repeat = MemoryRecordBase & {
+  title: string;
+  area: LifeArea | null;
+  days: Weekday[];
+  /** HH:MM, or "" for any time of day. */
+  time: string;
+  projectId: string | null;
+  whyDecisionId: string | null;
+  active: boolean;
+};
+
+export type MemoryKindMap = {
+  task: Task;
+  decision: Decision;
+  project: Project;
+  meeting: Meeting;
+  follow_up: FollowUp;
+  repeat: Repeat;
+};
+export type MemoryKind = keyof MemoryKindMap;
+export const MEMORY_KINDS = ["task", "decision", "project", "meeting", "follow_up", "repeat"] as const;
+
+/** Everything the change log can point at. */
+export type ChangeEntityKind = MemoryKind | "content_card" | "content_board" | "app_note";
+export type ChangeAction = "create" | "update" | "delete" | "restore" | "undo" | "redo";
+
+/** One saved change: what a record looked like before and after a write. */
+export type ChangeLogEntry = {
+  id: string;
+  /** One tool call = one batch; undo works on the whole batch. */
+  batchId: string;
+  entityKind: ChangeEntityKind;
+  entityId: string;
+  action: ChangeAction;
+  source: string;
+  summary: string;
+  before: unknown;
+  after: unknown;
+  /** The change an undo/redo reverses or re-applies. */
+  refChangeId: string | null;
+  at: string;
+};
