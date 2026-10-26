@@ -359,6 +359,73 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
       ],
     },
     {
+      // Quick notes about the app itself. Soft-deleted only (deleted_at), so
+      // the server refuses hard deletes like daily_pages.
+      name: "app_notes",
+      type: "base",
+      listRule: COLLECTION_ACCESS_RULE,
+      viewRule: COLLECTION_ACCESS_RULE,
+      createRule: COLLECTION_ACCESS_RULE,
+      updateRule: COLLECTION_ACCESS_RULE,
+      deleteRule: null,
+      fields: [
+        {
+          name: "owner",
+          type: "relation",
+          required: true,
+          maxSelect: 1,
+          collectionId: usersCollectionId,
+          cascadeDelete: true,
+        },
+        {
+          name: "note_id",
+          type: "text",
+          required: true,
+        },
+        // Everything below can be "" so none of it is required.
+        {
+          name: "text",
+          type: "text",
+          required: false,
+          max: 20000,
+        },
+        {
+          name: "kind",
+          type: "text",
+          required: false,
+        },
+        {
+          name: "status",
+          type: "text",
+          required: false,
+        },
+        {
+          name: "screen",
+          type: "text",
+          required: false,
+        },
+        {
+          name: "created_at_client",
+          type: "date",
+          required: false,
+        },
+        {
+          // "" = not deleted.
+          name: "deleted_at",
+          type: "date",
+          required: false,
+        },
+        {
+          name: "updated_at_client",
+          type: "date",
+          required: true,
+        },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_app_notes_owner_note_id ON app_notes (owner, note_id)",
+      ],
+    },
+    {
       name: "workspace_state",
       type: "base",
       listRule: COLLECTION_ACCESS_RULE,

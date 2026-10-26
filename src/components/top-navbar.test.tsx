@@ -48,6 +48,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -78,6 +79,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -115,6 +117,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -168,6 +171,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -230,6 +234,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -268,6 +273,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -299,6 +305,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -337,6 +344,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={retrySync}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -374,6 +382,7 @@ describe("TopNavbar", () => {
             ...sync,
           }}
           retrySync={vi.fn(async () => {})}
+          onOpenAppNotes={vi.fn()}
         />
       </AuthProvider>,
     );

@@ -30,6 +30,7 @@ export type PersistenceRecordKind =
   | "planner_preset"
   | "content_board"
   | "content_card"
+  | "app_note"
   | "workspace_state";
 
 export type PersistenceRecordMetadata = {
@@ -235,6 +236,7 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
     noteFolders?: unknown;
     contentBoard?: unknown;
     contentCards?: unknown;
+    appNotes?: unknown;
   };
 
   if (!candidate.uiState || typeof candidate.uiState !== "object") {
@@ -287,6 +289,8 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
       candidate.contentCards && typeof candidate.contentCards === "object"
         ? candidate.contentCards
         : {},
+    appNotes:
+      candidate.appNotes && typeof candidate.appNotes === "object" ? candidate.appNotes : {},
     noteFolders:
       candidate.noteFolders && typeof candidate.noteFolders === "object" ? candidate.noteFolders : {},
     uiState: {

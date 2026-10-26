@@ -7,6 +7,7 @@ import {
 } from "@/lib/persistence";
 import { getDailyPageKey, getTodoWorkspaceIdFromDailyPageKey } from "@/lib/store";
 import type {
+  AppNote,
   AppState,
   ContentBoard,
   ContentCard,
@@ -42,6 +43,7 @@ export type SyncRecordValue =
   | { key: string; kind: "planner_preset"; value: PlannerPreset }
   | { key: string; kind: "content_board"; value: ContentBoard }
   | { key: string; kind: "content_card"; value: ContentCard }
+  | { key: string; kind: "app_note"; value: AppNote }
   | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
 
 export type SyncOp = {
@@ -126,6 +128,11 @@ export function getSyncRecordValuesFromState(state: AppState): Record<string, Sy
     values[key] = { key, kind: "content_card", value: card };
   }
 
+  for (const [noteId, note] of Object.entries(state.appNotes)) {
+    const key = `app_note:${noteId}`;
+    values[key] = { key, kind: "app_note", value: note };
+  }
+
   values[WORKSPACE_RECORD_KEY] = {
     key: WORKSPACE_RECORD_KEY,
     kind: "workspace_state",
@@ -187,8 +194,10 @@ export function diffSyncRecords({
     }
   }
 
+  // Daily pages and app notes are never deleted on the server (app notes are
+  // soft-deleted with deletedAt, which syncs as an upsert).
   const removed = Object.values(prev).filter(
-    (record) => !next[record.key] && record.kind !== "daily_page",
+    (record) => !next[record.key] && record.kind !== "daily_page" && record.kind !== "app_note",
   );
   const deletedFolderIds = new Set(
     removed.filter((record) => record.kind === "note_folder").map((record) => record.value.id),
@@ -306,6 +315,13 @@ export function applySyncOpsToState(state: AppState, ops: Array<Pick<SyncOp, "ty
       if (type === "delete") delete contentCards[record.value.id];
       else contentCards[record.value.id] = record.value;
       next = { ...next, contentCards };
+      continue;
+    }
+
+    if (record.kind === "app_note") {
+      // App notes are soft-deleted (deletedAt), so a delete op should never
+      // exist; if one does, keep the note rather than drop it.
+      if (type !== "delete") next = { ...next, appNotes: { ...next.appNotes, [record.value.id]: record.value } };
       continue;
     }
 

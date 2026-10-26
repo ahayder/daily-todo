@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   Check,
   Download,
+  Lightbulb,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,6 +32,7 @@ type Props = {
   dispatch: Dispatch<AppAction>;
   sync: AppContextValue["sync"];
   retrySync: () => Promise<void>;
+  onOpenAppNotes: () => void;
 };
 
 function formatLastSynced(lastSyncedAt: string | null) {
@@ -77,7 +79,7 @@ function formatRelativeLastSaved(lastSyncedAt: string | null) {
   return `Last saved ${formatLastSynced(lastSyncedAt)}`;
 }
 
-export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
+export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: Props) {
   const desktopUpdate = useDesktopUpdate();
   const [isRetrying, setIsRetrying] = useState(false);
   const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
@@ -316,6 +318,23 @@ export function TopNavbar({ state, dispatch, sync, retrySync }: Props) {
       </nav>
 
       <div className="top-navbar__actions flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Note for the app"
+              aria-keyshortcuts="Meta+Shift+I Control+Shift+I"
+              className="theme-cycle-btn"
+              onClick={onOpenAppNotes}
+            >
+              <Lightbulb className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-[0.8125rem]">
+            Note for the app (⌘⇧I)
+          </TooltipContent>
+        </Tooltip>
+
         <div
           aria-live="polite"
           className={cn(

@@ -7,7 +7,7 @@ import {
   CONTENT_COLUMN_SHOOT_NEXT_ID,
   createDefaultContentBoard,
 } from "@/lib/store";
-import type { ContentBoard, ContentCard } from "@/lib/types";
+import type { AppNote, ContentBoard, ContentCard } from "@/lib/types";
 import { cardToPayload, rowToCard, tokenUserId, type ContentStore } from "./content-store";
 import * as tools from "./tools";
 
@@ -16,10 +16,11 @@ function card(id: string, columnId: string, order: number, extra: Partial<Conten
 }
 
 /** In-memory store that records every write, so tests can check what was sent. */
-function memoryStore(board: ContentBoard | null, cards: ContentCard[]) {
+function memoryStore(board: ContentBoard | null, cards: ContentCard[], appNotes: AppNote[] = []) {
   const state = {
     board,
     cards: Object.fromEntries(cards.map((c) => [c.id, c])) as Record<string, ContentCard>,
+    appNotes: Object.fromEntries(appNotes.map((n) => [n.id, n])) as Record<string, AppNote>,
     savedCards: [] as string[],
     boardSaves: 0,
   };
@@ -34,6 +35,10 @@ function memoryStore(board: ContentBoard | null, cards: ContentCard[]) {
       state.cards[next.id] = next;
       state.savedCards.push(next.id);
     },
+    loadAppNotes: async () => ({ ...state.appNotes }),
+    saveAppNote: async (next) => {
+      state.appNotes[next.id] = next;
+    },
   };
   return { store, state };
 }
@@ -41,8 +46,10 @@ function memoryStore(board: ContentBoard | null, cards: ContentCard[]) {
 const board = () => createDefaultContentBoard(new Date("2026-01-01"));
 
 describe("content planner MCP tools", () => {
-  it("exposes no delete actions", () => {
-    expect(Object.keys(tools).filter((name) => /delete|remove/i.test(name))).toEqual([]);
+  it("never hard-deletes: no delete actions for content, and the store has no delete method", () => {
+    expect(Object.keys(tools).filter((name) => /delete|remove/i.test(name))).toEqual(["setAppNoteDeletedTool"]);
+    const { store } = memoryStore(board(), []);
+    expect(Object.keys(store).filter((name) => /delete|remove/i.test(name))).toEqual([]);
   });
 
   it("adds an idea at the top of Ideas and renumbers that column", async () => {
@@ -163,5 +170,49 @@ describe("content store record mapping", () => {
   it("clears optional fields with empty values, never omitting them", () => {
     const payload = cardToPayload(card("a", CONTENT_COLUMN_INBOX_ID, 0), "user1");
     expect(payload).toMatchObject({ published_at: "", links: {}, transcript: "", series_id: "" });
+  });
+});
+
+describe("app note MCP tools", () => {
+  const note = (id: string, text: string, extra: Partial<AppNote> = {}): AppNote => ({
+    id,
+    text,
+    kind: "idea",
+    status: "open",
+    screen: "todos",
+    createdAt: "2026-10-01T10:00:00.000Z",
+    updatedAt: "2026-10-01T10:00:00.000Z",
+    deletedAt: null,
+    ...extra,
+  });
+
+  it("adds a note from chat and lists open notes newest first", async () => {
+    const { store } = memoryStore(board(), [], [note("n1", "Old one")]);
+    await tools.addAppNote(store, { text: "Weekly review", kind: "improvement" });
+    const { notes } = await tools.listAppNotes(store);
+    expect(notes.map((n) => n.text)).toEqual(["Weekly review", "Old one"]);
+    expect(notes[0]).toMatchObject({ kind: "improvement", screen: "chat" });
+  });
+
+  it("soft-deletes and restores, keeping the note on the server", async () => {
+    const { store, state } = memoryStore(board(), [], [note("n1", "Bigger timer")]);
+    await tools.setAppNoteDeletedTool(store, { note: "bigger", deleted: true });
+    expect(state.appNotes.n1.deletedAt).not.toBeNull();
+    expect((await tools.listAppNotes(store)).total).toBe(0);
+    expect((await tools.listAppNotes(store, { include_deleted: true })).total).toBe(1);
+    await tools.setAppNoteDeletedTool(store, { note: "n1", deleted: false });
+    expect(state.appNotes.n1.deletedAt).toBeNull();
+  });
+
+  it("updates status and filters by it", async () => {
+    const { store } = memoryStore(board(), [], [note("n1", "A"), note("n2", "B")]);
+    await tools.updateAppNoteTool(store, { note: "n1", status: "done" });
+    expect((await tools.listAppNotes(store)).notes.map((n) => n.id)).toEqual(["n2"]);
+    expect((await tools.listAppNotes(store, { status: "done" })).notes.map((n) => n.id)).toEqual(["n1"]);
+  });
+
+  it("refuses to guess between notes with similar text", async () => {
+    const { store } = memoryStore(board(), [], [note("n1", "Timer sound"), note("n2", "Timer color")]);
+    await expect(tools.getAppNote(store, "timer")).rejects.toThrow(/Several app notes/);
   });
 });

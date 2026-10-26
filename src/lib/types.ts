@@ -64,6 +64,26 @@ export type ContentCard = {
   seriesId?: string;
 };
 
+export const APP_NOTE_KINDS = ["idea", "improvement", "bug"] as const;
+export type AppNoteKind = (typeof APP_NOTE_KINDS)[number];
+export type AppNoteStatus = "open" | "done";
+
+/**
+ * A quick note about the app itself (idea, improvement, bug) captured while
+ * working. Never hard-deleted: deleting sets `deletedAt` and syncs as an edit.
+ */
+export type AppNote = {
+  id: string;
+  text: string;
+  kind: AppNoteKind;
+  status: AppNoteStatus;
+  /** Where it was captured: an app view, or "chat" when added through MCP. */
+  screen: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
 export type PlannerEvent = {
   id: string;
   dayKey: PlannerDayKey;
@@ -184,5 +204,6 @@ export type AppState = {
   plannerPresets: Record<string, PlannerPreset>;
   contentBoard: ContentBoard;
   contentCards: Record<string, ContentCard>;
+  appNotes: Record<string, AppNote>;
   uiState: UIState;
 };

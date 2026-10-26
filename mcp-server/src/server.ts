@@ -3,10 +3,15 @@ import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { CONTENT_PLATFORMS } from "@/lib/types";
+import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
 import { createPocketBaseStore, type ContentStore } from "./content-store";
 import {
+  addAppNote,
   addIdea,
+  getAppNote,
+  listAppNotes,
+  setAppNoteDeletedTool,
+  updateAppNoteTool,
   addSeries,
   getCard,
   listBoard,
@@ -22,8 +27,8 @@ import {
 
 /**
  * Content Planner MCP server (Streamable HTTP, stateless). Reachable only at
- * /mcp/<MCP_SECRET>; every other path is a 404. Read, add and edit only —
- * there are deliberately no delete tools.
+ * /mcp/<MCP_SECRET>; every other path is a 404. Nothing is ever hard-deleted:
+ * content has no delete tools, and app notes are soft-deleted only.
  */
 
 function requiredEnv(name: string): string {
@@ -180,6 +185,85 @@ function buildServer(store: ContentStore): McpServer {
       annotations: write,
     },
     run((args) => setCardSeries(store, args)),
+  );
+
+  const noteParam = z.string().describe("App note id (best) or part of its text");
+  const noteKind = z.enum(APP_NOTE_KINDS);
+
+  server.registerTool(
+    "list_app_notes",
+    {
+      title: "List app notes",
+      description:
+        "Quick notes the user captured about the DailyTodo app itself (ideas, improvements, bugs). Open notes by default, newest first.",
+      inputSchema: {
+        status: z.enum(["open", "done", "all"]).optional(),
+        kind: noteKind.optional(),
+        include_deleted: z.boolean().optional().describe("Also show soft-deleted notes"),
+      },
+      annotations: readOnly,
+    },
+    run((args) => listAppNotes(store, args)),
+  );
+
+  server.registerTool(
+    "get_app_note",
+    {
+      title: "Get an app note",
+      description: "One app note in full.",
+      inputSchema: { note: noteParam },
+      annotations: readOnly,
+    },
+    run(({ note }) => getAppNote(store, note)),
+  );
+
+  server.registerTool(
+    "add_app_note",
+    {
+      title: "Add an app note",
+      description: "Save a new note about the DailyTodo app: an idea, improvement or bug (user story welcome).",
+      inputSchema: { text: z.string(), kind: noteKind.optional().describe("Defaults to idea") },
+      annotations: write,
+    },
+    run((args) => addAppNote(store, args)),
+  );
+
+  server.registerTool(
+    "update_app_note",
+    {
+      title: "Update an app note",
+      description: "Change an app note's text, type, or status (open/done). Only the fields given change.",
+      inputSchema: {
+        note: noteParam,
+        text: z.string().optional(),
+        kind: noteKind.optional(),
+        status: z.enum(["open", "done"]).optional(),
+      },
+      annotations: write,
+    },
+    run((args) => updateAppNoteTool(store, args)),
+  );
+
+  server.registerTool(
+    "delete_app_note",
+    {
+      title: "Delete an app note (soft)",
+      description: "Soft-delete an app note: it is hidden but kept, and can be brought back with restore_app_note.",
+      inputSchema: { note: noteParam },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    run(({ note }) => setAppNoteDeletedTool(store, { note, deleted: true })),
+  );
+
+  server.registerTool(
+    "restore_app_note",
+    {
+      title: "Restore an app note",
+      description: "Bring back a soft-deleted app note.",
+      inputSchema: { note: noteParam },
+      annotations: write,
+    },
+    run(({ note }) => setAppNoteDeletedTool(store, { note, deleted: false })),
   );
 
   return server;

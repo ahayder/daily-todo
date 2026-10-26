@@ -62,7 +62,9 @@ vi.mock("@/lib/pocketbase/client", () => ({
   getPocketBaseClient: () => fakeClient,
 }));
 
-const { createPocketBasePersistenceRepository } = await import("@/lib/pocketbase/persistence-repository");
+const { appNoteFromRow, appNoteToRow, createPocketBasePersistenceRepository } = await import(
+  "@/lib/pocketbase/persistence-repository"
+);
 const { createDefaultContentBoard } = await import("@/lib/store");
 
 const OWNER = "user_1";
@@ -243,5 +245,40 @@ describe("Content series (PocketBase mapping)", () => {
 
     expect(db.content_boards[0].series_json).toEqual([SERIES]);
     expect(db.content_cards[0].series_id).toBe("");
+  });
+});
+
+describe("App notes (PocketBase mapping)", () => {
+  const note = {
+    id: "app-note_1",
+    text: "Add weekly review",
+    kind: "improvement" as const,
+    status: "open" as const,
+    screen: "todos",
+    createdAt: "2026-10-01T10:00:00.000Z",
+    updatedAt: "2026-10-02T10:00:00.000Z",
+    deletedAt: null,
+  };
+
+  test("round-trips a note, and clears deleted_at with an empty string", () => {
+    const row = { id: "r1", ...appNoteToRow(note, OWNER, note.updatedAt) };
+    expect(row.deleted_at).toBe("");
+    expect(appNoteFromRow(row)).toEqual(note);
+  });
+
+  test("loads notes and refuses to hard-delete one", async () => {
+    (db.app_notes ??= []).push({ id: "r1", ...appNoteToRow(note, OWNER, note.updatedAt) });
+    const repository = createPocketBasePersistenceRepository();
+    const result = await repository.loadServer({ userId: OWNER, now: new Date("2026-10-07T12:00:00Z") });
+    expect(result?.state.appNotes[note.id]?.text).toBe("Add weekly review");
+
+    const key = `app_note:${note.id}`;
+    const record = { key, kind: "app_note" as const, value: note };
+    const [outcome] = await repository.applyOps({
+      userId: OWNER,
+      ops: [{ key, kind: "app_note", type: "delete", record, base: record, baseUpdatedAtClient: null, updatedAtClient: note.updatedAt }],
+    });
+    expect(outcome.status).toBe("skipped");
+    expect(writes).not.toContain("delete:app_notes");
   });
 });
