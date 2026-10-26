@@ -91,7 +91,7 @@ describe("change log", () => {
       refChangeId: original.id,
     });
     expect(canRedo(undoState, undo)).toEqual({ ok: true });
-    expect(redoTarget(original, NOW)).toMatchObject({ day: "2026-10-27" });
+    expect(redoTarget(undo, NOW)).toMatchObject({ day: "2026-10-27" });
     expect(canRedo(task({ day: "2026-11-01" }), undo).ok).toBe(false);
     expect(canUndo(undoState, undo).ok).toBe(false);
   });

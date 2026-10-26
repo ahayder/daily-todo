@@ -173,7 +173,7 @@ export function canRedo(current: unknown, undoEntry: ChangeLogEntry): UndoCheck 
   return { ok: true };
 }
 
-/** The state to write to redo the original change: forward to its "after". */
-export function redoTarget(original: ChangeLogEntry, now = new Date()): RecordLike {
-  return { ...asRecord(original.after), updatedAt: now.toISOString() };
+/** The state to write to redo: back to what the record was just before the undo. */
+export function redoTarget(undoEntry: ChangeLogEntry, now = new Date()): RecordLike {
+  return { ...asRecord(undoEntry.before), updatedAt: now.toISOString() };
 }

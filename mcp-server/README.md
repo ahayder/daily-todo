@@ -1,19 +1,38 @@
-# Content Planner MCP server
+# DailyTodo MCP server
 
-Lets ChatGPT or Claude read and edit the Content Planner from chat: list the board, add ideas, edit sections (idea note, shoot card…), move videos between stages, set publish links and transcripts, and manage series. **There are no delete tools.**
+Lets ChatGPT or Claude work with DailyTodo from chat ("chat captures, the app shows"):
+- **External brain:** tasks (Today, time blocks, Shelf, leftovers), decisions, projects, meeting summaries, follow-ups, repeats, search, and a standup agenda.
+- **Content Planner:** list the board, add ideas, edit sections (idea note, shoot card…), move videos between stages, set publish links and transcripts, and manage series.
+- **App notes:** quick notes about the app itself.
+
+**Nothing is ever hard-deleted.** "Delete" tools only hide a record (soft delete). Every write is saved in the change log, so `undo_change` can put it back and `redo_change` can bring it back again.
+
+The server sends the assistant a short set of instructions (the Office Companion rules: proposed vs agreed, reuse tags, one small next step, protect personal time, summaries not transcripts). See `SERVER_INSTRUCTIONS` in `src/server.ts`.
 
 It signs in to PocketBase as your normal user, so it can only touch your records. It reuses the app's own logic from `src/lib/` (moving, renumbering, Published dates, sections), so a change made in chat behaves exactly like the same change made in the app.
 
 ## Tools
 
-`list_board`, `get_card`, `add_idea`, `update_card`, `move_card` (pass `to: "next"` to advance like the app's button), `set_publish_info`, `list_series`, `add_series`, `update_series`, `set_card_series`.
+- **Tasks:** `list_today`, `list_tasks`, `get_task`, `add_task`, `update_task` (incl. `append_note`), `schedule_task` (day + time block, or `"shelf"`), `complete_task` (also completes a repeat due today), `reopen_task`, `delete_task` (soft), `restore_task`
+- **Decisions:** `log_decision` (incl. `replaces`), `list_decisions`, `get_decision`, `update_decision`
+- **Projects:** `list_projects`, `get_project`, `add_project`, `update_project`
+- **Meetings:** `file_meeting` (summary + linked decisions/tasks/follow-ups in one call; the transcript is only kept with `store_transcript: true`), `list_meetings`, `get_meeting`
+- **Follow-ups:** `add_follow_up`, `list_follow_ups`, `resolve_follow_up`
+- **Repeats:** `add_repeat`, `list_repeats`, `update_repeat`
+- **Memory:** `search_memory`, `list_tags`, `standup_agenda`
+- **History:** `list_changes`, `undo_change` (undoes a whole tool call; refuses if the record changed since), `redo_change`
+- **Content Planner:** `list_board`, `get_card`, `add_idea`, `update_card`, `move_card` (pass `to: "next"` to advance like the app's button), `set_publish_info`, `list_series`, `add_series`, `update_series`, `set_card_series`
+- **App notes:** `list_app_notes`, `get_app_note`, `add_app_note`, `update_app_note`, `delete_app_note` (soft), `restore_app_note`
 
-You can name a card by its id or by part of its title. If more than one card matches, the tool lists them instead of guessing.
+You can name a record by its id or by part of its title. If more than one matches, the tool lists them instead of guessing.
+
+"Today" is the user's day in `USER_TIMEZONE` (default `Asia/Dhaka`).
 
 ## Run locally (test DB)
 
 ```bash
 pnpm pocketbase:local          # in its own terminal
+pnpm pocketbase:schema:apply:local
 cp mcp-server/env.example mcp-server/.env   # point at http://127.0.0.1:8090, test user
 pnpm mcp:dev                   # http://127.0.0.1:8787/mcp/<MCP_SECRET>
 npx @modelcontextprotocol/inspector   # optional: try the tools in a UI

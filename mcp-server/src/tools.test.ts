@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CONTENT_COLUMN_DEVELOP_ID,
@@ -9,6 +11,9 @@ import {
 } from "@/lib/store";
 import type { AppNote, ContentBoard, ContentCard } from "@/lib/types";
 import { cardToPayload, rowToCard, tokenUserId, type ContentStore } from "./content-store";
+import { withHistory } from "./history";
+import { createMemoryTestStore } from "./memory-test-store";
+import * as memoryTools from "./memory-tools";
 import * as tools from "./tools";
 
 function card(id: string, columnId: string, order: number, extra: Partial<ContentCard> = {}): ContentCard {
@@ -50,6 +55,26 @@ describe("content planner MCP tools", () => {
     expect(Object.keys(tools).filter((name) => /delete|remove/i.test(name))).toEqual(["setAppNoteDeletedTool"]);
     const { store } = memoryStore(board(), []);
     expect(Object.keys(store).filter((name) => /delete|remove/i.test(name))).toEqual([]);
+  });
+
+  it("never hard-deletes anywhere: the full store and history store have no delete, and delete tools are soft", async () => {
+    const { store, state } = createMemoryTestStore();
+    const history = withHistory(store, "chat:test");
+    expect(Object.keys(store).filter((name) => /delete|remove|destroy|purge/i.test(name))).toEqual([]);
+    expect(Object.keys(history).filter((name) => /delete|remove|destroy|purge/i.test(name))).toEqual([]);
+    expect(Object.keys(memoryTools).filter((name) => /delete|remove|destroy|purge/i.test(name))).toEqual(["deleteTask"]);
+
+    const ctx = { store: history, timeZone: "UTC", source: "chat:test" };
+    const { created } = await memoryTools.addTask(ctx, { title: "Keep me" });
+    await memoryTools.deleteTask(ctx, { task: created.id! });
+    expect(state.records.task[created.id!]).toMatchObject({ deletedAt: expect.any(String) });
+  });
+
+  it("registers only soft-delete tools (server.ts is read as text: importing it starts the server)", () => {
+    const source = readFileSync(path.join(__dirname, "server.ts"), "utf8");
+    const names = [...source.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((match) => match[1]);
+    expect(names.length).toBeGreaterThan(40);
+    expect(names.filter((name) => /delete|remove|destroy|purge/.test(name))).toEqual(["delete_app_note", "delete_task"]);
   });
 
   it("adds an idea at the top of Ideas and renumbers that column", async () => {
