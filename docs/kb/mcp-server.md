@@ -5,8 +5,7 @@ Last verified: 2026-10-27
 app notes and the external brain (tasks, decisions, projects, meetings, follow-ups, repeats,
 change history) from chat (MCP over HTTP). No hard deletes anywhere; the only deletes are the soft
 `delete_app_note` and `delete_task`. Deployed on Coolify at `https://mcp.ahayder.me` against the
-prod PocketBase. **The external-brain tools (v2.0.0) are not deployed yet** — waiting for the
-user's OK to apply the prod schema first, then merge dev→main and redeploy with `USER_TIMEZONE` set.
+prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23, `USER_TIMEZONE=Asia/Dhaka` set on Coolify).
 
 ## How it works
 - `mcp-server/src/server.ts`: `node:http` + `@modelcontextprotocol/sdk` Streamable HTTP, **stateless** — a new `McpServer` + transport per request. Only `/mcp/<MCP_SECRET>` serves MCP; `/health` returns ok; any other path (incl. wrong secret) is a 404. Auth is just the secret URL path (no OAuth); `MCP_SECRET` must be 32+ chars.
@@ -32,7 +31,8 @@ user's OK to apply the prod schema first, then merge dev→main and redeploy wit
 - Coolify at `coolify.ahayder.me`, CLI context `myvps`, project **DailyTodo**.
 - App `dailytodo-mcp` (uuid `jfrjb8yzrx7jwxqddehfd10n`): GitHub app source `ahayder/daily-todo`, branch `main`, build pack dockerfile, base dir `/`, dockerfile `/mcp-server/Dockerfile` (multi-stage, builds from source), port 8787, domain `https://mcp.ahayder.me`, health check `/health`. Wildcard `*.ahayder.me` DNS already points at the VPS.
 - Same project: website app `daily-todo` (nixpacks, `main`, `dailytodo.alihaydershuvo.com`); PocketBase is a Coolify service at `dailytodo-pocketbase.ahayder.me`.
-- Prod PocketBase has the series fields (`series_json`, `series_id`) — verified 2026-10-26.
+- Prod PocketBase has the series fields (`series_json`, `series_id`) — verified 2026-10-26 — and the 7 external-brain collections (applied 2026-10-27).
+- Deploy check: `/health` returns ok and logs show `DailyTodo MCP listening on :8787`.
 
 ## Gotchas
 - **Coolify applies env var changes only on a full redeploy** (`coolify deploy <uuid>`); a restart does not pick them up.
@@ -45,6 +45,7 @@ user's OK to apply the prod schema first, then merge dev→main and redeploy wit
 - PocketBase returns dates with a space instead of `T`; normalize every date (incl. `updated_at_client`) or outputs mix formats.
 - ESLint also lints `mcp-server/dist` if a local `pnpm mcp:build` left it there (git-ignored); delete it before `pnpm lint`.
 - **Local walkthrough without touching `mcp-server/.env`:** mint a 1-day test-DB token with `node --env-file=<main checkout>/.env.test.local scripts/create-mcp-token.mjs "" 1` into a private env file (`umask 077`), run `npx tsx --env-file=<that file> mcp-server/src/server.ts` with `PORT=8788`, then POST JSON-RPC to `/mcp/<secret>` with `Accept: application/json, text/event-stream`. Worktrees have no `.env` files or `pocketbase-local/`; use the main checkout's.
+- After adding tools, chat clients must reconnect/refresh the connector to see them.
 - Open app tabs only see MCP edits on focus/reload; a stale tab that then saves wins (last write wins).
 - Prod deploys need the user's OK. Point `mcp:dev` at the local test DB for experiments — prod data otherwise.
 
