@@ -1,5 +1,5 @@
 # Content Planner (Content Conveyor)
-Last verified: 2026-10-11
+Last verified: 2026-10-26
 
 `/content-planner` is a full-width **"Focus + Shelf"** page: one fixed five-stage conveyor per user,
 Ideas → Develop → Shoot next → Editing → Published. Built for ADHD: everything readable at a glance,
@@ -40,6 +40,7 @@ one obvious next step. Components: `src/components/content-planner/`; logic: `sr
 - Removed for good: Board/Gallery views, per-card collapse, move dialog, Markdown rendering of cards.
 - Selection, sheet state, review position and focus requests are ephemeral component state.
 - Changes to conveyor behavior need the user's product judgment; see [decisions.md](decisions.md).
+- Card/board field changes must also be mirrored in the MCP server's duplicated mapping (`mcp-server/src/content-store.ts`); see [mcp-server.md](mcp-server.md).
 
 ## Related
-[decisions.md](decisions.md), [pocketbase.md](pocketbase.md)
+[decisions.md](decisions.md), [pocketbase.md](pocketbase.md), [mcp-server.md](mcp-server.md)

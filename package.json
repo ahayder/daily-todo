@@ -23,7 +23,9 @@
     "pocketbase:backups:enable:local": "node --env-file=.env.test.local scripts/enable-pocketbase-backups.mjs",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mcp:dev": "tsx --env-file=mcp-server/.env mcp-server/src/server.ts",
+    "mcp:build": "esbuild mcp-server/src/server.ts --bundle --platform=node --target=node22 --format=esm --outfile=mcp-server/dist/server.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\""
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -31,6 +33,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@excalidraw/excalidraw": "^0.18.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.0",
@@ -74,11 +77,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^28.1.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }
