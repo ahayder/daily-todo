@@ -15,6 +15,9 @@ import {
 import { getSeriesList, getSeriesStats } from "@/lib/content-series";
 import {
   addContentSeries,
+  createAppNote,
+  setAppNoteDeleted,
+  updateAppNote,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
   createContentCard,
   createContentSeries,
@@ -27,14 +30,22 @@ import {
   updateContentSeries,
 } from "@/lib/store";
 import { CONTENT_PLATFORMS } from "@/lib/types";
-import type { ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
+import type {
+  AppNote,
+  AppNoteKind,
+  AppNoteStatus,
+  ContentBoard,
+  ContentCard,
+  ContentLinks,
+  ContentSeries,
+} from "@/lib/types";
 import type { ContentStore } from "./content-store";
 
 /**
  * Content Planner actions for the MCP server. Every rule (moving, renumbering,
  * Published dates, sections, series) comes from the app's own pure helpers so
- * chat edits behave exactly like edits in the UI. There are no delete actions
- * by design.
+ * chat edits behave exactly like edits in the UI. Nothing is ever hard-deleted:
+ * cards and series have no delete actions, and app notes are soft-deleted.
  */
 
 export class ToolError extends Error {}
@@ -302,4 +313,78 @@ export async function setCardSeries(store: ContentStore, input: { card: string; 
   const next = setContentCardSeries(cards, card.id, series?.id ?? null);
   await saveChangedCards(store, cards, next);
   return { updated: describeCard(next[card.id], board) };
+}
+
+// ---- App notes: quick notes about the DailyTodo app itself ----
+// Deleting is always a soft delete (deletedAt); nothing is ever removed.
+
+function describeNote(note: AppNote) {
+  return {
+    id: note.id,
+    text: note.text,
+    kind: note.kind,
+    status: note.status,
+    screen: note.screen,
+    created_at: note.createdAt,
+    ...(note.deletedAt ? { deleted_at: note.deletedAt } : {}),
+  };
+}
+
+/** Find a note by exact id, else by its text (contains). Never guesses between several. */
+export function resolveNote(notes: Record<string, AppNote>, query: string, includeDeleted = false): AppNote {
+  const trimmed = query.trim();
+  if (notes[trimmed]) return notes[trimmed];
+  const lower = trimmed.toLowerCase();
+  const matches = Object.values(notes).filter(
+    (note) => (includeDeleted || !note.deletedAt) && note.text.toLowerCase().includes(lower),
+  );
+  if (matches.length === 1) return matches[0];
+  if (matches.length === 0) throw new ToolError(`No app note matches "${query}". Use list_app_notes to see them.`);
+  const list = matches.map((note) => `- ${note.text.slice(0, 80)} (id: ${note.id})`).join("\n");
+  throw new ToolError(`Several app notes match "${query}". Call again with one of these ids:\n${list}`);
+}
+
+export async function listAppNotes(
+  store: ContentStore,
+  input: { status?: AppNoteStatus | "all"; kind?: AppNoteKind; include_deleted?: boolean } = {},
+) {
+  const notes = Object.values(await store.loadAppNotes())
+    .filter((note) => input.include_deleted || !note.deletedAt)
+    .filter((note) => (input.status ?? "open") === "all" || note.status === (input.status ?? "open"))
+    .filter((note) => !input.kind || note.kind === input.kind)
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return { total: notes.length, notes: notes.map(describeNote) };
+}
+
+export async function getAppNote(store: ContentStore, query: string) {
+  return describeNote(resolveNote(await store.loadAppNotes(), query, true));
+}
+
+export async function addAppNote(store: ContentStore, input: { text: string; kind?: AppNoteKind }) {
+  const note = createAppNote({ text: input.text, kind: input.kind, screen: "chat" });
+  if (!note) throw new ToolError("The note text can't be blank.");
+  await store.saveAppNote(note);
+  return { created: describeNote(note) };
+}
+
+export async function updateAppNoteTool(
+  store: ContentStore,
+  input: { note: string; text?: string; kind?: AppNoteKind; status?: AppNoteStatus },
+) {
+  const notes = await store.loadAppNotes();
+  const note = resolveNote(notes, input.note);
+  const next = updateAppNote(notes, note.id, input);
+  if (next === notes) return { updated: describeNote(note), note: "Nothing changed." };
+  await store.saveAppNote(next[note.id]);
+  return { updated: describeNote(next[note.id]) };
+}
+
+/** Soft delete (deleted: true) or restore. The record always stays on the server. */
+export async function setAppNoteDeletedTool(store: ContentStore, input: { note: string; deleted: boolean }) {
+  const notes = await store.loadAppNotes();
+  const note = resolveNote(notes, input.note, !input.deleted);
+  const next = setAppNoteDeleted(notes, note.id, input.deleted);
+  if (next === notes) return { note: describeNote(note), message: input.deleted ? "Already deleted." : "Not deleted." };
+  await store.saveAppNote(next[note.id]);
+  return { [input.deleted ? "deleted" : "restored"]: describeNote(next[note.id]) };
 }

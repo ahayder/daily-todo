@@ -1,6 +1,9 @@
 import { getYearMonth } from "@/lib/date";
 import { CONTENT_FONT_SCALE_DEFAULT } from "@/lib/content-font-scale";
 import type {
+  AppNote,
+  AppNoteKind,
+  AppNoteStatus,
   AppState,
   ContentBoard,
   ContentCard,
@@ -967,6 +970,60 @@ export function unlinkContentSeriesCards(
     .reduce((current, card) => setContentCardSeries(current, card.id, null), cards);
 }
 
+/** A new app note, or null when the text is blank. */
+export function createAppNote(input: { text: string; kind?: AppNoteKind; screen?: string }): AppNote | null {
+  const text = input.text.trim();
+  if (!text) return null;
+  const now = new Date().toISOString();
+  return {
+    id: makeId("app-note"),
+    text,
+    kind: input.kind ?? "idea",
+    status: "open",
+    screen: input.screen ?? "",
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+  };
+}
+
+/** Change a note's text, kind or status; blank text and no-ops are ignored. */
+export function updateAppNote(
+  notes: Record<string, AppNote>,
+  noteId: string,
+  updates: { text?: string; kind?: AppNoteKind; status?: AppNoteStatus },
+): Record<string, AppNote> {
+  const note = notes[noteId];
+  if (!note) return notes;
+  const text = updates.text === undefined ? note.text : updates.text.trim();
+  const kind = updates.kind ?? note.kind;
+  const status = updates.status ?? note.status;
+  if (!text || (text === note.text && kind === note.kind && status === note.status)) return notes;
+  return { ...notes, [noteId]: { ...note, text, kind, status, updatedAt: new Date().toISOString() } };
+}
+
+/**
+ * Soft delete (`deleted: true`) or restore an app note. Notes are never removed
+ * from state, so sync only ever sends an edit and the server keeps the record.
+ */
+export function setAppNoteDeleted(
+  notes: Record<string, AppNote>,
+  noteId: string,
+  deleted: boolean,
+): Record<string, AppNote> {
+  const note = notes[noteId];
+  if (!note || (note.deletedAt !== null) === deleted) return notes;
+  const now = new Date().toISOString();
+  return { ...notes, [noteId]: { ...note, deletedAt: deleted ? now : null, updatedAt: now } };
+}
+
+/** Notes still in use (not soft-deleted), newest first. */
+export function getVisibleAppNotes(notes: Record<string, AppNote>): AppNote[] {
+  return Object.values(notes)
+    .filter((note) => note.deletedAt === null)
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
 export function deleteContentCard(
   cards: Record<string, ContentCard>,
   cardId: string,
@@ -1009,6 +1066,7 @@ export function createInitialState(todayISO: string): AppState {
     },
     contentBoard: createDefaultContentBoard(),
     contentCards: {},
+    appNotes: {},
     uiState: {
       selectedDailyDate: todayISO,
       selectedTodoWorkspaceId: defaultTodoWorkspace.id,

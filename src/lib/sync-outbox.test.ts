@@ -13,7 +13,7 @@ import {
   sameTimestamp,
   type SyncOp,
 } from "@/lib/sync-outbox";
-import { createContentCard, createInitialState, getDailyPageKey } from "@/lib/store";
+import { createAppNote, createContentCard, createInitialState, getDailyPageKey, setAppNoteDeleted } from "@/lib/store";
 import type { AppState, DailyPage, Todo } from "@/lib/types";
 
 const NOW = "2026-10-07T12:00:00.000Z";
@@ -390,5 +390,21 @@ describe("helpers", () => {
 
   test("bad server data throws instead of becoming an empty workspace", () => {
     expect(() => parseAppStateOrThrow({ dailyPages: "broken" })).toThrow();
+  });
+});
+
+describe("app notes sync", () => {
+  test("a soft delete syncs as an upsert, and a removed note never becomes a delete op", () => {
+    const base = createInitialState("2026-03-10");
+    const note = createAppNote({ text: "Idea", screen: "todos" })!;
+    const withNote = { ...base, appNotes: { [note.id]: note } };
+
+    const softDeleted = { ...withNote, appNotes: setAppNoteDeleted(withNote.appNotes, note.id, true) };
+    const softOps = diff(withNote, softDeleted).ops;
+    expect(softOps).toHaveLength(1);
+    expect(softOps[0]).toMatchObject({ kind: "app_note", type: "upsert" });
+
+    const removed = { ...withNote, appNotes: {} };
+    expect(diff(withNote, removed).ops).toEqual([]);
   });
 });

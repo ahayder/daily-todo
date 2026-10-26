@@ -29,6 +29,7 @@ import {
 } from "@/lib/sync-outbox";
 import { DEFAULT_TODO_WORKSPACE_ID, getDailyPageKey } from "@/lib/store";
 import type {
+  AppNote,
   AppState,
   ContentBoard,
   ContentCard,
@@ -43,7 +44,7 @@ import type {
   TodoWorkspace,
 } from "@/lib/types";
 
-import { CONTENT_PLATFORMS } from "@/lib/types";
+import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
 
 export { getSyncRecordValuesFromState } from "@/lib/sync-outbox";
 
@@ -117,6 +118,20 @@ type PocketBaseContentCardRecord = {
   updated_at_client?: string;
 };
 
+type PocketBaseAppNoteRecord = {
+  id: string;
+  owner: string;
+  note_id?: string;
+  text?: string;
+  kind?: string;
+  status?: string;
+  screen?: string;
+  created_at_client?: string;
+  deleted_at?: string;
+  updated?: string;
+  updated_at_client?: string;
+};
+
 type PocketBaseWorkspaceStateRecord = {
   id: string;
   owner: string;
@@ -149,6 +164,7 @@ const COLLECTION_BY_KIND: Record<PersistenceRecordKind, string> = {
   planner_preset: "planner_presets",
   content_board: "content_boards",
   content_card: "content_cards",
+  app_note: "app_notes",
   workspace_state: "workspace_state",
 };
 
@@ -227,6 +243,39 @@ function normalizeContentSeries(value: unknown): ContentSeries[] {
   });
 }
 
+const APP_NOTE_KIND_SET = new Set<string>(APP_NOTE_KINDS);
+
+/** Reads an `app_notes` row; null when it has no id. Mirrored in mcp-server/src/content-store.ts. */
+export function appNoteFromRow(record: PocketBaseAppNoteRecord): AppNote | null {
+  if (!record.note_id) return null;
+  const updatedAt = record.updated_at_client ?? record.updated ?? new Date(0).toISOString();
+  return {
+    id: record.note_id,
+    text: record.text ?? "",
+    kind: record.kind && APP_NOTE_KIND_SET.has(record.kind) ? (record.kind as AppNote["kind"]) : "idea",
+    status: record.status === "done" ? "done" : "open",
+    screen: record.screen ?? "",
+    createdAt: normalizePocketBaseDate(record.created_at_client) ?? updatedAt,
+    updatedAt,
+    deletedAt: normalizePocketBaseDate(record.deleted_at),
+  };
+}
+
+/** The `app_notes` payload for a note. Empty strings clear optional fields. */
+export function appNoteToRow(note: AppNote, owner: string, updatedAtClient: string) {
+  return {
+    owner,
+    note_id: note.id,
+    text: note.text,
+    kind: note.kind,
+    status: note.status,
+    screen: note.screen,
+    created_at_client: note.createdAt,
+    deleted_at: note.deletedAt ?? "",
+    updated_at_client: updatedAtClient,
+  };
+}
+
 function isNotFoundError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -291,6 +340,7 @@ function assembleStateFromValues(
   const plannerPresets: Record<string, PlannerPreset> = {};
   let contentBoard = fallbackState.contentBoard;
   const contentCards: Record<string, ContentCard> = {};
+  const appNotes: Record<string, AppNote> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
 
   for (const record of Object.values(values)) {
@@ -328,6 +378,11 @@ function assembleStateFromValues(
       continue;
     }
 
+    if (record.kind === "app_note") {
+      appNotes[record.value.id] = record.value;
+      continue;
+    }
+
     todoWorkspaces = record.value.todoWorkspaces;
     syncableUiState = record.value.uiState;
   }
@@ -341,6 +396,7 @@ function assembleStateFromValues(
       plannerPresets,
       contentBoard,
       contentCards,
+      appNotes,
       uiState: mergeUiState(
         syncableUiState,
         extractLocalOnlyUIState(fallbackState.uiState),
@@ -405,6 +461,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       // Daily history is append-only; the server refuses these deletes too.
       if (op.kind === "daily_page") {
         return { key: op.key, status: "skipped", reason: "Daily pages are never deleted." };
+      }
+      if (op.kind === "app_note") {
+        return { key: op.key, status: "skipped", reason: "App notes are only soft-deleted." };
       }
       if (existing) {
         await client.collection(COLLECTION_BY_KIND[op.kind]).delete(existing.id, { requestKey: null });
@@ -478,6 +537,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       note_folder: "folder_id",
       planner_preset: "preset_id",
       content_card: "card_id",
+      app_note: "note_id",
     };
     const field = idField[record.kind];
     const filter = field
@@ -605,7 +665,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     records: Record<string, PersistenceRecordMetadata>;
   }> {
     const client = getPocketBaseClient();
-    const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, workspaceState] =
+    const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, appNotes, workspaceState] =
       await Promise.all([
       client
         .collection("daily_pages")
@@ -621,6 +681,15 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       client
         .collection("content_cards")
         .getFullList<PocketBaseContentCardRecord>({ filter: `owner="${userId}"`, requestKey: null }),
+      // Tolerate a server that doesn't have the collection yet (schema not
+      // applied): no notes, rather than failing the whole load.
+      client
+        .collection("app_notes")
+        .getFullList<PocketBaseAppNoteRecord>({ filter: `owner="${userId}"`, requestKey: null })
+        .catch((error: unknown) => {
+          if (isNotFoundError(error)) return [] as PocketBaseAppNoteRecord[];
+          throw error;
+        }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
     ]);
 
@@ -757,6 +826,20 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
+    for (const record of appNotes) {
+      const value = appNoteFromRow(record);
+      if (!value) continue;
+      const key = `app_note:${value.id}`;
+      values[key] = { key, kind: "app_note", value };
+      records[key] = createRecordMetadata(
+        key,
+        "app_note",
+        value,
+        record.updated ?? null,
+        record.updated_at_client ?? null,
+      );
+    }
+
     if (workspaceState) {
       const value: SyncableWorkspaceState = {
         todoWorkspaces: safeRecord<TodoWorkspace>(workspaceState.todo_workspaces_json),
@@ -872,6 +955,15 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         return client.collection("content_boards").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {
         return client.collection("content_boards").create<PocketBaseRow>(payload, { requestKey: null });
+      }
+    }
+
+    if (record.kind === "app_note") {
+      const payload = appNoteToRow(record.value, userId, updatedAtClient);
+      if (existing) {
+        return client.collection("app_notes").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
+      } else {
+        return client.collection("app_notes").create<PocketBaseRow>(payload, { requestKey: null });
       }
     }
 

@@ -49,6 +49,7 @@ describe("buildSchemaDefinitions", () => {
       "planner_presets",
       "content_boards",
       "content_cards",
+      "app_notes",
       "workspace_state",
       "app_state_snapshots",
     ]);
@@ -58,9 +59,10 @@ describe("buildSchemaDefinitions", () => {
       expect(definition.viewRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.createRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.updateRule).toBe(COLLECTION_ACCESS_RULE);
-      // Daily pages are append-only: only a superuser may delete them.
+      // Daily pages are append-only and app notes are soft-deleted: only a
+      // superuser may hard-delete them.
       expect(definition.deleteRule).toBe(
-        definition.name === "daily_pages" ? null : COLLECTION_ACCESS_RULE,
+        definition.name === "daily_pages" || definition.name === "app_notes" ? null : COLLECTION_ACCESS_RULE,
       );
       expect(definition.fields.find((field: { name: string }) => field.name === "owner")?.collectionId).toBe(
         "users_1",
@@ -113,6 +115,15 @@ describe("buildSchemaDefinitions", () => {
     expect(publishedAt?.type).toBe("date");
     expect(publishedAt?.required).toBe(false);
   });
+});
+
+test("app_notes: only the ids and sync timestamp are required (everything else can be empty)", () => {
+  const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+  const appNotes = definitions.find((item) => item.name === "app_notes");
+  const required = appNotes?.fields
+    .filter((field: { required?: boolean }) => field.required)
+    .map((field: { name: string }) => field.name);
+  expect(required).toEqual(["owner", "note_id", "updated_at_client"]);
 });
 
 describe("mergeCollectionDefinition", () => {
@@ -225,8 +236,8 @@ describe("applyPocketBaseSchema", () => {
       logger: { log: vi.fn(), error: vi.fn() } as unknown as Console,
     });
 
-    expect(summary.created).toHaveLength(8);
-    expect(create).toHaveBeenCalledTimes(8);
+    expect(summary.created).toHaveLength(9);
+    expect(create).toHaveBeenCalledTimes(9);
   });
 
   test("updates existing collection with drift and preserves unchanged ones", async () => {

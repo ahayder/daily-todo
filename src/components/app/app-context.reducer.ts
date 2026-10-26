@@ -15,6 +15,9 @@ import {
 } from "@/lib/persistence";
 import { toISODate } from "@/lib/date";
 import {
+  createAppNote,
+  setAppNoteDeleted,
+  updateAppNote,
   addPlannerPurposeToDays,
   addContentColumn,
   applyPlannerPurposeToDays,
@@ -490,6 +493,19 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
         contentBoard,
         contentCards: unlinkContentSeriesCards(state.contentCards, action.seriesId),
       };
+    }
+    case "create-app-note": {
+      const note = createAppNote(action);
+      return note ? { ...state, appNotes: { ...state.appNotes, [note.id]: note } } : state;
+    }
+    case "update-app-note": {
+      const appNotes = updateAppNote(state.appNotes, action.noteId, action);
+      return appNotes === state.appNotes ? state : { ...state, appNotes };
+    }
+    case "delete-app-note":
+    case "restore-app-note": {
+      const appNotes = setAppNoteDeleted(state.appNotes, action.noteId, action.type === "delete-app-note");
+      return appNotes === state.appNotes ? state : { ...state, appNotes };
     }
     case "set-content-card-series": {
       if (action.seriesId && !state.contentBoard.series?.some((series) => series.id === action.seriesId)) {

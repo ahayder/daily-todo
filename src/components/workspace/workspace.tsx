@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
 
 import { useAppState } from "@/components/app/app-context";
+import { AppNotesDialog } from "@/components/app-notes/app-notes-dialog";
 import { ContentPlannerView } from "@/components/content-planner-view";
 import { NotesView } from "@/components/notes/notes-view";
 import { PlannerView } from "@/components/planner/planner-view";
@@ -26,6 +27,13 @@ export function Workspace({ forcedView }: Props) {
   const isPlanner = activeView === "planner";
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
   const previousViewRef = useRef<ViewMode | null>(null);
+  const [isAppNotesOpen, setIsAppNotesOpen] = useState(false);
+  // What the user was working in, so closing the note dialog puts them back.
+  const appNotesReturnFocusRef = useRef<HTMLElement | null>(null);
+  const openAppNotes = () => {
+    appNotesReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setIsAppNotesOpen(true);
+  };
   const shellStyle = {
     "--content-font-scale": String(contentFontScale),
     "--content-font-size-editor": "calc(18px * var(--content-font-scale))",
@@ -53,6 +61,13 @@ export function Workspace({ forcedView }: Props) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+
+      // Cmd/Ctrl+Shift+I: note for the app, from anywhere (also in focus mode).
+      if (event.shiftKey && event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        openAppNotes();
         return;
       }
 
@@ -116,8 +131,19 @@ export function Workspace({ forcedView }: Props) {
           dispatch={dispatch}
           sync={sync}
           retrySync={retrySync}
+          onOpenAppNotes={openAppNotes}
         />
       ) : null}
+
+      <AppNotesDialog
+        open={isAppNotesOpen}
+        onOpenChange={setIsAppNotesOpen}
+        notes={state.appNotes}
+        dispatch={dispatch}
+        screen={activeView}
+        isReadOnly={sync.isReadOnly}
+        returnFocusRef={appNotesReturnFocusRef}
+      />
 
       <div
         className={

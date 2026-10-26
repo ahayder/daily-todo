@@ -1,6 +1,6 @@
 import PocketBase from "pocketbase";
-import { CONTENT_PLATFORMS } from "@/lib/types";
-import type { ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
+import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
+import type { AppNote, ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
 
 /**
  * Where the MCP tools read and write Content Planner data. Writes are one
@@ -13,6 +13,9 @@ export type ContentStore = {
   loadCards(): Promise<Record<string, ContentCard>>;
   saveBoard(board: ContentBoard): Promise<void>;
   saveCard(card: ContentCard): Promise<void>;
+  loadAppNotes(): Promise<Record<string, AppNote>>;
+  /** App notes are only ever soft-deleted (deletedAt), so there is no delete. */
+  saveAppNote(note: AppNote): Promise<void>;
 };
 
 type Row = Record<string, unknown> & { id: string };
@@ -92,6 +95,37 @@ export function cardToPayload(card: ContentCard, owner: string) {
     transcript: card.transcript ?? "",
     series_id: card.seriesId ?? "",
     updated_at_client: card.updatedAt,
+  };
+}
+
+// Mirrors appNoteFromRow / appNoteToRow in persistence-repository.ts.
+export function rowToAppNote(row: Row): AppNote | null {
+  if (!row.note_id) return null;
+  const updatedAt = String(row.updated_at_client ?? row.updated ?? new Date(0).toISOString());
+  const kind = String(row.kind ?? "");
+  return {
+    id: String(row.note_id),
+    text: typeof row.text === "string" ? row.text : "",
+    kind: (APP_NOTE_KINDS as readonly string[]).includes(kind) ? (kind as AppNote["kind"]) : "idea",
+    status: row.status === "done" ? "done" : "open",
+    screen: typeof row.screen === "string" ? row.screen : "",
+    createdAt: normalizeDate(row.created_at_client) ?? updatedAt,
+    updatedAt,
+    deletedAt: normalizeDate(row.deleted_at),
+  };
+}
+
+export function appNoteToPayload(note: AppNote, owner: string) {
+  return {
+    owner,
+    note_id: note.id,
+    text: note.text,
+    kind: note.kind,
+    status: note.status,
+    screen: note.screen,
+    created_at_client: note.createdAt,
+    deleted_at: note.deletedAt ?? "",
+    updated_at_client: note.updatedAt,
   };
 }
 
@@ -176,6 +210,30 @@ export function createPocketBaseStore(options: { url: string; auth: PocketBaseAu
       };
       if (existing) await pb.collection("content_boards").update(existing.id, payload);
       else await pb.collection("content_boards").create(payload);
+    },
+
+    async loadAppNotes() {
+      const owner = await ownerId();
+      const rows = await pb
+        .collection("app_notes")
+        .getFullList<Row>({ filter: pb.filter("owner = {:owner}", { owner }) });
+      const notes: Record<string, AppNote> = {};
+      for (const row of rows) {
+        const note = rowToAppNote(row);
+        if (note) notes[note.id] = note;
+      }
+      return notes;
+    },
+
+    async saveAppNote(note) {
+      const owner = await ownerId();
+      const existing = await findOne(
+        "app_notes",
+        pb.filter("owner = {:owner} && note_id = {:noteId}", { owner, noteId: note.id }),
+      );
+      const payload = appNoteToPayload(note, owner);
+      if (existing) await pb.collection("app_notes").update(existing.id, payload);
+      else await pb.collection("app_notes").create(payload);
     },
 
     async saveCard(card) {

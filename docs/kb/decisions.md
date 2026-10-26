@@ -3,7 +3,7 @@ Last verified: 2026-10-26
 
 Decisions the user made. Don't undo or re-propose without asking. Newest first.
 
-- **2026-10-26 — Content Planner MCP server.** User wanted to edit the Content Planner from ChatGPT/Claude chat. Chose: hosted online (ChatGPT needs a public URL), on the same VPS as PocketBase (Docker, planned `mcp.ahayder.me`), auth by secret URL path instead of OAuth (simple, single user), powers = read/add/edit only — **no delete tools** (safety). See [mcp-server.md](mcp-server.md).
+- **2026-10-26 — Content Planner MCP server.** User wanted to edit the Content Planner from ChatGPT/Claude chat. Chose: hosted online (ChatGPT needs a public URL), on the same VPS as PocketBase (Coolify, `mcp.ahayder.me`), auth by secret URL path instead of OAuth (simple, single user), powers = read/add/edit only — **no delete tools** (safety). Server logs in with a 365-day impersonation token rather than a stored password (user prefers not storing the password; password login also kept failing). See [mcp-server.md](mcp-server.md).
 
 - **2026-10-14 — Todos/Planner interview (no decision yet).** User wants a "Now + timeline" view on sit-down, welcomes gentle desktop pings, wants the Daily Planner as a guideline (not a strict schedule), and has no preference on leftovers. A "Today" home merging Todos + Daily Planner is only a proposal — not approved. Details: [user-needs.md](user-needs.md).
 - **2026-10-14 — One project memory.** kb-keeper + `docs/kb/` stay the only project memory. When upgrading the UI brain to v2, the user chose not to install ui-brain's `.brain/`, `brain` agent and Stop hook (avoids two competing memories).

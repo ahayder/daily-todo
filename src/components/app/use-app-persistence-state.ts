@@ -67,7 +67,8 @@ function changesSyncedContent(current: AppState, next: AppState) {
     current.noteFolders !== next.noteFolders ||
     current.plannerPresets !== next.plannerPresets ||
     current.contentBoard !== next.contentBoard ||
-    current.contentCards !== next.contentCards
+    current.contentCards !== next.contentCards ||
+    current.appNotes !== next.appNotes
   );
 }
 

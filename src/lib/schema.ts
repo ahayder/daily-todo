@@ -152,6 +152,17 @@ const contentCardSchema = z.object({
   seriesId: z.string().optional().catch(undefined),
 });
 
+const appNoteSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().catch(""),
+  kind: z.enum(["idea", "improvement", "bug"]).catch("idea"),
+  status: z.enum(["open", "done"]).catch("open"),
+  screen: z.string().catch(""),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().nullable().catch(null),
+});
+
 export const appStateSchema = z.object({
   dailyPages: z.record(z.string(), dailyPageSchema),
   todoWorkspaces: z.record(z.string(), todoWorkspaceSchema),
@@ -160,6 +171,7 @@ export const appStateSchema = z.object({
   plannerPresets: z.record(z.string(), plannerPresetSchema),
   contentBoard: contentBoardSchema,
   contentCards: z.record(z.string(), contentCardSchema).catch({}),
+  appNotes: z.record(z.string(), appNoteSchema).catch({}),
   uiState: z.object({
     selectedDailyDate: z.string().nullable(),
     selectedTodoWorkspaceId: z.string(),
