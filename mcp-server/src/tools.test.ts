@@ -8,7 +8,7 @@ import {
   createDefaultContentBoard,
 } from "@/lib/store";
 import type { ContentBoard, ContentCard } from "@/lib/types";
-import { cardToPayload, rowToCard, type ContentStore } from "./content-store";
+import { cardToPayload, rowToCard, tokenUserId, type ContentStore } from "./content-store";
 import * as tools from "./tools";
 
 function card(id: string, columnId: string, order: number, extra: Partial<ContentCard> = {}): ContentCard {
@@ -150,6 +150,14 @@ describe("content store record mapping", () => {
     });
     const row = { id: "rec1", ...cardToPayload(original, "user1") };
     expect(rowToCard(row)).toEqual(original);
+  });
+
+  it("reads the user id from a PocketBase auth token", () => {
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const token = (payload: object) => `${encode({ alg: "HS256" })}.${encode(payload)}.sig`;
+    expect(tokenUserId(token({ id: "user1", type: "auth", exp: 1 }))).toBe("user1");
+    expect(tokenUserId(token({ id: "user1", type: "file" }))).toBeNull();
+    expect(tokenUserId("not-a-token")).toBeNull();
   });
 
   it("clears optional fields with empty values, never omitting them", () => {

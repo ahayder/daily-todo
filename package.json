@@ -25,7 +25,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp:dev": "tsx --env-file=mcp-server/.env mcp-server/src/server.ts",
-    "mcp:build": "esbuild mcp-server/src/server.ts --bundle --platform=node --target=node22 --format=esm --outfile=mcp-server/dist/server.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\""
+    "mcp:build": "esbuild mcp-server/src/server.ts --bundle --platform=node --target=node22 --format=esm --outfile=mcp-server/dist/server.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "mcp:token": "node scripts/create-mcp-token.mjs",
+    "mcp:token:local": "node --env-file=.env.test.local scripts/create-mcp-token.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
