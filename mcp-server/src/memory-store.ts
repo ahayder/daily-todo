@@ -222,7 +222,7 @@ export function rowToMemoryRecord<K extends MemoryKind>(kind: K, row: Row): Memo
   const mapper = MEMORY_MAPPERS[kind] as Mapper<K>;
   const id = row[mapper.idField];
   if (typeof id !== "string" || !id) return null;
-  const updatedAt = String(row.updated_at_client ?? row.updated ?? new Date(0).toISOString());
+  const updatedAt = date(row.updated_at_client) ?? date(row.updated) ?? new Date(0).toISOString();
   return mapper.fromRow(row, {
     id,
     tags: strings(row.tags_json),
@@ -354,14 +354,22 @@ export function createPocketBaseMemoryStore({ pb, ownerId, findOne }: PocketBase
     },
 
     async listChanges(filter = {}) {
-      const owner = await ownerId();
+      const params: Record<string, string> = { owner: await ownerId() };
       const parts = ["owner = {:owner}"];
-      if (filter.entityKind) parts.push("entity_kind = {:entityKind}");
-      if (filter.entityId) parts.push("entity_id = {:entityId}");
-      if (filter.batchId) parts.push("batch_id = {:batchId}");
-      if (filter.refChangeId) parts.push("ref_change_id = {:refChangeId}");
+      // pb.filter can't take undefined values, so only add what is set.
+      for (const [key, field] of [
+        ["entityKind", "entity_kind"],
+        ["entityId", "entity_id"],
+        ["batchId", "batch_id"],
+        ["refChangeId", "ref_change_id"],
+      ] as const) {
+        const value = filter[key];
+        if (!value) continue;
+        params[key] = value;
+        parts.push(`${field} = {:${key}}`);
+      }
       const result = await pb.collection("change_log").getList<Row>(1, Math.min(filter.limit ?? 50, 500), {
-        filter: pb.filter(parts.join(" && "), { owner, ...filter }),
+        filter: pb.filter(parts.join(" && "), params),
         sort: "-change_id",
       });
       return result.items.flatMap((row) => rowToChange(row) ?? []);
