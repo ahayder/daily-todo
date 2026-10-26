@@ -37,6 +37,200 @@ function normalizeFieldForCompare(field) {
   return normalized;
 }
 
+// Optional field helpers for the "external brain" collections below. None of
+// these are required: PocketBase rejects "", 0, false, [] and {} on a required
+// field with a 400, which would silently freeze writes.
+const optionalText = (name, max) => ({ name, type: "text", required: false, ...(max ? { max } : {}) });
+const optionalJson = (name) => ({ name, type: "json", required: false, maxSize: 2000000 });
+const optionalDate = (name) => ({ name, type: "date", required: false });
+const optionalBool = (name) => ({ name, type: "bool", required: false });
+
+/**
+ * A soft-delete-only collection in the `app_notes` shape: owner + the client id
+ * + updated_at_client are required, everything else is optional, and the
+ * server refuses hard deletes (deleteRule null). "" in deleted_at = not deleted.
+ */
+function softDeleteCollection({ name, idField, fields, usersCollectionId }) {
+  return {
+    name,
+    type: "base",
+    listRule: COLLECTION_ACCESS_RULE,
+    viewRule: COLLECTION_ACCESS_RULE,
+    createRule: COLLECTION_ACCESS_RULE,
+    updateRule: COLLECTION_ACCESS_RULE,
+    deleteRule: null,
+    fields: [
+      {
+        name: "owner",
+        type: "relation",
+        required: true,
+        maxSelect: 1,
+        collectionId: usersCollectionId,
+        cascadeDelete: true,
+      },
+      { name: idField, type: "text", required: true },
+      ...fields,
+      optionalDate("created_at_client"),
+      optionalDate("deleted_at"),
+      { name: "updated_at_client", type: "date", required: true },
+    ],
+    indexes: [`CREATE UNIQUE INDEX idx_${name}_owner_${idField} ON ${name} (owner, ${idField})`],
+  };
+}
+
+function memoryCollections(usersCollectionId) {
+  const tags = optionalJson("tags_json");
+  return [
+    softDeleteCollection({
+      name: "tasks",
+      idField: "task_id",
+      usersCollectionId,
+      fields: [
+        optionalText("title", 2000),
+        optionalText("notes", 50000),
+        optionalText("area"),
+        optionalText("status"),
+        // YYYY-MM-DD, or "" = on the Shelf (no day).
+        optionalText("day"),
+        // A PlannerEvent id from planner_presets.
+        optionalText("block_id"),
+        optionalText("project_id"),
+        tags,
+        optionalText("link", 2000),
+        optionalText("why_decision_id"),
+        optionalText("repeat_id"),
+        optionalText("content_card_id"),
+        // "app" or "chat:<name>".
+        optionalText("source"),
+        optionalDate("done_at"),
+      ],
+    }),
+    softDeleteCollection({
+      name: "decisions",
+      idField: "decision_id",
+      usersCollectionId,
+      fields: [
+        optionalText("title", 2000),
+        optionalText("why", 20000),
+        // agreed | proposed | yours
+        optionalText("status"),
+        optionalText("source", 500),
+        optionalJson("people_json"),
+        optionalText("project_id"),
+        tags,
+        optionalText("replaces_id"),
+        optionalText("replaced_by_id"),
+        optionalText("revisit_on"),
+        optionalText("decided_on"),
+      ],
+    }),
+    softDeleteCollection({
+      name: "projects",
+      idField: "project_id",
+      usersCollectionId,
+      fields: [
+        optionalText("name", 500),
+        optionalText("area"),
+        // "Where it stands".
+        optionalText("state", 20000),
+        optionalText("next_step", 2000),
+        // active | paused | done
+        optionalText("status"),
+        tags,
+      ],
+    }),
+    softDeleteCollection({
+      name: "meetings",
+      idField: "meeting_id",
+      usersCollectionId,
+      fields: [
+        optionalText("title", 500),
+        optionalText("date"),
+        optionalText("project_id"),
+        optionalText("summary", 100000),
+        optionalJson("people_json"),
+        tags,
+        // Only stored when explicitly asked (privacy): summary is the default.
+        optionalText("transcript", 500000),
+      ],
+    }),
+    softDeleteCollection({
+      name: "follow_ups",
+      idField: "follow_up_id",
+      usersCollectionId,
+      fields: [
+        optionalText("what", 2000),
+        optionalText("who", 500),
+        optionalText("since"),
+        optionalText("project_id"),
+        // waiting | done
+        optionalText("status"),
+        tags,
+        optionalDate("done_at"),
+      ],
+    }),
+    softDeleteCollection({
+      name: "repeats",
+      idField: "repeat_id",
+      usersCollectionId,
+      fields: [
+        optionalText("title", 2000),
+        optionalText("area"),
+        // ["mon", "wed", "fri"]
+        optionalJson("days_json"),
+        // HH:MM, or "" for any time.
+        optionalText("time"),
+        optionalText("project_id"),
+        optionalText("why_decision_id"),
+        tags,
+        // Not required: false is "blank" to PocketBase.
+        optionalBool("active"),
+      ],
+    }),
+    {
+      // Every MCP write, for the History page and undo/redo. Append-only: the
+      // server refuses both edits and deletes, so the record of AI changes
+      // can't be rewritten.
+      name: "change_log",
+      type: "base",
+      listRule: COLLECTION_ACCESS_RULE,
+      viewRule: COLLECTION_ACCESS_RULE,
+      createRule: COLLECTION_ACCESS_RULE,
+      updateRule: null,
+      deleteRule: null,
+      fields: [
+        {
+          name: "owner",
+          type: "relation",
+          required: true,
+          maxSelect: 1,
+          collectionId: usersCollectionId,
+          cascadeDelete: true,
+        },
+        { name: "change_id", type: "text", required: true },
+        // One tool call = one batch; undo works on the whole batch.
+        optionalText("batch_id"),
+        optionalText("entity_kind"),
+        optionalText("entity_id"),
+        // create | update | delete | restore | undo | redo
+        optionalText("action"),
+        optionalText("source"),
+        optionalText("summary", 2000),
+        // The change this undo/redo reverses or re-applies.
+        optionalText("ref_change_id"),
+        optionalJson("before_json"),
+        optionalJson("after_json"),
+        { name: "at", type: "date", required: true },
+      ],
+      indexes: [
+        "CREATE UNIQUE INDEX idx_change_log_owner_change_id ON change_log (owner, change_id)",
+        "CREATE INDEX idx_change_log_owner_entity ON change_log (owner, entity_kind, entity_id)",
+        "CREATE INDEX idx_change_log_owner_batch ON change_log (owner, batch_id)",
+      ],
+    },
+  ];
+}
+
 export function buildSchemaDefinitions({ usersCollectionId }) {
   return [
     {
@@ -425,6 +619,7 @@ export function buildSchemaDefinitions({ usersCollectionId }) {
         "CREATE UNIQUE INDEX idx_app_notes_owner_note_id ON app_notes (owner, note_id)",
       ],
     },
+    ...memoryCollections(usersCollectionId),
     {
       name: "workspace_state",
       type: "base",
