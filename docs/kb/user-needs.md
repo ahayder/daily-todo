@@ -3,7 +3,9 @@ Last verified: 2026-10-27
 
 How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
 (2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
-**Nothing here is built yet.**
+**No UI is built yet.** Milestone 1 (backend: collections, logic, MCP tools, change history) is
+done but not on prod — see [external-brain.md](external-brain.md). Next: M2 UI (Today + History),
+M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
 
 ## Pain points
 - Too many choices (decision paralysis), losing the thread mid-day (shiny things), time
@@ -29,7 +31,7 @@ How the user actually works (interview 2026-10-14) and the redesign direction ag
 Three: **day job** (Velox for the Astra team, a skills repo), **content** (YouTube + a product
 sold through content), **personal**.
 
-## Redesign direction: "chat captures, the app shows" (2026-10-27, mockups only, nothing built)
+## Redesign direction: "chat captures, the app shows" (2026-10-27; UI is mockups only)
 - ChatGPT/Claude save tasks, decisions (status Agreed / Proposed / Yours + source), ideas,
   repeats/routines and meeting summaries through the MCP server. The app is for seeing where
   you are and trusting AI changes. Agreed parts are in [decisions.md](decisions.md).
@@ -55,4 +57,4 @@ sold through content), **personal**.
 - The user declined auto-pick / "pick for me" and hard caps in Content Planner; don't assume they want them in Today.
 
 ## Related
-[todos.md](todos.md), [daily-planner.md](daily-planner.md), [content-planner.md](content-planner.md), [decisions.md](decisions.md)
+[external-brain.md](external-brain.md), [todos.md](todos.md), [daily-planner.md](daily-planner.md), [content-planner.md](content-planner.md), [decisions.md](decisions.md)
