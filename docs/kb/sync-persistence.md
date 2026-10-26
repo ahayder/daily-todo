@@ -1,5 +1,5 @@
 # Sync & persistence
-Last verified: 2026-10-11
+Last verified: 2026-10-26
 
 PocketBase is the single source of truth. Each device only sends its **own changes**, one record
 at a time, through a persisted outbox. A device never compares its whole copy with the server.
@@ -18,7 +18,7 @@ at a time, through a persisted outbox. A device never compares its whole copy wi
 - Status label: Loading latest… / Offline · read-only / N changes waiting (visible on phones too).
 
 ## Safety rules
-- Daily pages are never deleted by the app (server `deleteRule` is null too).
+- Daily pages and app notes are never deleted by the app: `diffSyncRecords` skips `daily_page` and `app_note` when building removals, and the server `deleteRule` is null. App notes only soft-delete (`deletedAt`); the repository `applyOps` also ignores `app_note` deletes.
 - More than `MAX_UNEXPLAINED_DELETES` (5) deletes in one change, not explained by a parent-folder delete, are dropped as a bug.
 - Records identical to the server (`fingerprintSyncValue`, key-order-independent) are never re-sent.
 

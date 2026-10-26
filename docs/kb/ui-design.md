@@ -1,5 +1,5 @@
 # UI & design system (pointers)
-Last verified: 2026-10-14
+Last verified: 2026-10-26
 
 The UI rules are not duplicated here. Source of truth: `.design/DESIGN.md` (B2 "Pocket Stickers — Deep";
 opens with a Quick card), applied via the short UI brain block in `AGENTS.md` (markers `ui-brain:start v2` /
@@ -20,6 +20,7 @@ opens with a Quick card), applied via the short UI brain block in `AGENTS.md` (m
 - **Tailwind v4 layers:** never write unlayered CSS in `globals.css` — it beats every utility and breaks spacing app-wide. Use `@layer base` / `@layer components`.
 - When removing a visual treatment, delete the original rule; don't layer an override.
 - Amber (`text-warning`) text fails contrast in light mode — use amber only for dots/fills, keep text `text-foreground`.
+- **Base UI modal Dialog traps** (found in app notes, details in [app-notes.md](app-notes.md)): the Undo toast can't be clicked while a modal is open (show undo inline in the dialog); Esc inside an inline editor closes the dialog and `stopPropagation` doesn't help (intercept in `onOpenChange`); `DialogContent` needs `grid-cols-[minmax(0,1fr)]` + `[overflow-wrap:anywhere]` for long unbroken text.
 - ui-brain's `.brain/`, `brain` agent and Stop hook are deliberately not installed (see [decisions.md](decisions.md)); `check-brain.mjs` reporting them missing is expected.
 
 ## Related
