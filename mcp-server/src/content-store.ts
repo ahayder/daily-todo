@@ -1,6 +1,7 @@
 import PocketBase from "pocketbase";
 import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
 import type { AppNote, ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
+import { createPocketBaseMemoryStore, type MemoryStore } from "./memory-store";
 
 /**
  * Where the MCP tools read and write Content Planner data. Writes are one
@@ -17,6 +18,9 @@ export type ContentStore = {
   /** App notes are only ever soft-deleted (deletedAt), so there is no delete. */
   saveAppNote(note: AppNote): Promise<void>;
 };
+
+/** Everything the MCP server reads and writes. */
+export type AppStore = ContentStore & MemoryStore;
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -151,7 +155,7 @@ export type PocketBaseAuth = { token: string } | { email: string; password: stri
  * Prefer a long-lived impersonation token (no password stored on the server);
  * email + password is the fallback.
  */
-export function createPocketBaseStore(options: { url: string; auth: PocketBaseAuth }): ContentStore {
+export function createPocketBaseStore(options: { url: string; auth: PocketBaseAuth }): AppStore {
   const pb = new PocketBase(options.url);
   pb.autoCancellation(false);
   const { auth } = options;
@@ -180,6 +184,8 @@ export function createPocketBaseStore(options: { url: string; auth: PocketBaseAu
   }
 
   return {
+    ...createPocketBaseMemoryStore({ pb, ownerId, findOne }),
+
     async loadBoard() {
       const owner = await ownerId();
       const row = await findOne("content_boards", pb.filter("owner = {:owner}", { owner }));

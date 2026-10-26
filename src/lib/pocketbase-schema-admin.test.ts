@@ -37,6 +37,16 @@ function createBaseCollection(
   };
 }
 
+const MEMORY_COLLECTIONS: Record<string, string> = {
+  tasks: "task_id",
+  decisions: "decision_id",
+  projects: "project_id",
+  meetings: "meeting_id",
+  follow_ups: "follow_up_id",
+  repeats: "repeat_id",
+};
+const NO_HARD_DELETE = ["daily_pages", "app_notes", ...Object.keys(MEMORY_COLLECTIONS), "change_log"];
+
 describe("buildSchemaDefinitions", () => {
   test("contains the required collections and rules", () => {
     const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
@@ -50,6 +60,13 @@ describe("buildSchemaDefinitions", () => {
       "content_boards",
       "content_cards",
       "app_notes",
+      "tasks",
+      "decisions",
+      "projects",
+      "meetings",
+      "follow_ups",
+      "repeats",
+      "change_log",
       "workspace_state",
       "app_state_snapshots",
     ]);
@@ -58,12 +75,11 @@ describe("buildSchemaDefinitions", () => {
       expect(definition.listRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.viewRule).toBe(COLLECTION_ACCESS_RULE);
       expect(definition.createRule).toBe(COLLECTION_ACCESS_RULE);
-      expect(definition.updateRule).toBe(COLLECTION_ACCESS_RULE);
-      // Daily pages are append-only and app notes are soft-deleted: only a
-      // superuser may hard-delete them.
-      expect(definition.deleteRule).toBe(
-        definition.name === "daily_pages" || definition.name === "app_notes" ? null : COLLECTION_ACCESS_RULE,
-      );
+      // The change log is append-only: nobody may edit it.
+      expect(definition.updateRule).toBe(definition.name === "change_log" ? null : COLLECTION_ACCESS_RULE);
+      // Daily pages are append-only and everything else listed here is
+      // soft-deleted: only a superuser may hard-delete them.
+      expect(definition.deleteRule).toBe(NO_HARD_DELETE.includes(definition.name) ? null : COLLECTION_ACCESS_RULE);
       expect(definition.fields.find((field: { name: string }) => field.name === "owner")?.collectionId).toBe(
         "users_1",
       );
@@ -124,6 +140,30 @@ test("app_notes: only the ids and sync timestamp are required (everything else c
     .filter((field: { required?: boolean }) => field.required)
     .map((field: { name: string }) => field.name);
   expect(required).toEqual(["owner", "note_id", "updated_at_client"]);
+});
+
+test("memory collections: only owner, id and sync timestamp are required, with a unique (owner, id) index", () => {
+  const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+  for (const [name, idField] of Object.entries(MEMORY_COLLECTIONS)) {
+    const definition = definitions.find((item) => item.name === name);
+    const required = definition?.fields
+      .filter((field: { required?: boolean }) => field.required)
+      .map((field: { name: string }) => field.name);
+    expect(required).toEqual(["owner", idField, "updated_at_client"]);
+    expect(definition?.fields.some((field: { name: string }) => field.name === "deleted_at")).toBe(true);
+    expect(definition?.indexes).toContain(
+      `CREATE UNIQUE INDEX idx_${name}_owner_${idField} ON ${name} (owner, ${idField})`,
+    );
+  }
+});
+
+test("change_log: only owner, change_id and at are required", () => {
+  const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
+  const changeLog = definitions.find((item) => item.name === "change_log");
+  const required = changeLog?.fields
+    .filter((field: { required?: boolean }) => field.required)
+    .map((field: { name: string }) => field.name);
+  expect(required).toEqual(["owner", "change_id", "at"]);
 });
 
 describe("mergeCollectionDefinition", () => {
@@ -236,8 +276,8 @@ describe("applyPocketBaseSchema", () => {
       logger: { log: vi.fn(), error: vi.fn() } as unknown as Console,
     });
 
-    expect(summary.created).toHaveLength(9);
-    expect(create).toHaveBeenCalledTimes(9);
+    expect(summary.created).toHaveLength(16);
+    expect(create).toHaveBeenCalledTimes(16);
   });
 
   test("updates existing collection with drift and preserves unchanged ones", async () => {
