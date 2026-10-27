@@ -1,5 +1,5 @@
 # UI & design system (pointers)
-Last verified: 2026-10-26
+Last verified: 2026-10-27
 
 The UI rules are not duplicated here. Source of truth: `.design/DESIGN.md` (B2 "Pocket Stickers — Deep";
 opens with a Quick card), applied via the short UI brain block in `AGENTS.md` (markers `ui-brain:start v2` /
@@ -14,6 +14,9 @@ opens with a Quick card), applied via the short UI brain block in `AGENTS.md` (m
 - UI brain setup state: `.design/setup.md`. After a screen changes, run the `.claude/agents/ui-qa.md` agent (uses `?devWorkspace=1`, never plain `pnpm dev`).
 - Confirms use `ConfirmDialog` (`src/components/blocks/confirm-dialog.tsx`): `variant` `"destructive"` (default) or `"default"`; `onConfirm(event)` gets the click event (todo status confirm uses it as the confetti origin). All raw AlertDialog confirms were migrated except `src/components/workspace/desktop-update-provider.tsx` (rich update dialog, kept on purpose).
 - Sync pill (`src/components/workspace/top-navbar.tsx`): offline/issue = amber `bg-warning` dot + `text-foreground` label.
+- **Today screen** (`src/components/today/today-view.tsx`, full width, sidebar toggle hidden): PageHeader → NowCard for the current planner block (first open task, or "Free — your call" + "Pick from the Shelf" when the Shelf has items; Done / Not now) → "N new changes from your AI chats" panel (today's live AI batches; Undo, See all changes, "Looks good" hides them on this device via localStorage `dailytodo.today.aiSeenChangeId`) → "Your day" blocks with tasks + "Also today" (loose tasks, repeats due), with a Shelf aside (quick add, leftovers with WashiTag "N days waiting", then Shelf; "Do today" dropdown lists only blocks not yet ended + "Any time today").
+- **History screen** (`src/components/today/history-view.tsx`): one row per batch, grouped by day, "Undo all N"; no nav pill, reached from Today and has a back link.
+- Today/History feedback pattern: every edit shows an Undo toast; undo results/refusals show as toasts with "Bring back". When the clicked control disappears, focus moves to the Now card / Shelf heading / AI panel heading.
 - User-facing copy never says "PocketBase" (sync notices in `top-navbar.tsx`, `src/lib/split-persistence-repository.ts`, `src/lib/pocketbase/persistence-repository.ts`). Legacy leftover: `src/components/auth/auth-gate.tsx` still does.
 
 ## Gotchas

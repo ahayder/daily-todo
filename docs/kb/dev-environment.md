@@ -10,4 +10,6 @@ Last verified: 2026-10-27
 
 ## Gotchas
 - `pnpm lint` on the whole repo scans `src-tauri/target/**` build output and fails with ~860 parse errors. Run eslint on just the changed files instead.
+- **Worktrees** (`.claude/worktrees/*`) have no `.env` files or `pocketbase-local/`. Run admin scripts with `node --env-file=<main checkout>/.env.test.local …`.
+- `tsx` scripts that use `@/` imports must live inside the repo (scratchpad paths don't resolve the alias); use a `.mts` file.
 - A fresh clone inherits the work identity unless the local user values are re-set.

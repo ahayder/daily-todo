@@ -1,15 +1,15 @@
 # Architecture
-Last verified: 2026-10-11
+Last verified: 2026-10-27
 
 Next.js 16 App Router web app (also wrapped by a Tauri desktop shell). All app state lives in one
 React `useReducer` + Context (`AppProvider`), synced to PocketBase record-by-record.
 
 ## How it works
-- Routes: `src/app/todos`, `notes`, `planner`, `content-planner`, `auth/reset`; `src/app/page.tsx` redirects to `/todos`.
+- Routes: `src/app/today`, `history`, `todos`, `notes`, `planner`, `content-planner`, `auth/reset`; `src/app/page.tsx` redirects to `/today`. `ViewMode` includes `"today" | "history"` (`last_view` is a text field; old clients normalize unknown values to todos).
 - State: `src/components/app/` — `app-provider.tsx`, `app-context.reducer.ts` (all actions), `use-app-persistence-state.ts` (load/sync phases, see [sync-persistence.md](sync-persistence.md)).
 - Pure logic in `src/lib/`: `store.ts` (state factories, selectors, carryover, content-board defaults/migration), `content-conveyor.ts`, `planner-now.ts`, `task-attention.ts`, `date.ts`, `schema.ts` (Zod for persisted state), `types.ts` (all types).
 - Persistence: `persistence.ts` (normalize, `parseAppStateOrThrow`), `sync-outbox.ts`, `split-persistence-repository.ts`, `local-cache-storage.ts`, `pocketbase/` (auth + persistence repositories).
-- Shell: `src/components/workspace/` (providers, top navbar, sidebar, desktop updater, `workspace.tsx`). Todos/Notes have the sidebar; Planner and Content Planner are full-width (the `isPlanner` branch in `workspace.tsx`).
+- Shell: `src/components/workspace/` (providers, top navbar, sidebar, desktop updater, `workspace.tsx`). Todos/Notes have the sidebar; Today, History, Planner and Content Planner are full-width (the `isPlanner` branch in `workspace.tsx`).
 - UI layers: `components/ui` (Base UI primitives), `components/blocks` (shared blocks), `components/signature` (product elements). See [ui-design.md](ui-design.md).
 
 ### State shape
@@ -22,6 +22,8 @@ AppState {
   plannerPresets: Record<id, PlannerPreset>
   contentBoard: ContentBoard
   contentCards: Record<id, ContentCard>
+  memory: MemoryData // tasks, decisions, projects, meetings, follow-ups, repeats (external-brain.md)
+  changeLog: Record<id, ChangeLogEntry> // newest 300 loaded
   uiState: UIState // synced selection, focus timer + device prefs
 }
 DailyPage { date, markdown, todos[] }

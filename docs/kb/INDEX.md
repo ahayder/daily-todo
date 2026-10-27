@@ -12,7 +12,7 @@ Read this first, then open only the pages that matter for the task.
 | [daily-planner.md](daily-planner.md) | `/planner` NOW + Set up screens, templates, 24h clock | Daily Planner |
 | [content-planner.md](content-planner.md) | `/content-planner` Focus + Shelf conveyor, stages, Shoot card, publish info, video series | Content Planner |
 | [mcp-server.md](mcp-server.md) | `mcp-server/` MCP server for ChatGPT/Claude (Content Planner, app notes, external brain): 49 tools, change history + undo, secret-URL auth, token login, Coolify deploy | Editing the MCP server, its tools, or content card/board fields |
-| [external-brain.md](external-brain.md) | Tasks, decisions, projects, meetings, follow-ups, repeats + append-only `change_log`: schema, `src/lib/memory/` helpers, Today view logic, undo/redo rules (M1, no UI yet) | Building Today/Memory/History UI, MCP task/memory tools, undo of AI changes |
+| [external-brain.md](external-brain.md) | Tasks, decisions, projects, meetings, follow-ups, repeats + append-only `change_log`: schema, `src/lib/memory/` helpers, app state + sync, Today (`/today`) and History (`/history`) screens, app-side undo/redo | Today/History/Memory UI, MCP task/memory tools, undo of AI or app changes |
 | [app-notes.md](app-notes.md) | "Note for the app" quick capture (⌘⇧I): dialog, `app_notes` sync, soft-delete only, Base UI dialog traps | App notes, adding a never-deleted record kind, undo/Esc inside a modal |
 | [auth.md](auth.md) | PocketBase auth, dev workspace, dev auto-login, account menu, super-admin | Login, accounts, dev/test tools |
 | [desktop.md](desktop.md) | Tauri shell, updater, releases | Desktop app or releases |

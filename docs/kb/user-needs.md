@@ -3,9 +3,10 @@ Last verified: 2026-10-27
 
 How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
 (2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
-**No UI is built yet.** Milestone 1 (backend: collections, logic, MCP tools, change history) is
-live on prod since 2026-10-27 — see [external-brain.md](external-brain.md). Next: M2 UI (Today + History),
-M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
+M1 (backend: collections, logic, MCP tools, change history) is live on prod since 2026-10-27;
+M2 (Today + History UI) is built on branch `claude/charming-bun-fe98e0` — see
+[external-brain.md](external-brain.md). Old Todos / Daily Planner stay until a migration of old
+daily-page todos is decided. Next: M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
 
 ## Pain points
 - Too many choices (decision paralysis), losing the thread mid-day (shiny things), time
@@ -31,7 +32,7 @@ M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
 Three: **day job** (Velox for the Astra team, a skills repo), **content** (YouTube + a product
 sold through content), **personal**.
 
-## Redesign direction: "chat captures, the app shows" (2026-10-27; UI is mockups only)
+## Redesign direction: "chat captures, the app shows" (2026-10-27; Today + History built, Memory still mockup)
 - ChatGPT/Claude save tasks, decisions (status Agreed / Proposed / Yours + source), ideas,
   repeats/routines and meeting summaries through the MCP server. The app is for seeing where
   you are and trusting AI changes. Agreed parts are in [decisions.md](decisions.md).
