@@ -93,6 +93,7 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
   // History is opened from Today, so it keeps Today highlighted.
   const isToday = !mounted || lastView === "today" || lastView === "history";
   const isTodos = mounted && lastView === "todos";
+  const hasNoSidebar = mounted && (lastView === "today" || lastView === "history");
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
   const isContentPlanner = mounted && lastView === "content-planner";
@@ -256,7 +257,8 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
       )}
     >
       <div className="top-navbar__brand flex items-center gap-2.5">
-        {!isContentPlanner ? (
+        {/* Today and History have no sidebar, so no toggle either. */}
+        {!isContentPlanner && !hasNoSidebar ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button

@@ -2,7 +2,7 @@
 
 import { CalendarClock, MessageSquare, Sun } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
 import { EmptyState } from "@/components/blocks/empty-state";
 import { InlineComposer } from "@/components/blocks/inline-composer";
@@ -62,10 +62,24 @@ function longDate(day: string) {
   );
 }
 
-function SectionTitle({ children, hint }: { children: string; hint?: string }) {
+function SectionTitle({
+  children,
+  hint,
+  headingRef,
+}: {
+  children: string;
+  hint?: string;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+}) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 px-2">
-      <h2 className="font-heading text-lg font-semibold text-foreground">{children}</h2>
+      <h2
+        ref={headingRef}
+        tabIndex={headingRef ? -1 : undefined}
+        className="scroll-mt-4 rounded-md font-heading text-lg font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {children}
+      </h2>
       {hint ? <span className="text-[0.8125rem] text-muted-foreground">{hint}</span> : null}
     </div>
   );
@@ -96,8 +110,12 @@ function DoTodayMenu({
         <DropdownMenuGroup>
           <DropdownMenuLabel>Put it in which block?</DropdownMenuLabel>
           {blocks.map((block) => (
-            <DropdownMenuItem key={block.id} onClick={() => onPick(block.id)}>
-              <span className="font-mono tabular-nums text-muted-foreground">{block.start}</span>
+            <DropdownMenuItem
+              key={block.id}
+              aria-label={`${block.title || "Untitled block"}, ${block.start} to ${block.end}`}
+              onClick={() => onPick(block.id)}
+            >
+              <span className="font-mono text-[0.8125rem] tabular-nums text-muted-foreground">{block.start}</span>
               <span className="truncate">{block.title || "Untitled block"}</span>
             </DropdownMenuItem>
           ))}
@@ -110,7 +128,7 @@ function DoTodayMenu({
 }
 
 export function TodayView() {
-  const { state, dispatch, sync } = useAppState();
+  const { state, sync } = useAppState();
   const readOnly = sync.isReadOnly;
   const clock = useClock();
   const today = todayIn(TIME_ZONE, clock);
@@ -121,16 +139,38 @@ export function TodayView() {
     [preset, state.memory.repeat, state.memory.task, today],
   );
   const now = getNow(view, minutes);
+  const waiting = [...view.leftovers, ...view.shelf];
   const history = useMemo(() => buildHistory(state, TIME_ZONE), [state]);
-  const { undo, message } = useHistoryActions();
+  const { act, undo } = useHistoryActions();
+  const nowRef = useRef<HTMLDivElement>(null);
+  const shelfRef = useRef<HTMLHeadingElement>(null);
+  const dayRef = useRef<HTMLHeadingElement>(null);
+  const aiRef = useRef<HTMLParagraphElement>(null);
   // Device-local: which AI changes were already looked at ("Looks good").
   const [seen, setSeen] = useState(readSeen);
   const aiRows = aiChangesToday(history, today).filter((row) => row.changeId > seen);
 
+  // After an action removes the control that had focus, keep keyboard users in place.
+  const focusSoon = (target: React.RefObject<HTMLElement | null>) =>
+    window.requestAnimationFrame(() => (target.current ?? dayRef.current)?.focus());
+
   const toggle = (task: Task) =>
-    dispatch({ type: task.status === "done" ? "memory-reopen-task" : "memory-complete-task", taskId: task.id });
-  const schedule = (taskId: string, day: string | null, blockId: string | null = null) =>
-    dispatch({ type: "memory-schedule-task", taskId, day, blockId });
+    task.status === "done"
+      ? act({ type: "memory-reopen-task", taskId: task.id }, `Reopened “${task.title}”`)
+      : act({ type: "memory-complete-task", taskId: task.id }, `Finished “${task.title}”`);
+  const blockName = (blockId: string | null) =>
+    view.blocks.find((block) => block.id === blockId)?.title || "today";
+  const doToday = (task: Task, blockId: string | null) => {
+    act(
+      { type: "memory-schedule-task", taskId: task.id, day: today, blockId },
+      blockId ? `Put “${task.title}” in ${blockName(blockId)}` : `Planned “${task.title}” for today`,
+    );
+    focusSoon(shelfRef);
+  };
+  const pickFromShelf = () => {
+    shelfRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    shelfRef.current?.focus({ preventScroll: true });
+  };
   const markSeen = () => {
     const newest = aiRows[0]?.changeId ?? seen;
     setSeen(newest);
@@ -155,14 +195,13 @@ export function TodayView() {
     />
   );
 
-  const waiting = [...view.leftovers, ...view.shelf];
-
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-4 pb-12 sm:px-6">
         <PageHeader title="Today" subtitle={`${longDate(today)} · your plan is a guide, not a rule`} />
 
         {now ? (
+          <div ref={nowRef} tabIndex={-1} className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <NowCard
             title={now.task ? now.task.title : "Free — your call"}
             meta={`${now.block.title || "Time block"} · ${now.block.start}–${now.block.end}`}
@@ -173,30 +212,43 @@ export function TodayView() {
             actions={
               now.task ? (
                 <>
-                  <Button disabled={readOnly} onClick={() => toggle(now.task!)}>
+                  <Button
+                    disabled={readOnly}
+                    onClick={() => {
+                      toggle(now.task!);
+                      focusSoon(nowRef);
+                    }}
+                  >
                     Done
                   </Button>
                   <Button
                     variant="ghost"
                     className="text-now-foreground hover:bg-now-foreground/10"
                     disabled={readOnly}
-                    onClick={() => schedule(now.task!.id, null)}
+                    onClick={() => {
+                      act(
+                        { type: "memory-schedule-task", taskId: now.task!.id, day: null },
+                        `Moved “${now.task!.title}” to the Shelf`,
+                      );
+                      focusSoon(nowRef);
+                    }}
                   >
                     Not now
                   </Button>
                 </>
+              ) : waiting.length > 0 ? (
+                <Button variant="ghost" className="text-now-foreground hover:bg-now-foreground/10" onClick={pickFromShelf}>
+                  Pick from the Shelf
+                </Button>
               ) : undefined
             }
           />
+          </div>
         ) : null}
-
-        <p role="status" className={message ? "px-2 text-sm text-brand-subtle-foreground" : "sr-only"}>
-          {message}
-        </p>
 
         {aiRows.length > 0 ? (
           <section aria-label="New from your AI chats" className="flex flex-col gap-2 rounded-2xl bg-card p-3 shadow-[var(--rim)]">
-            <p className="flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
+            <p ref={aiRef} tabIndex={-1} className="flex items-center gap-2 rounded-lg px-2 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <MessageSquare aria-hidden="true" className="size-4 text-muted-foreground" />
               {aiRows.length === 1 ? "1 new change from your AI chats" : `${aiRows.length} new changes from your AI chats`}
             </p>
@@ -217,7 +269,10 @@ export function TodayView() {
                     className="pointer-coarse:h-11"
                     disabled={readOnly}
                     aria-label={`Undo: ${row.text}`}
-                    onClick={() => undo(row.changeId)}
+                    onClick={() => {
+                      undo(row.changeId, row.text);
+                      focusSoon(aiRef);
+                    }}
                   >
                     Undo
                   </Button>
@@ -237,7 +292,9 @@ export function TodayView() {
 
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
           <section aria-label="Your day" className="flex flex-col gap-3">
-            <SectionTitle hint="from your Daily Planner">Your day</SectionTitle>
+            <SectionTitle hint="from your Daily Planner" headingRef={dayRef}>
+              Your day
+            </SectionTitle>
             {view.blocks.length === 0 ? (
               <EmptyState
                 size="inline"
@@ -261,7 +318,7 @@ export function TodayView() {
                       aria-current={isNow ? "time" : undefined}
                       className={cn(
                         "flex flex-col gap-1 rounded-xl px-2 py-1.5",
-                        isNow ? "bg-brand-subtle" : "bg-transparent",
+                        isNow ? "bg-brand-subtle ring-1 ring-primary/30" : "bg-transparent",
                       )}
                     >
                       <div className="flex items-baseline gap-3 px-2">
@@ -300,7 +357,12 @@ export function TodayView() {
                     area={repeat.area}
                     meta={<span>Repeats{repeat.time ? ` · ${repeat.time}` : ""}</span>}
                     disabled={readOnly}
-                    onToggle={() => dispatch({ type: "memory-complete-repeat", repeatId: repeat.repeatId, day: today })}
+                    onToggle={() =>
+                      act(
+                        { type: "memory-complete-repeat", repeatId: repeat.repeatId, day: today },
+                        `Finished “${repeat.title}” for today`,
+                      )
+                    }
                   />
                 ))}
                 {view.today.map((task) =>
@@ -311,8 +373,13 @@ export function TodayView() {
           </section>
 
           <aside aria-label="Shelf" className="flex flex-col gap-3 rounded-2xl bg-card p-3 shadow-[var(--rim)]">
-            <SectionTitle hint="not today, unless you pick it">Shelf</SectionTitle>
-            <InlineComposer placeholder="Add to the Shelf…" onSubmit={(title) => dispatch({ type: "memory-add-task", title, day: null })} />
+            <SectionTitle hint="not today, unless you pick it" headingRef={shelfRef}>
+              Shelf
+            </SectionTitle>
+            <InlineComposer
+              placeholder="Add to the Shelf…"
+              onSubmit={(title) => act({ type: "memory-add-task", title, day: null }, `Added “${title}” to the Shelf`)}
+            />
             {waiting.length === 0 ? (
               <EmptyState size="inline" icon={<Sun />} title="The Shelf is clear." description="Things for some other day land here." />
             ) : (
@@ -325,7 +392,7 @@ export function TodayView() {
                         title={task.title}
                         blocks={view.blocks.filter((block) => timeToMinutes(block.end) > minutes)}
                         disabled={readOnly}
-                        onPick={(blockId) => schedule(task.id, today, blockId)}
+                        onPick={(blockId) => doToday(task, blockId)}
                       />
                     ),
                   }),

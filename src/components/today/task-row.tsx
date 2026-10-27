@@ -52,14 +52,15 @@ export function TaskRow({ title, done, area, source, meta, onToggle, action, dis
         onClick={onToggle}
         disabled={disabled}
         className={cn(
-          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 pointer-coarse:size-7",
+          // The 28px circle gets a 44px hit area on touch screens.
+          "relative mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 pointer-coarse:size-7 pointer-coarse:after:absolute pointer-coarse:after:-inset-2",
           done ? "border-primary bg-primary text-primary-foreground" : "border-input hover:border-primary",
         )}
       >
         {done ? <Check aria-hidden="true" className="size-3.5 animate-stamp" /> : null}
       </button>
       <div className="min-w-0 flex-1">
-        <p className={cn("text-[0.9375rem] leading-snug", done ? "text-muted-foreground line-through" : "text-foreground")}>
+        <p className={cn("text-[0.9375rem] leading-[1.7] break-words [overflow-wrap:anywhere]", done ? "text-muted-foreground line-through" : "text-foreground")}>
           {title}
         </p>
         {area || from || meta ? (

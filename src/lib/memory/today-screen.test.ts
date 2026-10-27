@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlannerPreset, Task } from "@/lib/types";
-import type { HistoryDay } from "./history-view";
+import type { HistoryDay, HistoryRow } from "./history-view";
 import type { TodayView } from "./tasks";
 import { aiChangesToday, getNow, minutesInZone, selectedPlannerPreset, shortDuration } from "./today-screen";
 
@@ -52,8 +52,17 @@ describe("today screen", () => {
   });
 
   it("lists only today's AI changes that are still in effect", () => {
-    const row = (changeId: string, who: string, status: "live" | "undone") =>
-      ({ changeId, batchId: changeId, at: "", who, text: "", more: [], where: null, status }) as const;
+    const row = (changeId: string, who: string, status: "live" | "undone"): HistoryRow => ({
+      changeId,
+      batchId: changeId,
+      at: "",
+      who,
+      text: "",
+      more: [],
+      count: 1,
+      where: null,
+      status,
+    });
     const history: HistoryDay[] = [
       { day: "2026-10-27", rows: [row("3", "Claude", "live"), row("2", "You", "live"), row("1", "ChatGPT", "undone")] },
       { day: "2026-10-26", rows: [row("0", "Claude", "live")] },

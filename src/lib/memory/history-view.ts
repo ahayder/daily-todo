@@ -19,6 +19,8 @@ export type HistoryRow = {
   text: string;
   /** Other changes in the same batch, in plain words. */
   more: string[];
+  /** How many changes one Undo reverses. */
+  count: number;
   where: { label: string; href: string } | null;
   status: "live" | "undone";
 };
@@ -162,8 +164,10 @@ export function describeChange(entry: Pick<ChangeLogEntry, "entityKind" | "actio
 }
 
 function whereFor(kind: ChangeEntityKind): HistoryRow["where"] {
-  if (kind === "task" || kind === "repeat") return { label: "Today", href: "/today" };
-  if (kind === "content_card" || kind === "content_board") return { label: "Content", href: "/content-planner" };
+  if (kind === "task" || kind === "repeat") return { label: "Open in Today", href: "/today" };
+  if (kind === "content_card" || kind === "content_board") {
+    return { label: "Open in Content Planner", href: "/content-planner" };
+  }
   return null;
 }
 
@@ -189,6 +193,7 @@ export function buildHistory(state: HistoryState, timeZone: string): HistoryDay[
       who: sourceLabel(first.source),
       text: texts[0],
       more: texts.slice(1),
+      count: sorted.length,
       where: whereFor(first.entityKind),
       status: changeStatus(state, newest.id),
     };

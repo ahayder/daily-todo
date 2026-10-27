@@ -44,7 +44,7 @@ function Row({
         {timeOf(row.at)}
       </span>
       <div className="min-w-0 flex-1">
-        <p className={cn("text-[0.9375rem] leading-snug", undone ? "text-muted-foreground line-through" : "font-semibold text-foreground")}>
+        <p className={cn("text-[0.9375rem] leading-[1.7] break-words", undone ? "text-muted-foreground line-through" : "font-semibold text-foreground")}>
           {row.text}
         </p>
         {row.more.length > 0 ? (
@@ -72,8 +72,8 @@ function Row({
           Bring back
         </Button>
       ) : (
-        <Button variant="outline" size="sm" className="shrink-0 pointer-coarse:h-11" disabled={disabled} aria-label={`Undo: ${row.text}`} onClick={onUndo}>
-          Undo
+        <Button variant="outline" size="sm" className="shrink-0 pointer-coarse:h-11" disabled={disabled} aria-label={row.count > 1 ? `Undo all ${row.count} changes: ${row.text}` : `Undo: ${row.text}`} onClick={onUndo}>
+          {row.count > 1 ? `Undo all ${row.count}` : "Undo"}
         </Button>
       )}
     </li>
@@ -84,7 +84,7 @@ export function HistoryView() {
   const { state } = useAppState();
   const today = todayIn(TIME_ZONE);
   const days = useMemo(() => buildHistory(state, TIME_ZONE), [state]);
-  const { undo, redo, message, isReadOnly } = useHistoryActions();
+  const { undo, redo, isReadOnly } = useHistoryActions();
 
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-background">
@@ -102,10 +102,6 @@ export function HistoryView() {
             subtitle="Every change, by you and your AI chats. Undo hides a change — nothing is ever deleted, so you can bring it back."
           />
         </div>
-
-        <p role="status" className={message ? "text-sm text-brand-subtle-foreground" : "sr-only"}>
-          {message}
-        </p>
 
         {days.length === 0 ? (
           <EmptyState
@@ -125,8 +121,8 @@ export function HistoryView() {
                     key={row.batchId}
                     row={row}
                     disabled={isReadOnly}
-                    onUndo={() => undo(row.changeId)}
-                    onRedo={() => redo(row.changeId)}
+                    onUndo={() => undo(row.changeId, row.text)}
+                    onRedo={() => redo(row.changeId, row.text)}
                   />
                 ))}
               </ul>
