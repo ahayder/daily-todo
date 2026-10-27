@@ -19,9 +19,9 @@ function presetWith(events: { id: string; title: string; start: number; end: num
   const days = Object.fromEntries(
     ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((key) => [key, day(key)]),
   ) as unknown as PlannerPreset["days"];
-  days.tuesday.events = events.map((event) => ({
+  days.monday.events = events.map((event) => ({
     id: event.id,
-    dayKey: "tuesday",
+    dayKey: "monday",
     purposeId: null,
     title: event.title,
     startMinutes: event.start,
@@ -117,5 +117,11 @@ describe("getTodayView", () => {
 
     const done = task("Standup prep", { day: date, repeatId: standup.id, status: "done" });
     expect(getTodayView({ tasks: asMap(done), repeats, preset: null, date }).repeats).toEqual([]);
+  });
+
+  it("uses the weekday planner template on every weekday and the Saturday one on Saturday", () => {
+    // The Daily Planner edits "monday" for Mon–Fri (see dayKeyForDate).
+    expect(getTodayView({ tasks: {}, repeats: {}, preset, date: "2026-10-29" }).blocks).toHaveLength(2);
+    expect(getTodayView({ tasks: {}, repeats: {}, preset, date: "2026-10-31" }).blocks).toHaveLength(0);
   });
 });

@@ -1,7 +1,6 @@
-import type { MemoryKind, MemoryKindMap } from "@/lib/types";
+import type { MemoryData, MemoryKind, MemoryKindMap } from "@/lib/types";
 
-/** Every external-brain record, by kind and id. */
-export type MemoryData = { [K in MemoryKind]: Record<string, MemoryKindMap[K]> };
+export type { MemoryData };
 
 export function emptyMemoryData(): MemoryData {
   return { task: {}, decision: {}, project: {}, meeting: {}, follow_up: {}, repeat: {} };

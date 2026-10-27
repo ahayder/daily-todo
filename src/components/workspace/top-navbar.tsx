@@ -90,7 +90,12 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
   );
 
   const lastView = state.uiState.lastView;
-  const isTodos = !mounted || lastView === "todos";
+  // History is opened from Today, so it keeps Today highlighted.
+  const isToday = !mounted || lastView === "today" || lastView === "history" || lastView === "standup";
+  const isMemory = mounted && (lastView === "memory" || lastView === "project");
+  const isTodos = mounted && lastView === "todos";
+  const hasNoSidebar =
+    mounted && ["today", "history", "memory", "project", "standup"].includes(lastView);
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
   const isContentPlanner = mounted && lastView === "content-planner";
@@ -254,7 +259,8 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
       )}
     >
       <div className="top-navbar__brand flex items-center gap-2.5">
-        {!isContentPlanner ? (
+        {/* Today and History have no sidebar, so no toggle either. */}
+        {!isContentPlanner && !hasNoSidebar ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -279,6 +285,24 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
       </div>
 
       <nav className="nav-pills" role="tablist" aria-label="Main navigation">
+        <Link
+          href="/today"
+          role="tab"
+          aria-selected={isToday}
+          className={cn("nav-pill", isToday && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "today" })}
+        >
+          Today
+        </Link>
+        <Link
+          href="/memory"
+          role="tab"
+          aria-selected={isMemory}
+          className={cn("nav-pill", isMemory && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "memory" })}
+        >
+          Memory
+        </Link>
         <Link
           href="/todos"
           role="tab"

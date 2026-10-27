@@ -16,7 +16,7 @@ import {
   DEFAULT_TODO_WORKSPACE_ID,
 } from "@/lib/store";
 import type { ApplyOpResult, SyncOp } from "@/lib/sync-outbox";
-import type { AppState, CachedNoteBody, NoteSummary, TodoWorkspace, UIState } from "@/lib/types";
+import type { AppState, CachedNoteBody, MemoryKind, NoteSummary, TodoWorkspace, UIState } from "@/lib/types";
 
 export const APP_STATE_VERSION = 5;
 export const LEGACY_LOCAL_STORAGE_KEY = "dailytodo.v1";
@@ -31,6 +31,8 @@ export type PersistenceRecordKind =
   | "content_board"
   | "content_card"
   | "app_note"
+  | MemoryKind
+  | "change_log"
   | "workspace_state";
 
 export type PersistenceRecordMetadata = {
@@ -237,6 +239,8 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
     contentBoard?: unknown;
     contentCards?: unknown;
     appNotes?: unknown;
+    memory?: unknown;
+    changeLog?: unknown;
   };
 
   if (!candidate.uiState || typeof candidate.uiState !== "object") {
@@ -250,6 +254,11 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
       : "dark";
 
   const normalizedLastView =
+    candidate.uiState.lastView === "today" ||
+    candidate.uiState.lastView === "history" ||
+    candidate.uiState.lastView === "memory" ||
+    candidate.uiState.lastView === "project" ||
+    candidate.uiState.lastView === "standup" ||
     candidate.uiState.lastView === "todos" ||
     candidate.uiState.lastView === "notes" ||
     candidate.uiState.lastView === "planner" ||
@@ -291,6 +300,8 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
         : {},
     appNotes:
       candidate.appNotes && typeof candidate.appNotes === "object" ? candidate.appNotes : {},
+    memory: candidate.memory && typeof candidate.memory === "object" ? candidate.memory : {},
+    changeLog: candidate.changeLog && typeof candidate.changeLog === "object" ? candidate.changeLog : {},
     noteFolders:
       candidate.noteFolders && typeof candidate.noteFolders === "object" ? candidate.noteFolders : {},
     uiState: {

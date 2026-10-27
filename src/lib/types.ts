@@ -2,7 +2,16 @@ export type Priority = 1 | 2 | 3;
 export type TaskStatus = "pending" | "ongoing" | "finished";
 export type FocusTimerStatus = "idle" | "running" | "paused";
 
-export type ViewMode = "todos" | "notes" | "planner" | "content-planner";
+export type ViewMode =
+  | "today"
+  | "history"
+  | "memory"
+  | "project"
+  | "standup"
+  | "todos"
+  | "notes"
+  | "planner"
+  | "content-planner";
 export type ThemeMode = "light" | "dark" | "system";
 export type CategoryTheme = "normal" | "adhd1" | "adhd2";
 export type PlannerDayKey =
@@ -205,6 +214,10 @@ export type AppState = {
   contentBoard: ContentBoard;
   contentCards: Record<string, ContentCard>;
   appNotes: Record<string, AppNote>;
+  /** External-brain records (tasks, decisions, …), soft-deleted only. */
+  memory: MemoryData;
+  /** The most recent change-log entries (History and undo). Append-only. */
+  changeLog: Record<string, ChangeLogEntry>;
   uiState: UIState;
 };
 
@@ -312,6 +325,8 @@ export type MemoryKindMap = {
   repeat: Repeat;
 };
 export type MemoryKind = keyof MemoryKindMap;
+/** Every external-brain record, by kind and id. */
+export type MemoryData = { [K in MemoryKind]: Record<string, MemoryKindMap[K]> };
 export const MEMORY_KINDS = ["task", "decision", "project", "meeting", "follow_up", "repeat"] as const;
 
 /** Everything the change log can point at. */

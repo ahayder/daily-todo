@@ -26,6 +26,7 @@ import type {
   TodoWorkspace,
 } from "@/lib/types";
 import { CONTENT_PLATFORMS } from "@/lib/types";
+import { emptyMemoryData } from "@/lib/memory/data";
 
 export const PLANNER_DAY_ORDER: PlannerDayKey[] = [
   "monday",
@@ -1067,6 +1068,8 @@ export function createInitialState(todayISO: string): AppState {
     contentBoard: createDefaultContentBoard(),
     contentCards: {},
     appNotes: {},
+    memory: emptyMemoryData(),
+    changeLog: {},
     uiState: {
       selectedDailyDate: todayISO,
       selectedTodoWorkspaceId: defaultTodoWorkspace.id,

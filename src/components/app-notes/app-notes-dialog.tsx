@@ -26,6 +26,11 @@ const SCREEN_LABEL: Record<string, string> = {
   notes: "Notes",
   planner: "Daily Planner",
   "content-planner": "Content Planner",
+  today: "Today",
+  history: "History",
+  memory: "Memory",
+  project: "Project",
+  standup: "Standup",
   chat: "From chat",
 };
 

@@ -1,4 +1,4 @@
-import type { LifeArea, PlannerDayKey, PlannerPreset, Repeat, Task } from "@/lib/types";
+import type { LifeArea, PlannerDayKey, PlannerEvent, PlannerPreset, Repeat, Task } from "@/lib/types";
 import { daysBetween, minutesToTime, weekdayOf } from "./dates";
 import { cleanTags, newRecordBase, patchRecord, liveRecords } from "./records";
 import { repeatsForDate } from "./repeats";
@@ -127,15 +127,22 @@ export type TodayView = {
   leftovers: (Task & { daysWaiting: number })[];
 };
 
+// The Daily Planner edits one weekday template ("monday") for Mon–Fri, plus
+// Saturday and Sunday (see dayKeyForDate in src/lib/planner-now.ts).
 const PLANNER_DAY_KEYS: Record<string, PlannerDayKey> = {
   mon: "monday",
-  tue: "tuesday",
-  wed: "wednesday",
-  thu: "thursday",
-  fri: "friday",
+  tue: "monday",
+  wed: "monday",
+  thu: "monday",
+  fri: "monday",
   sat: "saturday",
   sun: "sunday",
 };
+
+/** The Daily Planner time blocks for a day (unsorted). */
+export function plannerEventsForDay(preset: PlannerPreset | null, day: string): PlannerEvent[] {
+  return preset?.days[PLANNER_DAY_KEYS[weekdayOf(day)]]?.events ?? [];
+}
 
 const byCreated = (left: Task, right: Task) => left.createdAt.localeCompare(right.createdAt);
 
@@ -152,7 +159,7 @@ export function getTodayView(input: {
 }): TodayView {
   const { date } = input;
   const tasks = liveRecords(input.tasks).toSorted(byCreated);
-  const events = input.preset?.days[PLANNER_DAY_KEYS[weekdayOf(date)]]?.events ?? [];
+  const events = plannerEventsForDay(input.preset, date);
   const blocks: TodayBlock[] = events
     .toSorted((left, right) => left.startMinutes - right.startMinutes)
     .map((event) => ({

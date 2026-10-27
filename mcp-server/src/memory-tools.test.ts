@@ -18,8 +18,8 @@ function preset(): PlannerPreset {
   const days = Object.fromEntries(
     ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((key) => [key, day(key)]),
   ) as unknown as PlannerPreset["days"];
-  days.tuesday.events = [
-    { id: "deep", dayKey: "tuesday", purposeId: null, title: "Deep work", startMinutes: 540, endMinutes: 660, color: "teal", notes: "" },
+  days.monday.events = [
+    { id: "deep", dayKey: "monday", purposeId: null, title: "Deep work", startMinutes: 540, endMinutes: 660, color: "teal", notes: "" },
   ];
   return { id: "p1", name: "My week", subtitle: "", dayOrder: [], days, createdAt: "", updatedAt: "" };
 }

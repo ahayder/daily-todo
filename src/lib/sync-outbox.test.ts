@@ -14,6 +14,9 @@ import {
   type SyncOp,
 } from "@/lib/sync-outbox";
 import { createAppNote, createContentCard, createInitialState, getDailyPageKey, setAppNoteDeleted } from "@/lib/store";
+import { applyMemoryAction } from "@/lib/memory/app-actions";
+import { emptyMemoryData } from "@/lib/memory/data";
+import { createTask } from "@/lib/memory/tasks";
 import type { AppState, DailyPage, Todo } from "@/lib/types";
 
 const NOW = "2026-10-07T12:00:00.000Z";
@@ -406,5 +409,33 @@ describe("app notes sync", () => {
 
     const removed = { ...withNote, appNotes: {} };
     expect(diff(withNote, removed).ops).toEqual([]);
+  });
+});
+
+describe("external brain sync", () => {
+  const base = createInitialState("2026-10-27");
+  const task = createTask({ title: "Send link", day: "2026-10-27" }, new Date(NOW))!;
+  const withTask: AppState = { ...base, memory: { ...base.memory, task: { [task.id]: task } } };
+
+  test("an app edit sends the task and its change-log entry as upserts", () => {
+    const next = applyMemoryAction(withTask, { type: "memory-complete-task", taskId: task.id });
+    const ops = diff(withTask, next).ops;
+    expect(ops.map((op) => [op.kind, op.type]).toSorted()).toEqual([
+      ["change_log", "upsert"],
+      ["task", "upsert"],
+    ]);
+    expect(ops.find((op) => op.kind === "task")?.key).toBe(`task:${task.id}`);
+  });
+
+  test("records and change-log entries missing on a device never become deletes", () => {
+    const logged = applyMemoryAction(withTask, { type: "memory-complete-task", taskId: task.id });
+    const emptied: AppState = { ...logged, memory: emptyMemoryData(), changeLog: {} };
+    expect(diff(logged, emptied).ops).toEqual([]);
+  });
+
+  test("a delete op for a memory record keeps it in the state", () => {
+    const value = getSyncRecordValuesFromState(withTask)[`task:${task.id}`];
+    const next = applySyncOpsToState(withTask, [{ type: "delete", record: value }]);
+    expect(next.memory.task[task.id]).toEqual(task);
   });
 });

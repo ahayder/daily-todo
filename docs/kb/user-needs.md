@@ -3,9 +3,11 @@ Last verified: 2026-10-27
 
 How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
 (2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
-**No UI is built yet.** Milestone 1 (backend: collections, logic, MCP tools, change history) is
-done but not on prod — see [external-brain.md](external-brain.md). Next: M2 UI (Today + History),
-M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
+M1 (backend: collections, logic, MCP tools, change history) is live on prod since 2026-10-27;
+M2 (Today + History) and M3 (Memory / Project / Standup pages + desktop pings) are built on branch
+`claude/charming-bun-fe98e0`, shipping to web + desktop for a 2–3 day trial, then feedback — see
+[external-brain.md](external-brain.md). Old Todos / Daily Planner stay until a migration of old
+daily-page todos is decided. Next: M4 import Office Companion + OAuth.
 
 ## Pain points
 - Too many choices (decision paralysis), losing the thread mid-day (shiny things), time
@@ -31,7 +33,7 @@ M3 Memory / Project / Standup pages, M4 import Office Companion + OAuth.
 Three: **day job** (Velox for the Astra team, a skills repo), **content** (YouTube + a product
 sold through content), **personal**.
 
-## Redesign direction: "chat captures, the app shows" (2026-10-27; UI is mockups only)
+## Redesign direction: "chat captures, the app shows" (2026-10-27; Today, History, Memory, Project, Standup built)
 - ChatGPT/Claude save tasks, decisions (status Agreed / Proposed / Yours + source), ideas,
   repeats/routines and meeting summaries through the MCP server. The app is for seeing where
   you are and trusting AI changes. Agreed parts are in [decisions.md](decisions.md).
@@ -39,7 +41,8 @@ sold through content), **personal**.
   `/Users/ahayder/.claude/plans/yes-look-it-up-warm-hinton.md` — `tasks` + `change_log`
   collections, MCP task/history tools, a `withHistory` wrapper.
 - Screens: **Today** (Todos + Daily Planner merged: Now card + guideline timeline + Shelf),
-  **Memory** (search → project cards → decisions), **Content**.
+  **Memory** (search → project cards → decisions + waiting on others), **Content**. As built, the
+  nav is Today · Memory plus the old pills (see [decisions.md](decisions.md)).
 - UI review (ui-qa) outcomes already in the mockups: timeline rows show time + task only
   (details on expand); "Do today" opens a block picker; Now card has a "Not now" button; no
   D-codes in the UI; reuse the NowCard ring and WashiTag ("N days waiting"); headings ≤30px;

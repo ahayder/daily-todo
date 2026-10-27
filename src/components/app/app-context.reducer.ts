@@ -14,6 +14,7 @@ import {
   stripNoteBodies,
 } from "@/lib/persistence";
 import { toISODate } from "@/lib/date";
+import { applyMemoryAction, isMemoryAction } from "@/lib/memory/app-actions";
 import {
   createAppNote,
   setAppNoteDeleted,
@@ -1548,6 +1549,7 @@ function handleNotesAndPlannerActions(state: AppState, action: AppAction): AppSt
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
+  if (isMemoryAction(action)) return applyMemoryAction(state, action);
   return (
     handleUiActions(state, action) ??
     handleContentPlannerActions(state, action) ??

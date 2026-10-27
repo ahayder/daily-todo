@@ -6,9 +6,13 @@ import {
   type SyncableWorkspaceState,
 } from "@/lib/persistence";
 import { getDailyPageKey, getTodoWorkspaceIdFromDailyPageKey } from "@/lib/store";
+import { MEMORY_KINDS } from "@/lib/types";
 import type {
   AppNote,
   AppState,
+  ChangeLogEntry,
+  MemoryKind,
+  MemoryKindMap,
   ContentBoard,
   ContentCard,
   DailyPage,
@@ -36,6 +40,11 @@ export const WORKSPACE_RECORD_KEY = "workspace_state:self";
  */
 export const MAX_UNEXPLAINED_DELETES = 5;
 
+/** An external-brain record (task, decision, …), keyed `<kind>:<id>`. */
+export type MemorySyncRecordValue = {
+  [K in MemoryKind]: { key: string; kind: K; value: MemoryKindMap[K] };
+}[MemoryKind];
+
 export type SyncRecordValue =
   | { key: string; kind: "daily_page"; value: DailyPage }
   | { key: string; kind: "note"; value: NoteSummary }
@@ -44,7 +53,25 @@ export type SyncRecordValue =
   | { key: string; kind: "content_board"; value: ContentBoard }
   | { key: string; kind: "content_card"; value: ContentCard }
   | { key: string; kind: "app_note"; value: AppNote }
+  | MemorySyncRecordValue
+  | { key: string; kind: "change_log"; value: ChangeLogEntry }
   | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
+
+/**
+ * Kinds that are never deleted on the server: daily history is append-only,
+ * app notes and external-brain records are soft-deleted (deletedAt, synced as
+ * an upsert), and the change log is append-only. A record of these kinds
+ * missing on a device never becomes a delete.
+ */
+const NEVER_DELETED_KINDS = new Set<PersistenceRecordKind>(["daily_page", "app_note", ...MEMORY_KINDS, "change_log"]);
+
+export function isNeverDeletedKind(kind: PersistenceRecordKind): boolean {
+  return NEVER_DELETED_KINDS.has(kind);
+}
+
+export function isMemoryKind(kind: string): kind is MemoryKind {
+  return (MEMORY_KINDS as readonly string[]).includes(kind);
+}
 
 export type SyncOp = {
   key: string;
@@ -133,6 +160,18 @@ export function getSyncRecordValuesFromState(state: AppState): Record<string, Sy
     values[key] = { key, kind: "app_note", value: note };
   }
 
+  for (const kind of MEMORY_KINDS) {
+    for (const [id, value] of Object.entries(state.memory[kind])) {
+      const key = `${kind}:${id}`;
+      values[key] = { key, kind, value } as MemorySyncRecordValue;
+    }
+  }
+
+  for (const [changeId, entry] of Object.entries(state.changeLog)) {
+    const key = `change_log:${changeId}`;
+    values[key] = { key, kind: "change_log", value: entry };
+  }
+
   values[WORKSPACE_RECORD_KEY] = {
     key: WORKSPACE_RECORD_KEY,
     kind: "workspace_state",
@@ -194,11 +233,7 @@ export function diffSyncRecords({
     }
   }
 
-  // Daily pages and app notes are never deleted on the server (app notes are
-  // soft-deleted with deletedAt, which syncs as an upsert).
-  const removed = Object.values(prev).filter(
-    (record) => !next[record.key] && record.kind !== "daily_page" && record.kind !== "app_note",
-  );
+  const removed = Object.values(prev).filter((record) => !next[record.key] && !isNeverDeletedKind(record.kind));
   const deletedFolderIds = new Set(
     removed.filter((record) => record.kind === "note_folder").map((record) => record.value.id),
   );
@@ -325,6 +360,22 @@ export function applySyncOpsToState(state: AppState, ops: Array<Pick<SyncOp, "ty
       continue;
     }
 
+    if (isMemoryKind(record.kind)) {
+      // Soft-deleted only (deletedAt): a delete op keeps the record.
+      if (type === "delete") continue;
+      const value = record.value as MemoryKindMap[MemoryKind];
+      next = {
+        ...next,
+        memory: { ...next.memory, [record.kind]: { ...next.memory[record.kind], [value.id]: value } },
+      };
+      continue;
+    }
+
+    if (record.kind === "change_log") {
+      if (type !== "delete") next = { ...next, changeLog: { ...next.changeLog, [record.value.id]: record.value } };
+      continue;
+    }
+
     if (type === "delete") continue;
 
     if (record.kind === "content_board") {
@@ -332,6 +383,7 @@ export function applySyncOpsToState(state: AppState, ops: Array<Pick<SyncOp, "ty
       continue;
     }
 
+    if (record.kind !== "workspace_state") continue;
     next = {
       ...next,
       todoWorkspaces: record.value.todoWorkspaces,

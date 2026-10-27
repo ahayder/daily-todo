@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Priority } from "@/lib/types";
+import type { ChangeLogEntry, MemoryData, MemoryKind, Priority } from "@/lib/types";
 
 const taskStatusSchema = z.enum(["pending", "ongoing", "finished"]);
 
@@ -163,6 +163,38 @@ const appNoteSchema = z.object({
   deletedAt: z.string().nullable().catch(null),
 });
 
+function hasStringField(value: unknown, field: string): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && typeof (value as Record<string, unknown>)[field] === "string");
+}
+
+/**
+ * External-brain records are written by the MCP server and already shaped by
+ * src/lib/pocketbase/memory-rows.ts. Keep every record with an id and drop
+ * only broken ones, so one bad row never empties a whole list.
+ */
+function recordMap<T>(idField = "id") {
+  return z
+    .record(z.string(), z.unknown())
+    .catch({})
+    .transform(
+      (records) =>
+        Object.fromEntries(
+          Object.entries(records).filter(([, record]) => hasStringField(record, idField) && record[idField]),
+        ) as Record<string, T>,
+    );
+}
+
+const MEMORY_KIND_KEYS: MemoryKind[] = ["task", "decision", "project", "meeting", "follow_up", "repeat"];
+
+const memorySchema = z
+  .record(z.string(), z.unknown())
+  .catch({})
+  .transform((value) => {
+    const memory = {} as Record<MemoryKind, unknown>;
+    for (const kind of MEMORY_KIND_KEYS) memory[kind] = recordMap().parse(value[kind] ?? {});
+    return memory as MemoryData;
+  });
+
 export const appStateSchema = z.object({
   dailyPages: z.record(z.string(), dailyPageSchema),
   todoWorkspaces: z.record(z.string(), todoWorkspaceSchema),
@@ -172,6 +204,8 @@ export const appStateSchema = z.object({
   contentBoard: contentBoardSchema,
   contentCards: z.record(z.string(), contentCardSchema).catch({}),
   appNotes: z.record(z.string(), appNoteSchema).catch({}),
+  memory: memorySchema.optional().transform((value) => value ?? memorySchema.parse({})),
+  changeLog: recordMap<ChangeLogEntry>().optional().transform((value) => value ?? {}),
   uiState: z.object({
     selectedDailyDate: z.string().nullable(),
     selectedTodoWorkspaceId: z.string(),
@@ -185,7 +219,7 @@ export const appStateSchema = z.object({
     expandedYears: z.array(z.string()),
     expandedMonths: z.array(z.string()),
     expandedNoteFolders: z.array(z.string()).optional(),
-    lastView: z.enum(["todos", "notes", "planner", "content-planner"]),
+    lastView: z.enum(["today", "history", "memory", "project", "standup", "todos", "notes", "planner", "content-planner"]),
     themeMode: z.enum(["light", "dark", "system"]).optional(),
     categoryTheme: z.enum(["normal", "adhd1", "adhd2"]).optional(),
     isFocusMode: z.boolean().optional(),
