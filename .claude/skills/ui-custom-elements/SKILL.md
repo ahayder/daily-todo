@@ -12,9 +12,9 @@ These make DailyTodo look like a friendly night notebook, not a generic kit. The
 
 | Element | Import / file | Appears in | Rules |
 |---|---|---|---|
-| `NowCard` (`block` / `task` / `mini`) | `@/components/signature/now-card` | Target: Planner NOW (`block`), Focus-mode timer (`task`), compact spots (`mini`) — not adopted yet | max one per screen; the ring is the only glow; times in `font-mono`; over time / off-plan never turns warning-colored; pass `remainingDescription` for screen readers |
+| `NowCard` (`block` / `task` / `mini`) | `@/components/signature/now-card` | Today page Now card (`block`); target: Planner NOW, Focus-mode timer (`task`), compact spots (`mini`) | max one per screen; the ring is the only glow; times in `font-mono`; over time / off-plan never turns warning-colored; pass `remainingDescription` for screen readers |
 | `PriorityTab` + `PRIORITY_GROUP_SURFACE` | `@/components/signature/priority-tab` | Target: todo group headers, priority filters — not adopted yet | fixed hues (1 peach, 2 butter, 3 mint) for every label set; always the word from the active label set; task text stays plain |
-| `WashiTag` | `@/components/signature/washi-tag` | Target: todo rows, focus card, "Worth a look" — not adopted yet | pass `getTaskAgeDays(todo, date)`; renders nothing under 1 day; one per row; hide on finished tasks; weight grows, never color |
+| `WashiTag` | `@/components/signature/washi-tag` | Today Shelf leftovers ("N days waiting"); target: todo rows, focus card, "Worth a look" | pass `getTaskAgeDays(todo, date)`; renders nothing under 1 day; one per row; hide on finished tasks; weight grows, never color |
 | `StageTrack` | `@/components/signature/stage-track` | content card detail, `ContentEmptyState` | `current` from `getStageForColumn(columnId)` — never from editable column titles |
 | `SoftCapBadge` | `@/components/signature/stage-track` | Shoot next group on `ContentShelf` (`count`/`5`) | tints past the cap, never blocks, never red |
 | Series chip | `series-strip.tsx`, `card-series-picker.tsx` (content planner) | series strip, card's series picker, muted meta line on shelf rows | neutral chip (border + `card`/`background`, muted text) + lucide `Layers` + series name; never a per-series color or lilac; counts are kind and count only what exists ("5 shipped · 2 on the way") |

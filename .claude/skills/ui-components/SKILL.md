@@ -77,11 +77,19 @@ Feature components — reuse inside the Content Planner; copy their pattern else
 | `PublishInfo` | `publish-info.tsx` | published links per platform + transcript; auto-saves |
 | `ShootCardView` | `shoot-card-view.tsx` | a script part as calm reading text |
 
+## Today pieces (`src/components/today`)
+
+| Component | File | What it is |
+|---|---|---|
+| `TaskRow` | `task-row.tsx` | external-brain task: round check (44px touch target), plain title, meta line (area chip, washi tag, "From Claude"), one right-side action |
+| `LifeAreaChip` | `task-row.tsx` | life area as a neutral `chip` Badge + icon (Job/Content/Personal) — never a priority color |
+| `useHistoryActions` | `use-history-actions.ts` | `act(action, title)` runs an edit with an Undo toast; `undo` / `redo` show results and refusals as toasts ("Bring back") |
+
 ## Layouts
 
 | Layout | File | Used by |
 |---|---|---|
-| App shell (top nav + optional sidebar + main) | `src/components/workspace/workspace.tsx` | all routes; sidebar only on Todos/Notes (`isPlanner` / content planner are full-width) |
+| App shell (top nav + optional sidebar + main) | `src/components/workspace/workspace.tsx` | all routes; sidebar only on Todos/Notes (Today, History, Planner, Content Planner are full-width) |
 | Top nav (pills, sync pill, theme, A-/A+) | `src/components/workspace/top-navbar.tsx` | all routes (legacy styling) |
 | Sidebar (dates, notes tree, profile menu) | `src/components/workspace/sidebar.tsx` | Todos, Notes (legacy styling) |
 
