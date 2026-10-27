@@ -3,15 +3,17 @@
 import { ArrowLeft, FolderSearch } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
 import { EmptyState } from "@/components/blocks/empty-state";
 import { WashiTag } from "@/components/signature/washi-tag";
 import { DoTodayMenu } from "@/components/today/do-today-menu";
 import { SectionTitle } from "@/components/today/section-title";
 import { LifeAreaChip, TaskRow } from "@/components/today/task-row";
+import { useFocusSoon } from "@/components/today/use-focus-soon";
 import { useHistoryActions } from "@/components/today/use-history-actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_TIME_ZONE, todayIn } from "@/lib/memory/dates";
 import { nextStepTask, projectView } from "@/lib/memory/memory-screen";
@@ -35,15 +37,23 @@ function EditStanding({
 }) {
   const [state, setState] = useState(project.state);
   const [nextStep, setNextStep] = useState(project.nextStep);
+  const dirty = state !== project.state || nextStep !== project.nextStep;
+  const save = () => onSave({ state: state.trim(), nextStep: nextStep.trim() });
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ state: state.trim(), nextStep: nextStep.trim() });
+        save();
       }}
       onKeyDown={(event) => {
-        if (event.key === "Escape") onCancel();
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          save();
+        } else if (event.key === "Escape" && !dirty) {
+          // Esc only closes an untouched form; typed text is never thrown away silently.
+          onCancel();
+        }
       }}
     >
       <div className="flex flex-col gap-1">
@@ -56,8 +66,9 @@ function EditStanding({
         <label htmlFor="project-next" className="text-[0.8125rem] font-semibold text-muted-foreground">
           Next small step
         </label>
-        <Textarea id="project-next" value={nextStep} onChange={(event) => setNextStep(event.target.value)} />
+        <Input id="project-next" value={nextStep} onChange={(event) => setNextStep(event.target.value)} />
       </div>
+      <p className="text-[0.8125rem] text-muted-foreground">⌘/Ctrl+Enter saves.{dirty ? " Cancel throws away your changes." : ""}</p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" className="pointer-coarse:h-11" onClick={onCancel}>
           Cancel
@@ -71,9 +82,15 @@ function EditStanding({
 }
 
 function ProjectPage({ projectId }: { projectId: string }) {
-  const { state } = useAppState();
+  const { state, sync } = useAppState();
   const { act, isReadOnly } = useHistoryActions();
   const [editing, setEditing] = useState(false);
+  const focusSoon = useFocusSoon();
+  const standingRef = useRef<HTMLHeadingElement>(null);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const tasksRef = useRef<HTMLHeadingElement>(null);
+  const decisionsRef = useRef<HTMLHeadingElement>(null);
+  const waitingRef = useRef<HTMLHeadingElement>(null);
   const now = new Date();
   const today = todayIn(TIME_ZONE, now);
   const minutes = minutesInZone(now, TIME_ZONE);
@@ -90,6 +107,14 @@ function ProjectPage({ projectId }: { projectId: string }) {
     [minutes, preset, state.memory.repeat, state.memory.task, today],
   );
 
+  if (!view && sync.indicator === "loading") {
+    return (
+      <p role="status" className="mx-auto w-full max-w-6xl px-6 pt-6 text-sm text-muted-foreground">
+        Loading the project…
+      </p>
+    );
+  }
+
   if (!view) {
     return (
       <EmptyState
@@ -97,9 +122,9 @@ function ProjectPage({ projectId }: { projectId: string }) {
         title="This project isn’t here."
         description="It may not have synced to this device yet, or the link is old."
         action={
-          <Button variant="soft" size="sm" render={<Link href="/memory" />}>
-            Back to Memory
-          </Button>
+          <Link href="/memory" className={buttonVariants({ variant: "soft", size: "sm" })}>
+                  Back to Memory
+                </Link>
         }
       />
     );
@@ -111,11 +136,14 @@ function ProjectPage({ projectId }: { projectId: string }) {
     task.status === "done"
       ? act({ type: "memory-reopen-task", taskId: task.id }, `Reopened “${task.title}”`)
       : act({ type: "memory-complete-task", taskId: task.id }, `Finished “${task.title}”`);
-  const doToday = (task: Task, blockId: string | null) =>
+  const doToday = (task: Task, blockId: string | null) => {
     act({ type: "memory-schedule-task", taskId: task.id, day: today, blockId }, `Planned “${task.title}” for today`);
+    focusSoon(tasksRef);
+  };
   const doStepToday = () => {
+    focusSoon(standingRef);
     if (stepTask) {
-      doToday(stepTask, null);
+      act({ type: "memory-schedule-task", taskId: stepTask.id, day: today, blockId: null }, `Planned “${stepTask.title}” for today`);
       return;
     }
     act(
@@ -147,15 +175,25 @@ function ProjectPage({ projectId }: { projectId: string }) {
         {editing ? (
           <EditStanding
             project={project}
-            onCancel={() => setEditing(false)}
+            onCancel={() => {
+              setEditing(false);
+              focusSoon(editRef);
+            }}
             onSave={(updates) => {
               act({ type: "memory-update-project", projectId: project.id, updates }, `Updated “${project.name}”`);
               setEditing(false);
+              focusSoon(editRef);
             }}
           />
         ) : (
           <>
-            <p className="text-[0.8125rem] font-semibold text-muted-foreground">Where it stands now</p>
+            <h2
+              ref={standingRef}
+              tabIndex={-1}
+              className="w-fit rounded-md text-[0.8125rem] font-semibold text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Where it stands now
+            </h2>
             <p className="font-heading text-lg leading-snug font-semibold break-words text-foreground">
               {project.state || "Not written yet — tell your AI, or add it here."}
             </p>
@@ -165,15 +203,24 @@ function ProjectPage({ projectId }: { projectId: string }) {
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {project.nextStep ? (
                 stepTask?.onToday ? (
-                  <span className="text-sm font-semibold text-brand-subtle-foreground">{stepTask.where}</span>
+                  <Link href="/today" className="text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                    {stepTask.where} →
+                  </Link>
                 ) : (
                   <Button className="pointer-coarse:h-11" disabled={isReadOnly} onClick={doStepToday}>
                     Do today
                   </Button>
                 )
               ) : null}
-              <Button variant="ghost" size="sm" className="pointer-coarse:h-11" disabled={isReadOnly} onClick={() => setEditing(true)}>
-                Edit
+              <Button
+                ref={editRef}
+                variant="ghost"
+                size="sm"
+                className="pointer-coarse:h-11"
+                disabled={isReadOnly}
+                onClick={() => setEditing(true)}
+              >
+                Edit where it stands
               </Button>
               <Button
                 variant="ghost"
@@ -205,7 +252,9 @@ function ProjectPage({ projectId }: { projectId: string }) {
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
         <section aria-label="Tasks" className="flex flex-col gap-3">
-          <SectionTitle hint="open first, then done">Tasks</SectionTitle>
+          <SectionTitle hint="open first, then done" headingRef={tasksRef}>
+            Tasks
+          </SectionTitle>
           {view.open.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">No open tasks for this project.</p>
           ) : (
@@ -262,7 +311,7 @@ function ProjectPage({ projectId }: { projectId: string }) {
 
         <aside className="flex flex-col gap-6">
           <section aria-label="Decisions" className="flex flex-col gap-2">
-            <SectionTitle>Decisions</SectionTitle>
+            <SectionTitle headingRef={decisionsRef}>Decisions</SectionTitle>
             {view.decisions.length === 0 ? (
               <p className="px-2 text-sm text-muted-foreground">No decisions yet.</p>
             ) : (
@@ -272,12 +321,13 @@ function ProjectPage({ projectId }: { projectId: string }) {
                   item={item}
                   showProject={false}
                   disabled={isReadOnly}
-                  onMarkAgreed={() =>
+                  onMarkAgreed={() => {
                     act(
                       { type: "memory-set-decision-status", decisionId: item.decision.id, status: "agreed" },
                       `Marked “${item.decision.title}” agreed`,
-                    )
-                  }
+                    );
+                    focusSoon(decisionsRef);
+                  }}
                 />
               ))
             )}
@@ -285,13 +335,14 @@ function ProjectPage({ projectId }: { projectId: string }) {
 
           {view.waiting.length > 0 ? (
             <section aria-label="Waiting on others" className="flex flex-col gap-2">
-              <SectionTitle>Waiting on others</SectionTitle>
+              <SectionTitle headingRef={waitingRef}>Waiting on others</SectionTitle>
               <WaitingList
                 groups={view.waiting}
                 disabled={isReadOnly}
-                onResolve={(item) =>
-                  act({ type: "memory-resolve-follow-up", followUpId: item.id }, `Resolved “${item.what}”`)
-                }
+                onResolve={(item) => {
+                  act({ type: "memory-resolve-follow-up", followUpId: item.id }, `Resolved “${item.what}”`);
+                  focusSoon(waitingRef);
+                }}
               />
             </section>
           ) : null}

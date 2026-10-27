@@ -145,7 +145,7 @@ export function StandupView() {
                         type="button"
                         role="checkbox"
                         aria-checked={done}
-                        aria-label={done ? `Untick “${item.text}”` : `Tick “${item.text}” as talked about`}
+                        aria-label={`Talked about: ${item.text}`}
                         onClick={() => toggle(item.id)}
                         className={cn(
                           "relative mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:size-7 pointer-coarse:after:absolute pointer-coarse:after:-inset-2",

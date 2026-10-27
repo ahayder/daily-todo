@@ -10,7 +10,7 @@ import { InlineComposer } from "@/components/blocks/inline-composer";
 import { PageHeader } from "@/components/blocks/page-header";
 import { NowCard } from "@/components/signature/now-card";
 import { WashiTag } from "@/components/signature/washi-tag";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { setPingsEnabled, usePingsEnabled } from "@/lib/ping-settings";
 import { DEFAULT_TIME_ZONE, todayIn, weekdayOf } from "@/lib/memory/dates";
@@ -139,9 +139,9 @@ export function TodayView() {
           actions={
             <>
               {isWorkday ? (
-                <Button variant="ghost" size="sm" className="pointer-coarse:h-11" render={<Link href="/standup" />}>
+                <Link href="/standup" className={buttonVariants({ variant: "ghost", size: "sm", className: "pointer-coarse:h-11" })}>
                   Standup agenda
-                </Button>
+                </Link>
               ) : null}
               {isDesktop ? (
                 <IconButton
@@ -257,9 +257,9 @@ export function TodayView() {
                 title="No time blocks for today."
                 description="Plan your blocks once in the Daily Planner and they show up here every day."
                 action={
-                  <Button variant="soft" size="sm" render={<Link href="/planner" />}>
-                    Open the Daily Planner
-                  </Button>
+                  <Link href="/planner" className={buttonVariants({ variant: "soft", size: "sm" })}>
+                  Open the Daily Planner
+                </Link>
                 }
               />
             ) : (

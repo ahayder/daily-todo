@@ -2,12 +2,13 @@
 
 import { Brain, Lightbulb, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
 import { EmptyState } from "@/components/blocks/empty-state";
 import { PageHeader } from "@/components/blocks/page-header";
 import { SectionTitle } from "@/components/today/section-title";
 import { LifeAreaChip } from "@/components/today/task-row";
+import { useFocusSoon } from "@/components/today/use-focus-soon";
 import { useHistoryActions } from "@/components/today/use-history-actions";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_TIME_ZONE, todayIn } from "@/lib/memory/dates";
@@ -21,7 +22,7 @@ import {
 import { searchMemory, type SearchHit } from "@/lib/memory/search";
 import type { MemoryData, MemoryKind, Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { DecisionCard, WaitingList } from "./memory-parts";
+import { DecisionCard, shortDate, WaitingList } from "./memory-parts";
 
 const KIND_TITLES: Record<MemoryKind, string> = {
   project: "Projects",
@@ -33,13 +34,37 @@ const KIND_TITLES: Record<MemoryKind, string> = {
 };
 const KIND_ORDER: MemoryKind[] = ["project", "decision", "task", "meeting", "follow_up", "repeat"];
 
-/** Where a search hit lives in the app. */
+function hitProjectId(hit: SearchHit, memory: MemoryData): string | null {
+  const record = memory[hit.kind][hit.id] as { projectId?: string | null } | undefined;
+  return record?.projectId ?? null;
+}
+
+/** Where a search hit lives: its project page when it has one, else Today for tasks and repeats. */
 function hitHref(hit: SearchHit, memory: MemoryData): string | null {
   if (hit.kind === "project") return projectHref(hit.id);
-  if (hit.kind === "task" || hit.kind === "repeat") return "/today";
-  const record = memory[hit.kind][hit.id] as { projectId?: string | null } | undefined;
-  return record?.projectId ? projectHref(record.projectId) : null;
+  const projectId = hitProjectId(hit, memory);
+  if (projectId) return projectHref(projectId);
+  return hit.kind === "task" || hit.kind === "repeat" ? "/today" : null;
 }
+
+/** Project name and date, so look-alike results ("Standup" ×3) can be told apart. */
+function hitMeta(hit: SearchHit, memory: MemoryData): string {
+  const projectId = hitProjectId(hit, memory);
+  const project = projectId ? memory.project[projectId]?.name : null;
+  const meeting = hit.kind === "meeting" ? memory.meeting[hit.id]?.date : null;
+  return [project, shortDate(meeting || hit.updatedAt)].filter(Boolean).join(" · ");
+}
+
+/** Snippets come from markdown summaries: drop list bullets and stray dates. */
+function cleanSnippet(snippet: string): string {
+  return snippet
+    .replace(/(^|\s)[-*•]\s+/g, "$1")
+    .replace(/\(\d{4}-\d{2}-\d{2}\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const STATUS_WORDS: Record<Project["status"], string | null> = { active: null, paused: "Paused", done: "Done" };
 
 function ProjectCard({ project }: { project: Project }) {
   return (
@@ -48,7 +73,14 @@ function ProjectCard({ project }: { project: Project }) {
       className="flex flex-col gap-1.5 rounded-xl bg-card px-4 py-3 shadow-[var(--rim)] transition-colors outline-none hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="font-heading text-base font-semibold break-words text-foreground">{project.name}</span>
+        <span className="font-heading text-base font-semibold break-words text-foreground">
+          {project.name}
+          {STATUS_WORDS[project.status] ? (
+            <span className="ml-2 font-sans text-[0.8125rem] font-normal text-muted-foreground">
+              {STATUS_WORDS[project.status]}
+            </span>
+          ) : null}
+        </span>
         <LifeAreaChip area={project.area} />
       </span>
       {project.state ? <span className="text-sm leading-[1.6] text-foreground/85">{project.state}</span> : null}
@@ -60,8 +92,12 @@ function ProjectCard({ project }: { project: Project }) {
 }
 
 export function MemoryView() {
-  const { state } = useAppState();
+  const { state, sync } = useAppState();
   const { act, isReadOnly } = useHistoryActions();
+  const focusSoon = useFocusSoon();
+  const decisionsRef = useRef<HTMLHeadingElement>(null);
+  const waitingRef = useRef<HTMLHeadingElement>(null);
+  const loading = sync.indicator === "loading";
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState<string | null>(null);
   const today = todayIn(DEFAULT_TIME_ZONE);
@@ -118,9 +154,12 @@ export function MemoryView() {
                       const body = (
                         <>
                           <span className="block text-[0.9375rem] font-semibold break-words text-foreground">{hit.label}</span>
-                          {hit.snippet && hit.snippet !== hit.label ? (
-                            <span className="block text-sm leading-[1.7] break-words text-muted-foreground">{hit.snippet}</span>
+                          {hit.snippet && cleanSnippet(hit.snippet) !== hit.label ? (
+                            <span className="block text-sm leading-[1.7] break-words text-foreground/80">
+                              {cleanSnippet(hit.snippet)}
+                            </span>
                           ) : null}
+                          <span className="block text-[0.8125rem] text-muted-foreground">{hitMeta(hit, memory)}</span>
                         </>
                       );
                       return (
@@ -143,6 +182,10 @@ export function MemoryView() {
               );
             })}
           </section>
+        ) : loading && isEmpty ? (
+          <p role="status" className="px-1 text-sm text-muted-foreground">
+            Loading your memory…
+          </p>
         ) : isEmpty ? (
           <EmptyState
             icon={<Brain />}
@@ -176,7 +219,9 @@ export function MemoryView() {
 
             <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
               <section aria-label="Decisions" className="flex flex-col gap-3">
-                <SectionTitle hint="newest first">Decisions</SectionTitle>
+                <SectionTitle hint="newest first" headingRef={decisionsRef}>
+                  Decisions
+                </SectionTitle>
                 {tags.length > 0 ? (
                   <div role="group" aria-label="Filter decisions by tag" className="flex flex-wrap gap-1.5 px-1">
                     {[null, ...tags].map((value) => (
@@ -211,12 +256,13 @@ export function MemoryView() {
                         key={item.decision.id}
                         item={item}
                         disabled={isReadOnly}
-                        onMarkAgreed={() =>
+                        onMarkAgreed={() => {
                           act(
                             { type: "memory-set-decision-status", decisionId: item.decision.id, status: "agreed" },
                             `Marked “${item.decision.title}” agreed`,
-                          )
-                        }
+                          );
+                          focusSoon(decisionsRef);
+                        }}
                       />
                     ))}
                   </div>
@@ -224,16 +270,20 @@ export function MemoryView() {
               </section>
 
               <section aria-label="Waiting on others" className="flex flex-col gap-3">
-                <SectionTitle hint="by person">Waiting on others</SectionTitle>
+                <SectionTitle hint="by person" headingRef={waitingRef}>
+                  Waiting on others
+                </SectionTitle>
                 {waiting.length === 0 ? (
                   <p className="px-2 text-sm text-muted-foreground">Nobody — nothing you’re waiting on.</p>
                 ) : (
                   <WaitingList
                     groups={waiting}
                     disabled={isReadOnly}
-                    onResolve={(item) =>
-                      act({ type: "memory-resolve-follow-up", followUpId: item.id }, `Resolved “${item.what}”`)
-                    }
+                    projectName={(item) => (item.projectId ? (memory.project[item.projectId]?.name ?? null) : null)}
+                    onResolve={(item) => {
+                      act({ type: "memory-resolve-follow-up", followUpId: item.id }, `Resolved “${item.what}”`);
+                      focusSoon(waitingRef);
+                    }}
                   />
                 )}
               </section>

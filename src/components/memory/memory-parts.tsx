@@ -89,10 +89,13 @@ export function WaitingList({
   groups,
   disabled,
   onResolve,
+  projectName,
 }: {
   groups: { who: string; items: WaitingItem[] }[];
   disabled: boolean;
   onResolve: (item: WaitingItem) => void;
+  /** Shown under each item on Memory, where items from every project mix. */
+  projectName?: (item: WaitingItem) => string | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -104,9 +107,12 @@ export function WaitingList({
               <li key={item.id} className="flex items-start gap-3 rounded-xl bg-card px-3 py-2.5 shadow-[var(--rim)]">
                 <div className="min-w-0 flex-1">
                   <p className="text-[0.9375rem] leading-[1.6] break-words text-foreground">{item.what}</p>
+                  {projectName?.(item) ? (
+                    <p className="text-[0.8125rem] text-muted-foreground">{projectName(item)}</p>
+                  ) : null}
                   {item.daysWaiting > 0 ? (
                     <div className="mt-1">
-                      <WashiTag ageDays={item.daysWaiting} />
+                      <WashiTag ageDays={item.daysWaiting} variant="waiting" />
                     </div>
                   ) : null}
                 </div>
@@ -115,10 +121,10 @@ export function WaitingList({
                   size="sm"
                   className="shrink-0 pointer-coarse:h-11"
                   disabled={disabled}
-                  aria-label={`Resolved: ${item.what}`}
+                  aria-label={`Mark resolved: ${item.what}`}
                   onClick={() => onResolve(item)}
                 >
-                  Resolved
+                  Mark resolved
                 </Button>
               </li>
             ))}
