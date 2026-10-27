@@ -1,5 +1,8 @@
-import type { AppState } from "@/lib/types";
+import type { AppState, DecisionStatus, LifeArea, Project } from "@/lib/types";
 import { memoryWrites, redoChange, undoChange, writeWithHistory } from "./app-history";
+import { updateDecision } from "./decisions";
+import { resolveFollowUp } from "./follow-ups";
+import { updateProject } from "./projects";
 import { liveRecords } from "./records";
 import { completeTask, createTask, reopenTask, scheduleTask } from "./tasks";
 
@@ -11,13 +14,28 @@ import { completeTask, createTask, reopenTask, scheduleTask } from "./tasks";
 type Batch = { batchId?: string };
 
 export type MemoryAction =
-  | ({ type: "memory-add-task"; title: string; day: string | null; blockId?: string | null } & Batch)
+  | ({
+      type: "memory-add-task";
+      title: string;
+      day: string | null;
+      blockId?: string | null;
+      projectId?: string | null;
+      area?: LifeArea | null;
+    } & Batch)
   /** day null = back to the Shelf ("Not now"). */
   | ({ type: "memory-schedule-task"; taskId: string; day: string | null; blockId?: string | null } & Batch)
   | ({ type: "memory-complete-task"; taskId: string } & Batch)
   | ({ type: "memory-reopen-task"; taskId: string } & Batch)
   /** Ticks off today's repeat by creating its real (done) task row. */
   | ({ type: "memory-complete-repeat"; repeatId: string; day: string } & Batch)
+  | ({ type: "memory-resolve-follow-up"; followUpId: string } & Batch)
+  | ({ type: "memory-reopen-follow-up"; followUpId: string } & Batch)
+  | ({
+      type: "memory-update-project";
+      projectId: string;
+      updates: Partial<Pick<Project, "state" | "nextStep" | "status">>;
+    } & Batch)
+  | ({ type: "memory-set-decision-status"; decisionId: string; status: DecisionStatus } & Batch)
   | { type: "undo-change"; changeId: string }
   | { type: "undo-batch"; batchId: string }
   | { type: "redo-change"; changeId: string };
@@ -28,6 +46,10 @@ export const MEMORY_ACTION_TYPES = new Set<MemoryAction["type"]>([
   "memory-complete-task",
   "memory-reopen-task",
   "memory-complete-repeat",
+  "memory-resolve-follow-up",
+  "memory-reopen-follow-up",
+  "memory-update-project",
+  "memory-set-decision-status",
   "undo-change",
   "undo-batch",
   "redo-change",
@@ -50,7 +72,17 @@ export function applyMemoryAction(state: AppState, action: MemoryAction, now = n
   const tasks = state.memory.task;
   switch (action.type) {
     case "memory-add-task": {
-      const task = createTask({ title: action.title, day: action.day, blockId: action.blockId, source: "app" }, now);
+      const task = createTask(
+        {
+          title: action.title,
+          day: action.day,
+          blockId: action.blockId,
+          projectId: action.projectId,
+          area: action.area,
+          source: "app",
+        },
+        now,
+      );
       return task ? withTasks(state, { ...tasks, [task.id]: task }, now, action.batchId) : state;
     }
     case "memory-schedule-task":
@@ -90,6 +122,37 @@ export function applyMemoryAction(state: AppState, action: MemoryAction, now = n
         action.batchId,
       );
     }
+    case "memory-resolve-follow-up":
+      return writeWithHistory(
+        state,
+        memoryWrites("follow_up", state.memory.follow_up, resolveFollowUp(state.memory.follow_up, action.followUpId, now)),
+        { now, batchId: action.batchId },
+      );
+    case "memory-reopen-follow-up": {
+      const followUp = state.memory.follow_up[action.followUpId];
+      if (!followUp || followUp.status === "waiting") return state;
+      return writeWithHistory(
+        state,
+        [{ kind: "follow_up", id: followUp.id, value: { ...followUp, status: "waiting", doneAt: null, updatedAt: now.toISOString() } }],
+        { now, batchId: action.batchId },
+      );
+    }
+    case "memory-update-project":
+      return writeWithHistory(
+        state,
+        memoryWrites("project", state.memory.project, updateProject(state.memory.project, action.projectId, action.updates, now)),
+        { now, batchId: action.batchId },
+      );
+    case "memory-set-decision-status":
+      return writeWithHistory(
+        state,
+        memoryWrites(
+          "decision",
+          state.memory.decision,
+          updateDecision(state.memory.decision, action.decisionId, { status: action.status }, now),
+        ),
+        { now, batchId: action.batchId },
+      );
     case "undo-change":
       return undoChange(state, action.changeId, { now });
     case "undo-batch": {
