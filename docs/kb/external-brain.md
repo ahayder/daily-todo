@@ -4,7 +4,7 @@ Last verified: 2026-10-27
 Backend for the "chat captures, the app shows" redesign ([user-needs.md](user-needs.md)): chat
 saves tasks, decisions, projects, meetings, follow-ups and repeats through MCP, and every MCP
 write is logged so it can be undone. **Milestone 1 only: schema + pure logic + MCP tools, no UI.**
-Tested on the local test DB; prod schema apply and MCP deploy are still waiting for the user's OK.
+Live on prod since 2026-10-27 (schema applied, MCP server redeployed).
 
 ## How it works
 - **Collections** (`scripts/lib/pocketbase-schema.mjs`, helper `softDeleteCollection()`): `tasks`,
