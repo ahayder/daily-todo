@@ -39,6 +39,8 @@ Tested on the local test DB; prod schema apply and MCP deploy are still waiting 
 - "Today" is the day in `USER_TIMEZONE` (Asia/Dhaka), not the machine's date. They can differ
   near midnight; that is correct.
 - Every new field that can be empty/zero/false must stay non-required ([pocketbase.md](pocketbase.md)).
+- **Weekday mismatch (open bug):** `getTodayView` (`PLANNER_DAY_KEYS`) reads `tuesday`–`friday` planner days on Tue–Fri, but the planner UI only edits `monday` (= all weekdays, `dayKeyForDate` in `src/lib/planner-now.ts`), `saturday`, `sunday`. So Tue–Fri blocks come from stale/ignored days. `list_today` (MCP) shares it. Map Mon–Fri → `monday`.
+- `canUndo` reasons mention `redo_change` and `summarizeChange` lists raw field names (`blockId`) — MCP wording; the app UI needs its own plain copy.
 
 ## Related
 [mcp-server.md](mcp-server.md), [pocketbase.md](pocketbase.md), [user-needs.md](user-needs.md), [decisions.md](decisions.md), [app-notes.md](app-notes.md)
