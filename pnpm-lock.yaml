@@ -27,8 +27,8 @@ dependencies:
     specifier: ^2.10.1
     version: 2.10.1
   '@tauri-apps/plugin-notification':
-    specifier: ^2.7.0
-    version: 2.7.0
+    specifier: ~2.4.0
+    version: 2.4.0
   '@tauri-apps/plugin-process':
     specifier: ^2.3.1
     version: 2.3.1
@@ -2930,8 +2930,8 @@ packages:
       '@tauri-apps/cli-win32-x64-msvc': 2.10.1
     dev: true
 
-  /@tauri-apps/plugin-notification@2.7.0:
-    resolution: {integrity: sha512-kgdHCPSY/3GIi4gSWuLfd3y555U0kwzP0PmnUjT+sGhgO7RdAM6goFjDqayRaKC8yA5oEYi7w2NnA3oQxIjldw==}
+  /@tauri-apps/plugin-notification@2.4.0:
+    resolution: {integrity: sha512-xlJXMcUoKOjNupzDue5wrEsa1wytf+l/2gCAPhafHyP683Y3N7J/8clUWLZ3vpnwkpT2C1zcLMMQFjjecIG2xg==}
     dependencies:
       '@tauri-apps/api': 2.12.4
     dev: false
