@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarClock, MessageSquare, Sun } from "lucide-react";
+import { isTauri } from "@tauri-apps/api/core";
+import { Bell, BellOff, CalendarClock, MessageSquare, Sun } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
@@ -10,6 +11,8 @@ import { PageHeader } from "@/components/blocks/page-header";
 import { NowCard } from "@/components/signature/now-card";
 import { WashiTag } from "@/components/signature/washi-tag";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { setPingsEnabled, usePingsEnabled } from "@/lib/ping-settings";
 import { DEFAULT_TIME_ZONE, todayIn, weekdayOf } from "@/lib/memory/dates";
 import { buildHistory } from "@/lib/memory/history-view";
 import { getTodayView } from "@/lib/memory/tasks";
@@ -68,6 +71,9 @@ export function TodayView() {
   );
   const now = getNow(view, minutes);
   const isWorkday = !["sat", "sun"].includes(weekdayOf(today));
+  // Pings only exist in the desktop app.
+  const [isDesktop] = useState(() => typeof window !== "undefined" && isTauri());
+  const pingsEnabled = usePingsEnabled();
   const waiting = [...view.leftovers, ...view.shelf];
   const history = useMemo(() => buildHistory(state, TIME_ZONE), [state]);
   const { act, undo } = useHistoryActions();
@@ -131,11 +137,21 @@ export function TodayView() {
           title="Today"
           subtitle={`${longDate(today)} · your plan is a guide, not a rule`}
           actions={
-            isWorkday ? (
-              <Button variant="ghost" size="sm" className="pointer-coarse:h-11" render={<Link href="/standup" />}>
-                Standup agenda
-              </Button>
-            ) : undefined
+            <>
+              {isWorkday ? (
+                <Button variant="ghost" size="sm" className="pointer-coarse:h-11" render={<Link href="/standup" />}>
+                  Standup agenda
+                </Button>
+              ) : null}
+              {isDesktop ? (
+                <IconButton
+                  label={pingsEnabled ? "Turn desktop pings off" : "Turn desktop pings on"}
+                  aria-pressed={pingsEnabled}
+                  icon={pingsEnabled ? <Bell /> : <BellOff />}
+                  onClick={() => setPingsEnabled(!pingsEnabled)}
+                />
+              ) : null}
+            </>
           }
         />
 

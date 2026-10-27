@@ -12,6 +12,7 @@ import { MemoryView } from "@/components/memory/memory-view";
 import { ProjectView } from "@/components/memory/project-view";
 import { StandupView } from "@/components/memory/standup-view";
 import { HistoryView } from "@/components/today/history-view";
+import { PingScheduler } from "@/components/today/ping-scheduler";
 import { TodayView } from "@/components/today/today-view";
 import { TodosView } from "@/components/todos/todos-view";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -142,6 +143,8 @@ export function Workspace({ forcedView }: Props) {
           onOpenAppNotes={openAppNotes}
         />
       ) : null}
+
+      <PingScheduler />
 
       <AppNotesDialog
         open={isAppNotesOpen}
