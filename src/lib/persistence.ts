@@ -254,6 +254,8 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
       : "dark";
 
   const normalizedLastView =
+    candidate.uiState.lastView === "today" ||
+    candidate.uiState.lastView === "history" ||
     candidate.uiState.lastView === "todos" ||
     candidate.uiState.lastView === "notes" ||
     candidate.uiState.lastView === "planner" ||

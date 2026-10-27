@@ -90,7 +90,9 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
   );
 
   const lastView = state.uiState.lastView;
-  const isTodos = !mounted || lastView === "todos";
+  // History is opened from Today, so it keeps Today highlighted.
+  const isToday = !mounted || lastView === "today" || lastView === "history";
+  const isTodos = mounted && lastView === "todos";
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
   const isContentPlanner = mounted && lastView === "content-planner";
@@ -279,6 +281,15 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
       </div>
 
       <nav className="nav-pills" role="tablist" aria-label="Main navigation">
+        <Link
+          href="/today"
+          role="tab"
+          aria-selected={isToday}
+          className={cn("nav-pill", isToday && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "today" })}
+        >
+          Today
+        </Link>
         <Link
           href="/todos"
           role="tab"

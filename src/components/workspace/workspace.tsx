@@ -8,6 +8,8 @@ import { AppNotesDialog } from "@/components/app-notes/app-notes-dialog";
 import { ContentPlannerView } from "@/components/content-planner-view";
 import { NotesView } from "@/components/notes/notes-view";
 import { PlannerView } from "@/components/planner/planner-view";
+import { HistoryView } from "@/components/today/history-view";
+import { TodayView } from "@/components/today/today-view";
 import { TodosView } from "@/components/todos/todos-view";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/workspace/sidebar";
@@ -25,6 +27,8 @@ export function Workspace({ forcedView }: Props) {
   const isFocusMode = state.uiState.isFocusMode;
   const isContentPlanner = activeView === "content-planner";
   const isPlanner = activeView === "planner";
+  // Today and History are full-width pages without the Todos/Notes sidebar.
+  const isFullWidth = isContentPlanner || isPlanner || activeView === "today" || activeView === "history";
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
   const previousViewRef = useRef<ViewMode | null>(null);
   const [isAppNotesOpen, setIsAppNotesOpen] = useState(false);
@@ -147,13 +151,13 @@ export function Workspace({ forcedView }: Props) {
 
       <div
         className={
-          state.uiState.isSidebarCollapsed || isContentPlanner || isPlanner
+          state.uiState.isSidebarCollapsed || isFullWidth
             ? "app-body app-body--sidebar-collapsed"
             : "app-body"
         }
         data-content-planner-full-width={isContentPlanner ? "true" : undefined}
       >
-        {!isFocusMode && !isContentPlanner && !isPlanner ? (
+        {!isFocusMode && !isFullWidth ? (
           <Sidebar
             state={workspaceState}
             dispatch={dispatch}
@@ -163,7 +167,11 @@ export function Workspace({ forcedView }: Props) {
         ) : null}
 
         <main className="main-panel">
-          {activeView === "todos" ? (
+          {activeView === "today" ? (
+            <TodayView />
+          ) : activeView === "history" ? (
+            <HistoryView />
+          ) : activeView === "todos" ? (
             <TodosView state={state} dispatch={dispatch} />
           ) : activeView === "planner" ? (
             <PlannerView state={state} dispatch={dispatch} fontScale={contentFontScale} />
