@@ -242,6 +242,22 @@ describe("normalizeAppState", () => {
     }
   });
 
+  test("old saved state without external-brain data gets empty lists, and broken records are dropped", () => {
+    const legacy: Record<string, unknown> = { ...createInitialState("2026-10-27") };
+    delete legacy.memory;
+    delete legacy.changeLog;
+    const parsed = normalizeAppState(legacy, new Date("2026-10-27T08:00:00Z"));
+    expect(parsed.memory.task).toEqual({});
+    expect(parsed.changeLog).toEqual({});
+
+    const withBroken = normalizeAppState(
+      { ...legacy, memory: { task: { ok: { id: "ok", title: "Keep" }, bad: { title: "No id" } } } },
+      new Date("2026-10-27T08:00:00Z"),
+    );
+    expect(Object.keys(withBroken.memory.task)).toEqual(["ok"]);
+    expect(withBroken.memory.decision).toEqual({});
+  });
+
   test("backfills missing content column subtitles", () => {
     const initial = createInitialState("2026-03-11");
     const legacyColumns = initial.contentBoard.columns.map((column) => ({

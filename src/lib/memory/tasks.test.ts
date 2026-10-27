@@ -118,4 +118,10 @@ describe("getTodayView", () => {
     const done = task("Standup prep", { day: date, repeatId: standup.id, status: "done" });
     expect(getTodayView({ tasks: asMap(done), repeats, preset: null, date }).repeats).toEqual([]);
   });
+
+  it("uses the weekday planner template on every weekday and the Saturday one on Saturday", () => {
+    // The Daily Planner edits "monday" for Mon–Fri (see dayKeyForDate).
+    expect(getTodayView({ tasks: {}, repeats: {}, preset, date: "2026-10-29" }).blocks).toHaveLength(2);
+    expect(getTodayView({ tasks: {}, repeats: {}, preset, date: "2026-10-31" }).blocks).toHaveLength(0);
+  });
 });
