@@ -91,9 +91,11 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
 
   const lastView = state.uiState.lastView;
   // History is opened from Today, so it keeps Today highlighted.
-  const isToday = !mounted || lastView === "today" || lastView === "history";
+  const isToday = !mounted || lastView === "today" || lastView === "history" || lastView === "standup";
+  const isMemory = mounted && (lastView === "memory" || lastView === "project");
   const isTodos = mounted && lastView === "todos";
-  const hasNoSidebar = mounted && (lastView === "today" || lastView === "history");
+  const hasNoSidebar =
+    mounted && ["today", "history", "memory", "project", "standup"].includes(lastView);
   const isNotes = mounted && lastView === "notes";
   const isPlanner = mounted && lastView === "planner";
   const isContentPlanner = mounted && lastView === "content-planner";
@@ -291,6 +293,15 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
           onClick={() => dispatch({ type: "set-view", view: "today" })}
         >
           Today
+        </Link>
+        <Link
+          href="/memory"
+          role="tab"
+          aria-selected={isMemory}
+          className={cn("nav-pill", isMemory && "nav-pill--active")}
+          onClick={() => dispatch({ type: "set-view", view: "memory" })}
+        >
+          Memory
         </Link>
         <Link
           href="/todos"

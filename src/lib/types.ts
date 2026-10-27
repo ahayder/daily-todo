@@ -2,7 +2,16 @@ export type Priority = 1 | 2 | 3;
 export type TaskStatus = "pending" | "ongoing" | "finished";
 export type FocusTimerStatus = "idle" | "running" | "paused";
 
-export type ViewMode = "today" | "history" | "todos" | "notes" | "planner" | "content-planner";
+export type ViewMode =
+  | "today"
+  | "history"
+  | "memory"
+  | "project"
+  | "standup"
+  | "todos"
+  | "notes"
+  | "planner"
+  | "content-planner";
 export type ThemeMode = "light" | "dark" | "system";
 export type CategoryTheme = "normal" | "adhd1" | "adhd2";
 export type PlannerDayKey =

@@ -67,7 +67,7 @@ export function TaskRow({ title, done, area, source, meta, onToggle, action, dis
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
             <LifeAreaChip area={area} />
             {meta}
-            {from ? <span>{from}</span> : null}
+            {from ? <span>{meta || area ? `· ${from}` : from}</span> : null}
           </div>
         ) : null}
       </div>

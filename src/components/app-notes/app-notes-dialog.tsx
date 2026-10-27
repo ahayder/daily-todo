@@ -28,6 +28,9 @@ const SCREEN_LABEL: Record<string, string> = {
   "content-planner": "Content Planner",
   today: "Today",
   history: "History",
+  memory: "Memory",
+  project: "Project",
+  standup: "Standup",
   chat: "From chat",
 };
 

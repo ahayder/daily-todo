@@ -219,7 +219,7 @@ export const appStateSchema = z.object({
     expandedYears: z.array(z.string()),
     expandedMonths: z.array(z.string()),
     expandedNoteFolders: z.array(z.string()).optional(),
-    lastView: z.enum(["today", "history", "todos", "notes", "planner", "content-planner"]),
+    lastView: z.enum(["today", "history", "memory", "project", "standup", "todos", "notes", "planner", "content-planner"]),
     themeMode: z.enum(["light", "dark", "system"]).optional(),
     categoryTheme: z.enum(["normal", "adhd1", "adhd2"]).optional(),
     isFocusMode: z.boolean().optional(),

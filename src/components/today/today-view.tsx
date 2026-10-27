@@ -10,18 +10,9 @@ import { PageHeader } from "@/components/blocks/page-header";
 import { NowCard } from "@/components/signature/now-card";
 import { WashiTag } from "@/components/signature/washi-tag";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { DEFAULT_TIME_ZONE, todayIn } from "@/lib/memory/dates";
+import { DEFAULT_TIME_ZONE, todayIn, weekdayOf } from "@/lib/memory/dates";
 import { buildHistory } from "@/lib/memory/history-view";
-import { getTodayView, type TodayBlock } from "@/lib/memory/tasks";
+import { getTodayView } from "@/lib/memory/tasks";
 import {
   aiChangesToday,
   getNow,
@@ -32,6 +23,8 @@ import {
 } from "@/lib/memory/today-screen";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { DoTodayMenu } from "./do-today-menu";
+import { SectionTitle } from "./section-title";
 import { TaskRow } from "./task-row";
 import { useHistoryActions } from "./use-history-actions";
 
@@ -62,71 +55,6 @@ function longDate(day: string) {
   );
 }
 
-function SectionTitle({
-  children,
-  hint,
-  headingRef,
-}: {
-  children: string;
-  hint?: string;
-  headingRef?: React.Ref<HTMLHeadingElement>;
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-2 px-2">
-      <h2
-        ref={headingRef}
-        tabIndex={headingRef ? -1 : undefined}
-        className="scroll-mt-4 rounded-md font-heading text-lg font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {children}
-      </h2>
-      {hint ? <span className="text-[0.8125rem] text-muted-foreground">{hint}</span> : null}
-    </div>
-  );
-}
-
-function DoTodayMenu({
-  title,
-  blocks,
-  disabled,
-  onPick,
-}: {
-  title: string;
-  blocks: TodayBlock[];
-  disabled: boolean;
-  onPick: (blockId: string | null) => void;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        disabled={disabled}
-        render={
-          <Button variant="outline" size="sm" className="pointer-coarse:h-11" aria-label={`Do “${title}” today`}>
-            Do today
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Put it in which block?</DropdownMenuLabel>
-          {blocks.map((block) => (
-            <DropdownMenuItem
-              key={block.id}
-              aria-label={`${block.title || "Untitled block"}, ${block.start} to ${block.end}`}
-              onClick={() => onPick(block.id)}
-            >
-              <span className="font-mono text-[0.8125rem] tabular-nums text-muted-foreground">{block.start}</span>
-              <span className="truncate">{block.title || "Untitled block"}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        {blocks.length > 0 ? <DropdownMenuSeparator /> : null}
-        <DropdownMenuItem onClick={() => onPick(null)}>Any time today</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function TodayView() {
   const { state, sync } = useAppState();
   const readOnly = sync.isReadOnly;
@@ -139,6 +67,7 @@ export function TodayView() {
     [preset, state.memory.repeat, state.memory.task, today],
   );
   const now = getNow(view, minutes);
+  const isWorkday = !["sat", "sun"].includes(weekdayOf(today));
   const waiting = [...view.leftovers, ...view.shelf];
   const history = useMemo(() => buildHistory(state, TIME_ZONE), [state]);
   const { act, undo } = useHistoryActions();
@@ -198,7 +127,17 @@ export function TodayView() {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-4 pb-12 sm:px-6">
-        <PageHeader title="Today" subtitle={`${longDate(today)} · your plan is a guide, not a rule`} />
+        <PageHeader
+          title="Today"
+          subtitle={`${longDate(today)} · your plan is a guide, not a rule`}
+          actions={
+            isWorkday ? (
+              <Button variant="ghost" size="sm" className="pointer-coarse:h-11" render={<Link href="/standup" />}>
+                Standup agenda
+              </Button>
+            ) : undefined
+          }
+        />
 
         {now ? (
           <div ref={nowRef} tabIndex={-1} className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">

@@ -8,6 +8,9 @@ import { AppNotesDialog } from "@/components/app-notes/app-notes-dialog";
 import { ContentPlannerView } from "@/components/content-planner-view";
 import { NotesView } from "@/components/notes/notes-view";
 import { PlannerView } from "@/components/planner/planner-view";
+import { MemoryView } from "@/components/memory/memory-view";
+import { ProjectView } from "@/components/memory/project-view";
+import { StandupView } from "@/components/memory/standup-view";
 import { HistoryView } from "@/components/today/history-view";
 import { TodayView } from "@/components/today/today-view";
 import { TodosView } from "@/components/todos/todos-view";
@@ -28,7 +31,8 @@ export function Workspace({ forcedView }: Props) {
   const isContentPlanner = activeView === "content-planner";
   const isPlanner = activeView === "planner";
   // Today and History are full-width pages without the Todos/Notes sidebar.
-  const isFullWidth = isContentPlanner || isPlanner || activeView === "today" || activeView === "history";
+  const isFullWidth =
+    isContentPlanner || isPlanner || ["today", "history", "memory", "project", "standup"].includes(activeView);
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
   const previousViewRef = useRef<ViewMode | null>(null);
   const [isAppNotesOpen, setIsAppNotesOpen] = useState(false);
@@ -171,6 +175,12 @@ export function Workspace({ forcedView }: Props) {
             <TodayView />
           ) : activeView === "history" ? (
             <HistoryView />
+          ) : activeView === "memory" ? (
+            <MemoryView />
+          ) : activeView === "project" ? (
+            <ProjectView />
+          ) : activeView === "standup" ? (
+            <StandupView />
           ) : activeView === "todos" ? (
             <TodosView state={state} dispatch={dispatch} />
           ) : activeView === "planner" ? (
