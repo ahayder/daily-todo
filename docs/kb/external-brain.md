@@ -3,9 +3,11 @@ Last verified: 2026-10-27
 
 Backend + UI for the "chat captures, the app shows" redesign ([user-needs.md](user-needs.md)): chat
 saves tasks, decisions, projects, meetings, follow-ups and repeats through MCP; the app shows them
-on **Today** (`/today`) and lists every change on **History** (`/history`), with undo.
-M1 (schema, logic, MCP tools) live on prod since 2026-10-27. M2 (Today + History UI, app-side
-sync) built on branch `claude/charming-bun-fe98e0`, going to `dev`.
+on **Today** (`/today`), **Memory** (`/memory`, `/memory/project?id=…`), **Standup** (`/standup`)
+and lists every change on **History** (`/history`), with undo; desktop pings nudge.
+M1 (schema, logic, MCP tools) live on prod since 2026-10-27. M2 (Today + History, app sync) and
+M3 (Memory, Project, Standup, pings; plan `docs/plans/2026-10-27-external-brain-m3.md`) built on
+branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop release for a 2–3 day trial.
 
 ## How it works
 - **Collections** (`scripts/lib/pocketbase-schema.mjs`, helper `softDeleteCollection()`): `tasks`,
@@ -34,18 +36,27 @@ sync) built on branch `claude/charming-bun-fe98e0`, going to `dev`.
   - `standup.ts`: `since` defaults to the previous Mon–Fri workday; area defaults to `job`; records with no area are kept.
   - `today-screen.ts`: `selectedPlannerPreset` (selected, else newest), `minutesInZone`, `getNow`, `shortDuration`, `aiChangesToday`.
   - `history-view.ts`: `describeChange`, `sourceLabel` (You / Claude / ChatGPT / An AI chat), `buildHistory` (one row per batch; undo/redo entries hidden and shown as the original row's "undone" status; grouped by day in Asia/Dhaka; `count` for "Undo all N").
+  - `memory-screen.ts` (Memory/Project view models): `projectGroups` (active vs paused/done), `decisionLog` (with `replacedBy` and links like "1 open task" / "Repeats Mon/Wed/Fri"), `decisionTags`, `waitingByPerson` (`daysWaiting`), `projectView` (where-labels + timeline from `changeLog` of the project and its records), `nextStepTask`, `projectHref`.
+  - `pings.ts` `duePings`: weekdays only, 08:00–18:00 Asia/Dhaka; a ping when a block with an open task starts (3-min grace) and a standup heads-up 10 min before `STANDUP_TIME` (16:00); none while the app is focused; deduped by ping id.
+  - `standup.ts` `buildStandupAgenda` feeds `/standup` (area `job`).
 - **Undo/redo core** in `src/lib/change-log.ts`: `buildChange`, `summarizeChange`, `canUndo`
   (the record must equal the entry's `after`, ignoring `updatedAt`), `undoTarget` (the `before`
   state, or a soft delete if the change was a create), `canRedo`/`redoTarget` (re-applies the undo
   entry's own `before`).
 - **App edits:** `src/lib/memory/app-actions.ts` — reducer actions `memory-add-task`,
   `memory-schedule-task`, `memory-complete-task`, `memory-reopen-task`, `memory-complete-repeat`,
-  `undo-change`, `undo-batch`, `redo-change` (optional `batchId` so the UI can undo its own edit).
+  `memory-resolve-follow-up`, `memory-reopen-follow-up`, `memory-update-project` (state / nextStep /
+  status), `memory-set-decision-status`, `undo-change`, `undo-batch`, `redo-change` (optional `batchId` so the UI can undo its own edit).
   `appReducer` runs `applyMemoryAction` first. They go through `src/lib/memory/app-history.ts`
   `writeWithHistory` (logs `source: "app"`); batch undo/redo is all-or-nothing, same rules as
-  `mcp-server/src/history.ts`, with its own plain refusal text.
-- **UI:** `src/components/today/` (`today-view`, `history-view`, `task-row`, `use-history-actions`),
-  routes `src/app/today`, `src/app/history`. Layout and UX: [ui-design.md](ui-design.md).
+  `mcp-server/src/history.ts`, with its own plain refusal text. `memory-add-task` accepts
+  `projectId`/`area` (Project page "Do today" creates a task in the project).
+- **UI:** `src/components/today/` (`today-view`, `history-view`, `task-row`, `use-history-actions`,
+  `ping-scheduler`), `src/components/memory/` (`memory-view`, `project-view`, `standup-view`,
+  `memory-parts`); routes `src/app/{today,history,memory,memory/project,standup}`. Layout and UX:
+  [ui-design.md](ui-design.md). Pings (desktop only): [desktop.md](desktop.md).
+- **Device-local (localStorage):** standup ticks `dailytodo.standup.ticks` (reset daily); pings switch
+  `dailytodo.pings.enabled` (default on) and sent ids `dailytodo.pings.sent` (per day) in `src/lib/ping-settings.ts`.
 - MCP side (stores, `withHistory`, tools): see [mcp-server.md](mcp-server.md).
 
 ## Gotchas
@@ -63,8 +74,11 @@ sync) built on branch `claude/charming-bun-fe98e0`, going to `dev`.
   wording. The app uses `app-history.ts` refusals and `history-view.ts` `describeChange` instead.
 - Only external-brain edits made in the app write `change_log`. Content Planner and app-note edits
   in the app don't yet (follow-up), so History doesn't show them.
+- Project page uses `/memory/project?id=…`, not `/memory/[id]`: the desktop app is a static export,
+  so dynamic segments don't work. Read the id with `useSearchParams` inside `<Suspense>`.
+- Meetings show the summary only, never the transcript.
 - Testing real sync: on `localhost` the app forces the offline dev workspace; use
   `http://dailytodo.localhost:5005` with `pnpm dev:test` + local PocketBase ([testing.md](testing.md), [dev-environment.md](dev-environment.md)).
 
 ## Related
-[mcp-server.md](mcp-server.md), [sync-persistence.md](sync-persistence.md), [pocketbase.md](pocketbase.md), [user-needs.md](user-needs.md), [decisions.md](decisions.md), [app-notes.md](app-notes.md)
+[mcp-server.md](mcp-server.md), [sync-persistence.md](sync-persistence.md), [pocketbase.md](pocketbase.md), [user-needs.md](user-needs.md), [decisions.md](decisions.md), [app-notes.md](app-notes.md), [desktop.md](desktop.md), [ui-design.md](ui-design.md)
