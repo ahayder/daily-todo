@@ -19,9 +19,9 @@ function presetWith(events: { id: string; title: string; start: number; end: num
   const days = Object.fromEntries(
     ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((key) => [key, day(key)]),
   ) as unknown as PlannerPreset["days"];
-  days.tuesday.events = events.map((event) => ({
+  days.monday.events = events.map((event) => ({
     id: event.id,
-    dayKey: "tuesday",
+    dayKey: "monday",
     purposeId: null,
     title: event.title,
     startMinutes: event.start,

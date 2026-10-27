@@ -12,6 +12,7 @@ import {
   completeTask,
   createTask,
   getTodayView,
+  plannerEventsForDay,
   reopenTask,
   scheduleTask,
   updateTask,
@@ -110,11 +111,9 @@ export function resolveDay(ctx: MemoryContext, value: string): string | null {
   throw new ToolError(`"${value}" isn't a day. Use YYYY-MM-DD, "today", "tomorrow" or "shelf".`);
 }
 
-const PLANNER_DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
-
 /** A Daily Planner time block on `day`, by id or title. */
 function resolveBlock(preset: PlannerPreset | null, day: string, query: string): string {
-  const events = preset?.days[PLANNER_DAY_KEYS[new Date(`${day}T00:00:00Z`).getUTCDay()]]?.events ?? [];
+  const events = plannerEventsForDay(preset, day);
   const trimmed = query.trim();
   const lower = trimmed.toLowerCase();
   const byId = events.find((event) => event.id === trimmed);
