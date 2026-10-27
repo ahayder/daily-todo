@@ -20,17 +20,33 @@ import {
   createBrowserOutboxStorage,
   fingerprintSyncValue,
   getWorkspaceIdFromDailyPageRecordKey,
+  isMemoryKind,
+  isNeverDeletedKind,
   mergeDailyPageConflict,
   sameTimestamp,
   WORKSPACE_RECORD_KEY,
   type ApplyOpResult,
+  type MemorySyncRecordValue,
   type SyncOp,
   type SyncRecordValue,
 } from "@/lib/sync-outbox";
 import { DEFAULT_TODO_WORKSPACE_ID, getDailyPageKey } from "@/lib/store";
+import { emptyMemoryData } from "@/lib/memory/data";
+import {
+  MEMORY_MAPPERS,
+  changeToPayload,
+  memoryRecordToPayload,
+  rowToChange,
+  rowToMemoryRecord,
+  type Row as MemoryRowShape,
+} from "@/lib/pocketbase/memory-rows";
+import { MEMORY_KINDS } from "@/lib/types";
 import type {
   AppNote,
   AppState,
+  ChangeLogEntry,
+  MemoryKind,
+  MemoryKindMap,
   ContentBoard,
   ContentCard,
   ContentSeries,
@@ -165,8 +181,18 @@ const COLLECTION_BY_KIND: Record<PersistenceRecordKind, string> = {
   content_board: "content_boards",
   content_card: "content_cards",
   app_note: "app_notes",
+  task: MEMORY_MAPPERS.task.collection,
+  decision: MEMORY_MAPPERS.decision.collection,
+  project: MEMORY_MAPPERS.project.collection,
+  meeting: MEMORY_MAPPERS.meeting.collection,
+  follow_up: MEMORY_MAPPERS.follow_up.collection,
+  repeat: MEMORY_MAPPERS.repeat.collection,
+  change_log: "change_log",
   workspace_state: "workspace_state",
 };
+
+/** How many recent change-log entries the app keeps (History, undo). */
+export const CHANGE_LOG_LOAD_LIMIT = 300;
 
 function isNetworkError(error: unknown): boolean {
   return (
@@ -276,6 +302,18 @@ export function appNoteToRow(note: AppNote, owner: string, updatedAtClient: stri
   };
 }
 
+type MemoryRow = MemoryRowShape;
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+/** A collection the server doesn't have yet (schema not applied) reads as empty. */
+function emptyWhenMissing<T>(error: unknown): T[] {
+  if (isNotFoundError(error)) return [];
+  throw error;
+}
+
 function isNotFoundError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -341,6 +379,8 @@ function assembleStateFromValues(
   let contentBoard = fallbackState.contentBoard;
   const contentCards: Record<string, ContentCard> = {};
   const appNotes: Record<string, AppNote> = {};
+  const memory = emptyMemoryData();
+  const changeLog: Record<string, ChangeLogEntry> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
 
   for (const record of Object.values(values)) {
@@ -383,6 +423,18 @@ function assembleStateFromValues(
       continue;
     }
 
+    if (isMemoryKind(record.kind)) {
+      const value = record.value as MemoryKindMap[MemoryKind];
+      (memory[record.kind] as Record<string, MemoryKindMap[MemoryKind]>)[value.id] = value;
+      continue;
+    }
+
+    if (record.kind === "change_log") {
+      changeLog[record.value.id] = record.value;
+      continue;
+    }
+
+    if (record.kind !== "workspace_state") continue;
     todoWorkspaces = record.value.todoWorkspaces;
     syncableUiState = record.value.uiState;
   }
@@ -397,6 +449,8 @@ function assembleStateFromValues(
       contentBoard,
       contentCards,
       appNotes,
+      memory,
+      changeLog,
       uiState: mergeUiState(
         syncableUiState,
         extractLocalOnlyUIState(fallbackState.uiState),
@@ -462,8 +516,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       if (op.kind === "daily_page") {
         return { key: op.key, status: "skipped", reason: "Daily pages are never deleted." };
       }
-      if (op.kind === "app_note") {
-        return { key: op.key, status: "skipped", reason: "App notes are only soft-deleted." };
+      if (isNeverDeletedKind(op.kind)) {
+        return { key: op.key, status: "skipped", reason: "This kind is only soft-deleted or append-only." };
       }
       if (existing) {
         await client.collection(COLLECTION_BY_KIND[op.kind]).delete(existing.id, { requestKey: null });
@@ -503,6 +557,12 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       }
     }
 
+    // The change log is append-only (no update rule): an entry that is
+    // already on the server is done, and a PATCH would be refused forever.
+    if (op.record.kind === "change_log" && existing) {
+      return { key: op.key, status: "written", serverUpdatedAtClient: null };
+    }
+
     const saved = await this.writeRow(userId, op.record, op.updatedAtClient, existing);
     return { key: op.key, status: "written", serverUpdatedAtClient: saved.updated_at_client ?? null };
   }
@@ -538,6 +598,13 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       planner_preset: "preset_id",
       content_card: "card_id",
       app_note: "note_id",
+      task: MEMORY_MAPPERS.task.idField,
+      decision: MEMORY_MAPPERS.decision.idField,
+      project: MEMORY_MAPPERS.project.idField,
+      meeting: MEMORY_MAPPERS.meeting.idField,
+      follow_up: MEMORY_MAPPERS.follow_up.idField,
+      repeat: MEMORY_MAPPERS.repeat.idField,
+      change_log: "change_id",
     };
     const field = idField[record.kind];
     const filter = field
@@ -692,6 +759,21 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
         }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
     ]);
+    const [memoryRows, changeRows] = await Promise.all([
+      Promise.all(
+        MEMORY_KINDS.map((kind) =>
+          client
+            .collection(MEMORY_MAPPERS[kind].collection)
+            .getFullList<MemoryRow>({ filter: `owner="${userId}"`, requestKey: null })
+            .catch(emptyWhenMissing<MemoryRow>),
+        ),
+      ),
+      client
+        .collection("change_log")
+        .getList<MemoryRow>(1, CHANGE_LOG_LOAD_LIMIT, { filter: `owner="${userId}"`, sort: "-change_id", requestKey: null })
+        .then((result) => result.items)
+        .catch(emptyWhenMissing<MemoryRow>),
+    ]);
 
     const values: Record<string, SyncRecordValue> = {};
     const records: Record<string, PersistenceRecordMetadata> = {};
@@ -840,6 +922,30 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
+    MEMORY_KINDS.forEach((kind, index) => {
+      for (const row of memoryRows[index]) {
+        const value = rowToMemoryRecord(kind, row);
+        if (!value) continue;
+        const key = `${kind}:${value.id}`;
+        values[key] = { key, kind, value } as SyncRecordValue;
+        records[key] = createRecordMetadata(
+          key,
+          kind,
+          value,
+          stringOrNull(row.updated),
+          stringOrNull(row.updated_at_client),
+        );
+      }
+    });
+
+    for (const row of changeRows) {
+      const value = rowToChange(row);
+      if (!value) continue;
+      const key = `change_log:${value.id}`;
+      values[key] = { key, kind: "change_log", value };
+      records[key] = createRecordMetadata(key, "change_log", value, stringOrNull(row.updated), null);
+    }
+
     if (workspaceState) {
       const value: SyncableWorkspaceState = {
         todoWorkspaces: safeRecord<TodoWorkspace>(workspaceState.todo_workspaces_json),
@@ -967,6 +1073,24 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       }
     }
 
+    if (isMemoryKind(record.kind)) {
+      const memoryRecord = record as MemorySyncRecordValue;
+      const collection = MEMORY_MAPPERS[memoryRecord.kind].collection;
+      const payload = memoryRecordToPayload(memoryRecord.kind, memoryRecord.value as never, userId);
+      if (existing) {
+        return client.collection(collection).update<PocketBaseRow>(existing.id, payload, { requestKey: null });
+      } else {
+        return client.collection(collection).create<PocketBaseRow>(payload, { requestKey: null });
+      }
+    }
+
+    if (record.kind === "change_log") {
+      // Create only; applyOp never sends an entry that already exists.
+      return client
+        .collection("change_log")
+        .create<PocketBaseRow>(changeToPayload(record.value, userId), { requestKey: null });
+    }
+
     if (record.kind === "content_card") {
       const payload = {
         owner: userId,
@@ -990,6 +1114,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       }
     }
 
+    if (record.kind !== "workspace_state") {
+      throw new Error(`Unknown record kind ${record.kind}`);
+    }
     const payload = {
       owner: userId,
       selected_daily_date: record.value.uiState.selectedDailyDate,

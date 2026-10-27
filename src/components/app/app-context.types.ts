@@ -17,12 +17,14 @@ import type {
   ThemeMode,
   ViewMode,
 } from "@/lib/types";
+import type { MemoryAction } from "@/lib/memory/app-actions";
 import type {
   PersistenceRepository,
   PersistenceStatus,
 } from "@/lib/persistence";
 
 export type AppAction =
+  | MemoryAction
   | { type: "set-view"; view: ViewMode }
   | { type: "toggle-sidebar-collapsed" }
   | { type: "set-sidebar-collapsed"; isCollapsed: boolean }
