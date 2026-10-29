@@ -9,17 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { Textarea } from "@/components/ui/textarea";
-import { getVisibleAppNotes } from "@/lib/store";
-import type { AppNote, AppNoteKind } from "@/lib/types";
+import { getVisibleChangeRequests } from "@/lib/store";
+import type { ChangeRequest, ChangeRequestKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const KIND_OPTIONS: { value: AppNoteKind; label: string }[] = [
+const KIND_OPTIONS: { value: ChangeRequestKind; label: string }[] = [
   { value: "idea", label: "Idea" },
   { value: "improvement", label: "Improvement" },
   { value: "bug", label: "Bug" },
 ];
 
-const KIND_LABEL: Record<AppNoteKind, string> = { idea: "Idea", improvement: "Improvement", bug: "Bug" };
+const KIND_LABEL: Record<ChangeRequestKind, string> = { idea: "Idea", improvement: "Improvement", bug: "Bug" };
 
 const SCREEN_LABEL: Record<string, string> = {
   todos: "Todos",
@@ -37,7 +37,7 @@ const SCREEN_LABEL: Record<string, string> = {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  notes: Record<string, AppNote>;
+  notes: Record<string, ChangeRequest>;
   dispatch: Dispatch<AppAction>;
   /** The view the user is on, saved with each note. */
   screen: string;
@@ -55,29 +55,29 @@ function formatDate(iso: string) {
 }
 
 /**
- * Quick capture for notes about the app itself, reachable from every screen.
+ * Quick capture for change requests about the app itself, reachable from every screen.
  * Save keeps the box open so several thoughts can go in a row; the list below
  * is for a quick look back. Deleting is a soft delete; Undo shows inside the
  * dialog because a toast would sit under the modal and can't be clicked.
  */
-export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, isReadOnly, returnFocusRef }: Props) {
+export function ChangeRequestDialog({ open, onOpenChange, notes, dispatch, screen, isReadOnly, returnFocusRef }: Props) {
   const [text, setText] = useState("");
-  const [kind, setKind] = useState<AppNoteKind>("idea");
+  const [kind, setKind] = useState<ChangeRequestKind>("idea");
   const [showDone, setShowDone] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   /** The last done/delete, shown with Undo inside the dialog. */
-  const [lastAction, setLastAction] = useState<{ note: AppNote; type: "deleted" | "done" } | null>(null);
+  const [lastAction, setLastAction] = useState<{ note: ChangeRequest; type: "deleted" | "done" } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const visible = useMemo(() => getVisibleAppNotes(notes), [notes]);
+  const visible = useMemo(() => getVisibleChangeRequests(notes), [notes]);
   const doneCount = visible.filter((note) => note.status === "done").length;
   const listed = showDone ? visible : visible.filter((note) => note.status === "open");
 
   const save = () => {
     if (isReadOnly || !text.trim()) return;
-    dispatch({ type: "create-app-note", text, kind, screen });
+    dispatch({ type: "create-change-request", text, kind, screen });
     setText("");
     setJustSaved(true);
     inputRef.current?.focus();
@@ -92,31 +92,31 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
   };
 
   const saveEdit = (noteId: string) => {
-    if (editText.trim()) dispatch({ type: "update-app-note", noteId, text: editText });
+    if (editText.trim()) dispatch({ type: "update-change-request", noteId, text: editText });
     setEditingId(null);
   };
 
   // After a row disappears, keep keyboard focus in the dialog on the capture box.
-  const afterRowAction = (note: AppNote, type: "deleted" | "done") => {
+  const afterRowAction = (note: ChangeRequest, type: "deleted" | "done") => {
     setLastAction({ note, type });
     setJustSaved(false);
     inputRef.current?.focus();
   };
 
-  const remove = (note: AppNote) => {
-    dispatch({ type: "delete-app-note", noteId: note.id });
+  const remove = (note: ChangeRequest) => {
+    dispatch({ type: "delete-change-request", noteId: note.id });
     afterRowAction(note, "deleted");
   };
 
-  const toggleDone = (note: AppNote) => {
+  const toggleDone = (note: ChangeRequest) => {
     const status = note.status === "done" ? "open" : "done";
-    dispatch({ type: "update-app-note", noteId: note.id, status });
+    dispatch({ type: "update-change-request", noteId: note.id, status });
     if (status === "done") afterRowAction(note, "done");
   };
 
   const undoLastAction = () => {
-    if (lastAction?.type === "deleted") dispatch({ type: "restore-app-note", noteId: lastAction.note.id });
-    if (lastAction?.type === "done") dispatch({ type: "update-app-note", noteId: lastAction.note.id, status: "open" });
+    if (lastAction?.type === "deleted") dispatch({ type: "restore-change-request", noteId: lastAction.note.id });
+    if (lastAction?.type === "done") dispatch({ type: "update-change-request", noteId: lastAction.note.id, status: "open" });
     setLastAction(null);
   };
 
@@ -138,7 +138,7 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
         className="max-h-[calc(100dvh-2rem)] max-w-lg grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)]"
       >
         <DialogHeader>
-          <DialogTitle>Note for the app</DialogTitle>
+          <DialogTitle>Change request</DialogTitle>
           <DialogDescription>
             Jot down an idea, improvement or bug, then get back to work.
           </DialogDescription>
@@ -154,11 +154,11 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
               setJustSaved(false);
             }}
             placeholder="What should the app do better?"
-            aria-label="Note text"
+            aria-label="Request text"
             className="min-h-24"
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <SegmentedControl label="Note type" options={KIND_OPTIONS} value={kind} onValueChange={setKind} />
+            <SegmentedControl label="Request type" options={KIND_OPTIONS} value={kind} onValueChange={setKind} />
             <div className="flex items-center gap-3">
               {justSaved ? (
                 <span role="status" className="inline-flex items-center gap-1 text-[0.8125rem] text-success">
@@ -167,16 +167,16 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
                 </span>
               ) : null}
               <Button onClick={save} disabled={isReadOnly || !text.trim()}>
-                {isReadOnly ? "Connecting…" : "Save note"}
+                {isReadOnly ? "Connecting…" : "Save request"}
               </Button>
             </div>
           </div>
         </div>
 
-        <section aria-label="Your app notes" className="flex min-h-0 flex-col gap-2 border-t border-border pt-3">
+        <section aria-label="Your change requests" className="flex min-h-0 flex-col gap-2 border-t border-border pt-3">
           <div className="flex items-center justify-between">
             <h3 className="text-[0.8125rem] font-semibold text-muted-foreground">
-              {listed.length} {showDone ? "notes" : "open"}
+              {listed.length} {showDone ? (listed.length === 1 ? "request" : "requests") : "open"}
             </h3>
             {doneCount > 0 ? (
               <Button variant="ghost" size="sm" onClick={() => setShowDone((value) => !value)}>
@@ -190,7 +190,7 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
               role="status"
               className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-1.5 text-[0.8125rem] text-foreground"
             >
-              <span>{lastAction.type === "deleted" ? "Note deleted" : "Marked done"}</span>
+              <span>{lastAction.type === "deleted" ? "Request deleted" : "Marked done"}</span>
               <Button variant="ghost" size="sm" onClick={undoLastAction}>
                 Undo
               </Button>
@@ -199,7 +199,7 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
 
           {listed.length === 0 ? (
             <p className="py-4 text-center text-[0.8125rem] text-muted-foreground">
-              {doneCount > 0 ? "All caught up, no open notes." : "Nothing here yet. Your notes will show up here."}
+              {doneCount > 0 ? "All caught up, no open requests." : "Nothing here yet. Your requests will show up here."}
             </p>
           ) : (
             <ul className="-mx-1 min-h-0 flex-1 overflow-y-auto">
@@ -221,7 +221,7 @@ export function AppNotesDialog({ open, onOpenChange, notes, dispatch, screen, is
                         onKeyDown={(event) => {
                           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) saveEdit(note.id);
                         }}
-                        aria-label="Edit note"
+                        aria-label="Edit request"
                         className="min-h-16"
                       />
                     ) : (

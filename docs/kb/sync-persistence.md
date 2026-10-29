@@ -1,5 +1,5 @@
 # Sync & persistence
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 PocketBase is the single source of truth. Each device only sends its **own changes**, one record
 at a time, through a persisted outbox. A device never compares its whole copy with the server.
@@ -18,7 +18,8 @@ at a time, through a persisted outbox. A device never compares its whole copy wi
 - Status label: Loading latest… / Offline · read-only / N changes waiting (visible on phones too).
 
 ## Safety rules
-- **Never-deleted kinds:** `NEVER_DELETED_KINDS` / `isNeverDeletedKind` in `src/lib/sync-outbox.ts` = `daily_page`, `app_note`, the 6 memory kinds (`task`, `decision`, `project`, `meeting`, `follow_up`, `repeat`) and `change_log`. `diffSyncRecords` never builds removals for them and the repository `applyOps` skips their deletes; server `deleteRule` is null. App notes and memory records only soft-delete (`deletedAt`). Use this set for any new never-deleted kind.
+- **Never-deleted kinds:** `NEVER_DELETED_KINDS` / `isNeverDeletedKind` in `src/lib/sync-outbox.ts` = `daily_page`, `app_note`, the 6 memory kinds (`task`, `decision`, `project`, `meeting`, `follow_up`, `repeat`) and `change_log`. `diffSyncRecords` never builds removals for them and the repository `applyOps` skips their deletes; server `deleteRule` is null. Change requests (kind `app_note`) and memory records only soft-delete (`deletedAt`). Use this set for any new never-deleted kind.
+- **Renaming a synced type:** rename code/UI only; keep the stored kind, collection, field and id-prefix names (older desktop builds still sync with them) and read the old local-cache key as a fallback in `src/lib/persistence.ts`. Example: change requests still sync as `app_note` / `app_notes`, local key `appNotes` → `changeRequests` ([change-requests.md](change-requests.md)).
 - Memory kinds sync upsert-only with keys `<kind>:<id>`. `change_log` syncs **create-only** (`change_log:<id>`): an entry already on the server counts as written and is never PATCHed (`updateRule` null → 403 would freeze the outbox).
 - More than `MAX_UNEXPLAINED_DELETES` (5) deletes in one change, not explained by a parent-folder delete, are dropped as a bug.
 - Records identical to the server (`fingerprintSyncValue`, key-order-independent) are never re-sent.

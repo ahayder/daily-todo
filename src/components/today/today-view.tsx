@@ -1,13 +1,14 @@
 "use client";
 
 import { isTauri } from "@tauri-apps/api/core";
-import { Bell, BellOff, CalendarClock, MessageSquare, Sun } from "lucide-react";
+import { Bell, BellOff, CalendarClock, MessageSquare, Pencil, Sun } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
 import { EmptyState } from "@/components/blocks/empty-state";
 import { InlineComposer } from "@/components/blocks/inline-composer";
 import { PageHeader } from "@/components/blocks/page-header";
+import { PlannerSetupDialog } from "@/components/planner/planner-view";
 import { NowCard } from "@/components/signature/now-card";
 import { WashiTag } from "@/components/signature/washi-tag";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -59,7 +60,7 @@ function longDate(day: string) {
 }
 
 export function TodayView() {
-  const { state, sync } = useAppState();
+  const { state, dispatch, sync } = useAppState();
   const readOnly = sync.isReadOnly;
   const clock = useClock();
   const today = todayIn(TIME_ZONE, clock);
@@ -78,6 +79,22 @@ export function TodayView() {
   const history = useMemo(() => buildHistory(state, TIME_ZONE), [state]);
   const { act, undo } = useHistoryActions();
   const nowRef = useRef<HTMLDivElement>(null);
+  const [isPlanOpen, setIsPlanOpen] = useState(false);
+
+  // `/planner` redirects here with ?editPlan=1: once the plan has loaded, open
+  // the editor and tidy the URL.
+  const hasPreset = preset !== null;
+  useEffect(() => {
+    if (!hasPreset) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("editPlan") !== "1") return;
+    const timer = window.setTimeout(() => {
+      url.searchParams.delete("editPlan");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+      setIsPlanOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [hasPreset]);
   const shelfRef = useRef<HTMLHeadingElement>(null);
   const dayRef = useRef<HTMLHeadingElement>(null);
   const aiRef = useRef<HTMLParagraphElement>(null);
@@ -247,7 +264,18 @@ export function TodayView() {
 
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
           <section aria-label="Your day" className="flex flex-col gap-3">
-            <SectionTitle hint="from your Daily Planner" headingRef={dayRef}>
+            <SectionTitle
+              hint="from your day plan"
+              headingRef={dayRef}
+              action={
+                preset && view.blocks.length > 0 ? (
+                  <Button variant="ghost" size="sm" className="pointer-coarse:h-11" onClick={() => setIsPlanOpen(true)}>
+                    <Pencil aria-hidden="true" />
+                    Edit day plan
+                  </Button>
+                ) : null
+              }
+            >
               Your day
             </SectionTitle>
             {view.blocks.length === 0 ? (
@@ -255,11 +283,13 @@ export function TodayView() {
                 size="inline"
                 icon={<CalendarClock />}
                 title="No time blocks for today."
-                description="Plan your blocks once in the Daily Planner and they show up here every day."
+                description="Plan your blocks once and they show up here every day."
                 action={
-                  <Link href="/planner" className={buttonVariants({ variant: "soft", size: "sm" })}>
-                  Open the Daily Planner
-                </Link>
+                  preset ? (
+                    <Button variant="soft" size="sm" onClick={() => setIsPlanOpen(true)}>
+                      Set up your day plan
+                    </Button>
+                  ) : null
                 }
               />
             ) : (
@@ -365,6 +395,16 @@ export function TodayView() {
           .
         </p>
       </div>
+      {preset ? (
+        <PlannerSetupDialog
+          open={isPlanOpen}
+          onOpenChange={setIsPlanOpen}
+          presetId={preset.id}
+          days={preset.days}
+          dispatch={dispatch}
+          initialDay={weekdayOf(today) === "sat" ? "saturday" : weekdayOf(today) === "sun" ? "sunday" : "monday"}
+        />
+      ) : null}
     </div>
   );
 }

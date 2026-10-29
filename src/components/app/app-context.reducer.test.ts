@@ -300,29 +300,29 @@ describe("content series", () => {
   });
 });
 
-describe("app notes", () => {
+describe("change requests", () => {
   test("captures, edits, soft-deletes and restores a note without ever removing it", () => {
     let state = createInitialState("2026-03-10");
-    state = appReducer(state, { type: "create-app-note", text: "  Add a weekly review  ", kind: "improvement", screen: "todos" });
-    const [note] = Object.values(state.appNotes);
+    state = appReducer(state, { type: "create-change-request", text: "  Add a weekly review  ", kind: "improvement", screen: "todos" });
+    const [note] = Object.values(state.changeRequests);
     expect(note).toMatchObject({ text: "Add a weekly review", kind: "improvement", status: "open", screen: "todos", deletedAt: null });
 
-    state = appReducer(state, { type: "update-app-note", noteId: note.id, status: "done" });
-    expect(state.appNotes[note.id].status).toBe("done");
+    state = appReducer(state, { type: "update-change-request", noteId: note.id, status: "done" });
+    expect(state.changeRequests[note.id].status).toBe("done");
 
-    state = appReducer(state, { type: "delete-app-note", noteId: note.id });
-    expect(state.appNotes[note.id]).toBeDefined();
-    expect(state.appNotes[note.id].deletedAt).not.toBeNull();
+    state = appReducer(state, { type: "delete-change-request", noteId: note.id });
+    expect(state.changeRequests[note.id]).toBeDefined();
+    expect(state.changeRequests[note.id].deletedAt).not.toBeNull();
 
-    state = appReducer(state, { type: "restore-app-note", noteId: note.id });
-    expect(state.appNotes[note.id].deletedAt).toBeNull();
+    state = appReducer(state, { type: "restore-change-request", noteId: note.id });
+    expect(state.changeRequests[note.id].deletedAt).toBeNull();
   });
 
   test("ignores blank notes and blank edits", () => {
     const state = createInitialState("2026-03-10");
-    expect(appReducer(state, { type: "create-app-note", text: "   ", kind: "idea", screen: "" })).toBe(state);
-    const withNote = appReducer(state, { type: "create-app-note", text: "x", kind: "idea", screen: "" });
-    const id = Object.keys(withNote.appNotes)[0];
-    expect(appReducer(withNote, { type: "update-app-note", noteId: id, text: " " })).toBe(withNote);
+    expect(appReducer(state, { type: "create-change-request", text: "   ", kind: "idea", screen: "" })).toBe(state);
+    const withNote = appReducer(state, { type: "create-change-request", text: "x", kind: "idea", screen: "" });
+    const id = Object.keys(withNote.changeRequests)[0];
+    expect(appReducer(withNote, { type: "update-change-request", noteId: id, text: " " })).toBe(withNote);
   });
 });

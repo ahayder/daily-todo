@@ -3,7 +3,7 @@
 Lets ChatGPT or Claude work with DailyTodo from chat ("chat captures, the app shows"):
 - **External brain:** tasks (Today, time blocks, Shelf, leftovers), decisions, projects, meeting summaries, follow-ups, repeats, search, and a standup agenda.
 - **Content Planner:** list the board, add ideas, edit sections (idea note, shoot card…), move videos between stages, set publish links and transcripts, and manage series.
-- **App notes:** quick notes about the app itself.
+- **Change requests:** quick notes about the app itself.
 
 **Nothing is ever hard-deleted.** "Delete" tools only hide a record (soft delete). Every write is saved in the change log, so `undo_change` can put it back and `redo_change` can bring it back again.
 
@@ -22,7 +22,7 @@ It signs in to PocketBase as your normal user, so it can only touch your records
 - **Memory:** `search_memory`, `list_tags`, `standup_agenda`
 - **History:** `list_changes`, `undo_change` (undoes a whole tool call; refuses if the record changed since), `redo_change`
 - **Content Planner:** `list_board`, `get_card`, `add_idea`, `update_card`, `move_card` (pass `to: "next"` to advance like the app's button), `set_publish_info`, `list_series`, `add_series`, `update_series`, `set_card_series`
-- **App notes:** `list_app_notes`, `get_app_note`, `add_app_note`, `update_app_note`, `delete_app_note` (soft), `restore_app_note`
+- **Change requests:** `list_change_requests`, `get_change_request`, `add_change_request`, `update_change_request`, `delete_change_request` (soft), `restore_change_request`
 
 You can name a record by its id or by part of its title. If more than one matches, the tool lists them instead of guessing.
 

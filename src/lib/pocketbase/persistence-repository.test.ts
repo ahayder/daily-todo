@@ -62,7 +62,7 @@ vi.mock("@/lib/pocketbase/client", () => ({
   getPocketBaseClient: () => fakeClient,
 }));
 
-const { appNoteFromRow, appNoteToRow, createPocketBasePersistenceRepository } = await import(
+const { changeRequestFromRow, changeRequestToRow, createPocketBasePersistenceRepository } = await import(
   "@/lib/pocketbase/persistence-repository"
 );
 const { createDefaultContentBoard } = await import("@/lib/store");
@@ -248,7 +248,7 @@ describe("Content series (PocketBase mapping)", () => {
   });
 });
 
-describe("App notes (PocketBase mapping)", () => {
+describe("Change requests (PocketBase mapping)", () => {
   const note = {
     id: "app-note_1",
     text: "Add weekly review",
@@ -261,16 +261,16 @@ describe("App notes (PocketBase mapping)", () => {
   };
 
   test("round-trips a note, and clears deleted_at with an empty string", () => {
-    const row = { id: "r1", ...appNoteToRow(note, OWNER, note.updatedAt) };
+    const row = { id: "r1", ...changeRequestToRow(note, OWNER, note.updatedAt) };
     expect(row.deleted_at).toBe("");
-    expect(appNoteFromRow(row)).toEqual(note);
+    expect(changeRequestFromRow(row)).toEqual(note);
   });
 
   test("loads notes and refuses to hard-delete one", async () => {
-    (db.app_notes ??= []).push({ id: "r1", ...appNoteToRow(note, OWNER, note.updatedAt) });
+    (db.app_notes ??= []).push({ id: "r1", ...changeRequestToRow(note, OWNER, note.updatedAt) });
     const repository = createPocketBasePersistenceRepository();
     const result = await repository.loadServer({ userId: OWNER, now: new Date("2026-10-07T12:00:00Z") });
-    expect(result?.state.appNotes[note.id]?.text).toBe("Add weekly review");
+    expect(result?.state.changeRequests[note.id]?.text).toBe("Add weekly review");
 
     const key = `app_note:${note.id}`;
     const record = { key, kind: "app_note" as const, value: note };

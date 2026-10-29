@@ -48,11 +48,13 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    // Todos, Notes and the Daily Planner left the nav; the planner's editor opens from Today.
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Today", "Memory", "Content Planner"]);
     expect(screen.getByText(/Last saved/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Theme:/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Sign out/i })).not.toBeInTheDocument();
@@ -79,7 +81,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -117,7 +119,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -171,7 +173,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -234,7 +236,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -273,7 +275,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -305,7 +307,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -344,7 +346,7 @@ describe("TopNavbar", () => {
             persistenceAvailable: true,
           }}
           retrySync={retrySync}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );
@@ -382,7 +384,7 @@ describe("TopNavbar", () => {
             ...sync,
           }}
           retrySync={vi.fn(async () => {})}
-          onOpenAppNotes={vi.fn()}
+          onOpenChangeRequests={vi.fn()}
         />
       </AuthProvider>,
     );

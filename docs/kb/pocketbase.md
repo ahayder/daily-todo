@@ -1,10 +1,10 @@
 # PocketBase
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 Backend for auth and all synced data. Full setup guide: `docs/pocketbase.md`.
 
 ## How it works
-- Collections: `daily_pages`, `notes`, `note_folders`, `planner_presets`, `content_boards`, `content_cards`, `app_notes` (see [app-notes.md](app-notes.md)), `workspace_state` (legacy `app_state_snapshots` kept, unused). External brain (see [external-brain.md](external-brain.md); on prod since 2026-10-27): `tasks`, `decisions`, `projects`, `meetings`, `follow_ups`, `repeats` (built by `softDeleteCollection()`, no delete rule) and append-only `change_log` (no update or delete rule). The user token gets 403 on DELETE for all of these and on PATCH of `change_log` (verified locally). `src/lib/pocketbase-schema-admin.test.ts` covers 16 collections.
+- Collections: `daily_pages`, `notes`, `note_folders`, `planner_presets`, `content_boards`, `content_cards`, `app_notes` (holds change requests; old name kept on purpose, see [change-requests.md](change-requests.md)), `workspace_state` (legacy `app_state_snapshots` kept, unused). External brain (see [external-brain.md](external-brain.md); on prod since 2026-10-27): `tasks`, `decisions`, `projects`, `meetings`, `follow_ups`, `repeats` (built by `softDeleteCollection()`, no delete rule) and append-only `change_log` (no update or delete rule). The user token gets 403 on DELETE for all of these and on PATCH of `change_log` (verified locally). `src/lib/pocketbase-schema-admin.test.ts` covers 16 collections.
 - Schema lives in `scripts/lib/pocketbase-schema.mjs`; apply with `pnpm pocketbase:schema:apply` (admin creds via env). It reconciles fields/indexes/rules, never deletes collections or fields.
 - `daily_pages.workspace_id` scopes owner/date uniqueness (unique index owner/workspace/date). `workspace_state` holds `todo_workspaces_json` and `selected_todo_workspace_id`. `content_boards.series_json` holds the content series list; `content_cards.series_id` links a card (both non-required).
 - Daily backups: `pnpm pocketbase:backups:enable` (03:00, keep 7, in server `pb_data/backups`).

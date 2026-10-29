@@ -1,11 +1,11 @@
 # Architecture
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 Next.js 16 App Router web app (also wrapped by a Tauri desktop shell). All app state lives in one
 React `useReducer` + Context (`AppProvider`), synced to PocketBase record-by-record.
 
 ## How it works
-- Routes: `src/app/today`, `history`, `memory`, `memory/project` (`?id=`; no dynamic segments because of static export), `standup`, `todos`, `notes`, `planner`, `content-planner`, `auth/reset`; `src/app/page.tsx` redirects to `/today`. `ViewMode` includes `"today" | "history" | "memory" | "project" | "standup"` (`last_view` is a text field; old clients normalize unknown values to todos).
+- Routes: `src/app/today`, `history`, `memory`, `memory/project` (`?id=`; no dynamic segments because of static export), `standup`, `todos`, `notes`, `planner` (only redirects to `/today?editPlan=1`), `content-planner`, `auth/reset`; `src/app/page.tsx` redirects to `/today`. `ViewMode` includes `"today" | "history" | "memory" | "project" | "standup"` (`last_view` is a text field; old clients normalize unknown values to todos).
 - State: `src/components/app/` — `app-provider.tsx`, `app-context.reducer.ts` (all actions), `use-app-persistence-state.ts` (load/sync phases, see [sync-persistence.md](sync-persistence.md)).
 - Pure logic in `src/lib/`: `store.ts` (state factories, selectors, carryover, content-board defaults/migration), `content-conveyor.ts`, `planner-now.ts`, `task-attention.ts`, `date.ts`, `schema.ts` (Zod for persisted state), `types.ts` (all types).
 - Persistence: `persistence.ts` (normalize, `parseAppStateOrThrow`), `sync-outbox.ts`, `split-persistence-repository.ts`, `local-cache-storage.ts`, `pocketbase/` (auth + persistence repositories).

@@ -32,7 +32,7 @@ type Props = {
   dispatch: Dispatch<AppAction>;
   sync: AppContextValue["sync"];
   retrySync: () => Promise<void>;
-  onOpenAppNotes: () => void;
+  onOpenChangeRequests: () => void;
 };
 
 function formatLastSynced(lastSyncedAt: string | null) {
@@ -79,7 +79,7 @@ function formatRelativeLastSaved(lastSyncedAt: string | null) {
   return `Last saved ${formatLastSynced(lastSyncedAt)}`;
 }
 
-export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: Props) {
+export function TopNavbar({ state, dispatch, sync, retrySync, onOpenChangeRequests }: Props) {
   const desktopUpdate = useDesktopUpdate();
   const [isRetrying, setIsRetrying] = useState(false);
   const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
@@ -302,15 +302,6 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
           Memory
         </Link>
         <Link
-          href="/planner"
-          role="tab"
-          aria-selected={isPlanner}
-          className={cn("nav-pill", isPlanner && "nav-pill--active")}
-          onClick={() => dispatch({ type: "set-view", view: "planner" })}
-        >
-          Daily Planner
-        </Link>
-        <Link
           href="/content-planner"
           role="tab"
           aria-selected={isContentPlanner}
@@ -326,16 +317,16 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenAppNotes }: 
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label="Note for the app"
+              aria-label="Change request"
               aria-keyshortcuts="Meta+Shift+I Control+Shift+I"
               className="theme-cycle-btn"
-              onClick={onOpenAppNotes}
+              onClick={onOpenChangeRequests}
             >
               <Lightbulb className="h-4 w-4" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-[0.8125rem]">
-            Note for the app (⌘⇧I)
+            Change request (⌘⇧I)
           </TooltipContent>
         </Tooltip>
 

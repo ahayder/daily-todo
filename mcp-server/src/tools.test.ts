@@ -9,7 +9,7 @@ import {
   CONTENT_COLUMN_SHOOT_NEXT_ID,
   createDefaultContentBoard,
 } from "@/lib/store";
-import type { AppNote, ContentBoard, ContentCard } from "@/lib/types";
+import type { ChangeRequest, ContentBoard, ContentCard } from "@/lib/types";
 import { cardToPayload, rowToCard, tokenUserId, type ContentStore } from "./content-store";
 import { withHistory } from "./history";
 import { createMemoryTestStore } from "./memory-test-store";
@@ -21,11 +21,11 @@ function card(id: string, columnId: string, order: number, extra: Partial<Conten
 }
 
 /** In-memory store that records every write, so tests can check what was sent. */
-function memoryStore(board: ContentBoard | null, cards: ContentCard[], appNotes: AppNote[] = []) {
+function memoryStore(board: ContentBoard | null, cards: ContentCard[], changeRequests: ChangeRequest[] = []) {
   const state = {
     board,
     cards: Object.fromEntries(cards.map((c) => [c.id, c])) as Record<string, ContentCard>,
-    appNotes: Object.fromEntries(appNotes.map((n) => [n.id, n])) as Record<string, AppNote>,
+    changeRequests: Object.fromEntries(changeRequests.map((n) => [n.id, n])) as Record<string, ChangeRequest>,
     savedCards: [] as string[],
     boardSaves: 0,
   };
@@ -40,9 +40,9 @@ function memoryStore(board: ContentBoard | null, cards: ContentCard[], appNotes:
       state.cards[next.id] = next;
       state.savedCards.push(next.id);
     },
-    loadAppNotes: async () => ({ ...state.appNotes }),
-    saveAppNote: async (next) => {
-      state.appNotes[next.id] = next;
+    loadChangeRequests: async () => ({ ...state.changeRequests }),
+    saveChangeRequest: async (next) => {
+      state.changeRequests[next.id] = next;
     },
   };
   return { store, state };
@@ -52,7 +52,7 @@ const board = () => createDefaultContentBoard(new Date("2026-01-01"));
 
 describe("content planner MCP tools", () => {
   it("never hard-deletes: no delete actions for content, and the store has no delete method", () => {
-    expect(Object.keys(tools).filter((name) => /delete|remove/i.test(name))).toEqual(["setAppNoteDeletedTool"]);
+    expect(Object.keys(tools).filter((name) => /delete|remove/i.test(name))).toEqual(["setChangeRequestDeletedTool"]);
     const { store } = memoryStore(board(), []);
     expect(Object.keys(store).filter((name) => /delete|remove/i.test(name))).toEqual([]);
   });
@@ -74,7 +74,7 @@ describe("content planner MCP tools", () => {
     const source = readFileSync(path.join(__dirname, "server.ts"), "utf8");
     const names = [...source.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((match) => match[1]);
     expect(names.length).toBeGreaterThan(40);
-    expect(names.filter((name) => /delete|remove|destroy|purge/.test(name))).toEqual(["delete_app_note", "delete_task"]);
+    expect(names.filter((name) => /delete|remove|destroy|purge/.test(name))).toEqual(["delete_change_request", "delete_task"]);
   });
 
   it("adds an idea at the top of Ideas and renumbers that column", async () => {
@@ -198,8 +198,8 @@ describe("content store record mapping", () => {
   });
 });
 
-describe("app note MCP tools", () => {
-  const note = (id: string, text: string, extra: Partial<AppNote> = {}): AppNote => ({
+describe("change request MCP tools", () => {
+  const note = (id: string, text: string, extra: Partial<ChangeRequest> = {}): ChangeRequest => ({
     id,
     text,
     kind: "idea",
@@ -213,31 +213,31 @@ describe("app note MCP tools", () => {
 
   it("adds a note from chat and lists open notes newest first", async () => {
     const { store } = memoryStore(board(), [], [note("n1", "Old one")]);
-    await tools.addAppNote(store, { text: "Weekly review", kind: "improvement" });
-    const { notes } = await tools.listAppNotes(store);
+    await tools.addChangeRequest(store, { text: "Weekly review", kind: "improvement" });
+    const { notes } = await tools.listChangeRequests(store);
     expect(notes.map((n) => n.text)).toEqual(["Weekly review", "Old one"]);
     expect(notes[0]).toMatchObject({ kind: "improvement", screen: "chat" });
   });
 
   it("soft-deletes and restores, keeping the note on the server", async () => {
     const { store, state } = memoryStore(board(), [], [note("n1", "Bigger timer")]);
-    await tools.setAppNoteDeletedTool(store, { note: "bigger", deleted: true });
-    expect(state.appNotes.n1.deletedAt).not.toBeNull();
-    expect((await tools.listAppNotes(store)).total).toBe(0);
-    expect((await tools.listAppNotes(store, { include_deleted: true })).total).toBe(1);
-    await tools.setAppNoteDeletedTool(store, { note: "n1", deleted: false });
-    expect(state.appNotes.n1.deletedAt).toBeNull();
+    await tools.setChangeRequestDeletedTool(store, { note: "bigger", deleted: true });
+    expect(state.changeRequests.n1.deletedAt).not.toBeNull();
+    expect((await tools.listChangeRequests(store)).total).toBe(0);
+    expect((await tools.listChangeRequests(store, { include_deleted: true })).total).toBe(1);
+    await tools.setChangeRequestDeletedTool(store, { note: "n1", deleted: false });
+    expect(state.changeRequests.n1.deletedAt).toBeNull();
   });
 
   it("updates status and filters by it", async () => {
     const { store } = memoryStore(board(), [], [note("n1", "A"), note("n2", "B")]);
-    await tools.updateAppNoteTool(store, { note: "n1", status: "done" });
-    expect((await tools.listAppNotes(store)).notes.map((n) => n.id)).toEqual(["n2"]);
-    expect((await tools.listAppNotes(store, { status: "done" })).notes.map((n) => n.id)).toEqual(["n1"]);
+    await tools.updateChangeRequestTool(store, { note: "n1", status: "done" });
+    expect((await tools.listChangeRequests(store)).notes.map((n) => n.id)).toEqual(["n2"]);
+    expect((await tools.listChangeRequests(store, { status: "done" })).notes.map((n) => n.id)).toEqual(["n1"]);
   });
 
   it("refuses to guess between notes with similar text", async () => {
     const { store } = memoryStore(board(), [], [note("n1", "Timer sound"), note("n2", "Timer color")]);
-    await expect(tools.getAppNote(store, "timer")).rejects.toThrow(/Several app notes/);
+    await expect(tools.getChangeRequest(store, "timer")).rejects.toThrow(/Several change requests/);
   });
 });

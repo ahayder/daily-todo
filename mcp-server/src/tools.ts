@@ -15,9 +15,9 @@ import {
 import { getSeriesList, getSeriesStats } from "@/lib/content-series";
 import {
   addContentSeries,
-  createAppNote,
-  setAppNoteDeleted,
-  updateAppNote,
+  createChangeRequest,
+  setChangeRequestDeleted,
+  updateChangeRequest,
   CONTENT_COLUMN_SHOOT_NEXT_ID,
   createContentCard,
   createContentSeries,
@@ -31,9 +31,9 @@ import {
 } from "@/lib/store";
 import { CONTENT_PLATFORMS } from "@/lib/types";
 import type {
-  AppNote,
-  AppNoteKind,
-  AppNoteStatus,
+  ChangeRequest,
+  ChangeRequestKind,
+  ChangeRequestStatus,
   ContentBoard,
   ContentCard,
   ContentLinks,
@@ -45,7 +45,7 @@ import type { ContentStore } from "./content-store";
  * Content Planner actions for the MCP server. Every rule (moving, renumbering,
  * Published dates, sections, series) comes from the app's own pure helpers so
  * chat edits behave exactly like edits in the UI. Nothing is ever hard-deleted:
- * cards and series have no delete actions, and app notes are soft-deleted.
+ * cards and series have no delete actions, and change requests are soft-deleted.
  */
 
 export class ToolError extends Error {}
@@ -315,10 +315,10 @@ export async function setCardSeries(store: ContentStore, input: { card: string; 
   return { updated: describeCard(next[card.id], board) };
 }
 
-// ---- App notes: quick notes about the DailyTodo app itself ----
+// ---- Change requests: quick notes about the DailyTodo app itself ----
 // Deleting is always a soft delete (deletedAt); nothing is ever removed.
 
-function describeNote(note: AppNote) {
+function describeNote(note: ChangeRequest) {
   return {
     id: note.id,
     text: note.text,
@@ -331,7 +331,7 @@ function describeNote(note: AppNote) {
 }
 
 /** Find a note by exact id, else by its text (contains). Never guesses between several. */
-export function resolveNote(notes: Record<string, AppNote>, query: string, includeDeleted = false): AppNote {
+export function resolveNote(notes: Record<string, ChangeRequest>, query: string, includeDeleted = false): ChangeRequest {
   const trimmed = query.trim();
   if (notes[trimmed]) return notes[trimmed];
   const lower = trimmed.toLowerCase();
@@ -339,16 +339,16 @@ export function resolveNote(notes: Record<string, AppNote>, query: string, inclu
     (note) => (includeDeleted || !note.deletedAt) && note.text.toLowerCase().includes(lower),
   );
   if (matches.length === 1) return matches[0];
-  if (matches.length === 0) throw new ToolError(`No app note matches "${query}". Use list_app_notes to see them.`);
+  if (matches.length === 0) throw new ToolError(`No change request matches "${query}". Use list_change_requests to see them.`);
   const list = matches.map((note) => `- ${note.text.slice(0, 80)} (id: ${note.id})`).join("\n");
-  throw new ToolError(`Several app notes match "${query}". Call again with one of these ids:\n${list}`);
+  throw new ToolError(`Several change requests match "${query}". Call again with one of these ids:\n${list}`);
 }
 
-export async function listAppNotes(
+export async function listChangeRequests(
   store: ContentStore,
-  input: { status?: AppNoteStatus | "all"; kind?: AppNoteKind; include_deleted?: boolean } = {},
+  input: { status?: ChangeRequestStatus | "all"; kind?: ChangeRequestKind; include_deleted?: boolean } = {},
 ) {
-  const notes = Object.values(await store.loadAppNotes())
+  const notes = Object.values(await store.loadChangeRequests())
     .filter((note) => input.include_deleted || !note.deletedAt)
     .filter((note) => (input.status ?? "open") === "all" || note.status === (input.status ?? "open"))
     .filter((note) => !input.kind || note.kind === input.kind)
@@ -356,35 +356,35 @@ export async function listAppNotes(
   return { total: notes.length, notes: notes.map(describeNote) };
 }
 
-export async function getAppNote(store: ContentStore, query: string) {
-  return describeNote(resolveNote(await store.loadAppNotes(), query, true));
+export async function getChangeRequest(store: ContentStore, query: string) {
+  return describeNote(resolveNote(await store.loadChangeRequests(), query, true));
 }
 
-export async function addAppNote(store: ContentStore, input: { text: string; kind?: AppNoteKind }) {
-  const note = createAppNote({ text: input.text, kind: input.kind, screen: "chat" });
+export async function addChangeRequest(store: ContentStore, input: { text: string; kind?: ChangeRequestKind }) {
+  const note = createChangeRequest({ text: input.text, kind: input.kind, screen: "chat" });
   if (!note) throw new ToolError("The note text can't be blank.");
-  await store.saveAppNote(note);
+  await store.saveChangeRequest(note);
   return { created: describeNote(note) };
 }
 
-export async function updateAppNoteTool(
+export async function updateChangeRequestTool(
   store: ContentStore,
-  input: { note: string; text?: string; kind?: AppNoteKind; status?: AppNoteStatus },
+  input: { note: string; text?: string; kind?: ChangeRequestKind; status?: ChangeRequestStatus },
 ) {
-  const notes = await store.loadAppNotes();
+  const notes = await store.loadChangeRequests();
   const note = resolveNote(notes, input.note);
-  const next = updateAppNote(notes, note.id, input);
+  const next = updateChangeRequest(notes, note.id, input);
   if (next === notes) return { updated: describeNote(note), note: "Nothing changed." };
-  await store.saveAppNote(next[note.id]);
+  await store.saveChangeRequest(next[note.id]);
   return { updated: describeNote(next[note.id]) };
 }
 
 /** Soft delete (deleted: true) or restore. The record always stays on the server. */
-export async function setAppNoteDeletedTool(store: ContentStore, input: { note: string; deleted: boolean }) {
-  const notes = await store.loadAppNotes();
+export async function setChangeRequestDeletedTool(store: ContentStore, input: { note: string; deleted: boolean }) {
+  const notes = await store.loadChangeRequests();
   const note = resolveNote(notes, input.note, !input.deleted);
-  const next = setAppNoteDeleted(notes, note.id, input.deleted);
+  const next = setChangeRequestDeleted(notes, note.id, input.deleted);
   if (next === notes) return { note: describeNote(note), message: input.deleted ? "Already deleted." : "Not deleted." };
-  await store.saveAppNote(next[note.id]);
+  await store.saveChangeRequest(next[note.id]);
   return { [input.deleted ? "deleted" : "restored"]: describeNote(next[note.id]) };
 }

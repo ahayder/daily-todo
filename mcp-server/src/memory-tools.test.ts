@@ -38,13 +38,13 @@ function setup(initial: Parameters<typeof createMemoryTestStore>[0] = {}) {
 }
 
 describe("memory MCP tools", () => {
-  it("logs every write through withHistory, including content and app-note saves", async () => {
+  it("logs every write through withHistory, including content and change-request saves", async () => {
     const { state, call } = setup({
       cards: [{ id: "c1", columnId: CONTENT_COLUMN_INBOX_ID, title: "Video", notes: "", order: 0, updatedAt: "x" } as ContentCard],
     });
     await memory.addTask(call(), { title: "Write intro" });
     await tools.moveCard(call().store, { card: "c1", to: "develop" });
-    await tools.addAppNote(call().store, { text: "Bigger buttons" });
+    await tools.addChangeRequest(call().store, { text: "Bigger buttons" });
     await tools.addSeries(call().store, { title: "Desk" });
     expect(state.changes.map((change) => [change.entityKind, change.action])).toEqual([
       ["task", "create"],

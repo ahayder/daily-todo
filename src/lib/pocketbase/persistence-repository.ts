@@ -42,7 +42,7 @@ import {
 } from "@/lib/pocketbase/memory-rows";
 import { MEMORY_KINDS } from "@/lib/types";
 import type {
-  AppNote,
+  ChangeRequest,
   AppState,
   ChangeLogEntry,
   MemoryKind,
@@ -60,7 +60,7 @@ import type {
   TodoWorkspace,
 } from "@/lib/types";
 
-import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
+import { CHANGE_REQUEST_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
 
 export { getSyncRecordValuesFromState } from "@/lib/sync-outbox";
 
@@ -134,7 +134,7 @@ type PocketBaseContentCardRecord = {
   updated_at_client?: string;
 };
 
-type PocketBaseAppNoteRecord = {
+type PocketBaseChangeRequestRecord = {
   id: string;
   owner: string;
   note_id?: string;
@@ -180,6 +180,7 @@ const COLLECTION_BY_KIND: Record<PersistenceRecordKind, string> = {
   planner_preset: "planner_presets",
   content_board: "content_boards",
   content_card: "content_cards",
+  // Change requests. Stored names kept ("app_note", "app_notes") so existing data and older apps keep working.
   app_note: "app_notes",
   task: MEMORY_MAPPERS.task.collection,
   decision: MEMORY_MAPPERS.decision.collection,
@@ -269,16 +270,16 @@ function normalizeContentSeries(value: unknown): ContentSeries[] {
   });
 }
 
-const APP_NOTE_KIND_SET = new Set<string>(APP_NOTE_KINDS);
+const CHANGE_REQUEST_KIND_SET = new Set<string>(CHANGE_REQUEST_KINDS);
 
 /** Reads an `app_notes` row; null when it has no id. Mirrored in mcp-server/src/content-store.ts. */
-export function appNoteFromRow(record: PocketBaseAppNoteRecord): AppNote | null {
+export function changeRequestFromRow(record: PocketBaseChangeRequestRecord): ChangeRequest | null {
   if (!record.note_id) return null;
   const updatedAt = record.updated_at_client ?? record.updated ?? new Date(0).toISOString();
   return {
     id: record.note_id,
     text: record.text ?? "",
-    kind: record.kind && APP_NOTE_KIND_SET.has(record.kind) ? (record.kind as AppNote["kind"]) : "idea",
+    kind: record.kind && CHANGE_REQUEST_KIND_SET.has(record.kind) ? (record.kind as ChangeRequest["kind"]) : "idea",
     status: record.status === "done" ? "done" : "open",
     screen: record.screen ?? "",
     createdAt: normalizePocketBaseDate(record.created_at_client) ?? updatedAt,
@@ -288,7 +289,7 @@ export function appNoteFromRow(record: PocketBaseAppNoteRecord): AppNote | null 
 }
 
 /** The `app_notes` payload for a note. Empty strings clear optional fields. */
-export function appNoteToRow(note: AppNote, owner: string, updatedAtClient: string) {
+export function changeRequestToRow(note: ChangeRequest, owner: string, updatedAtClient: string) {
   return {
     owner,
     note_id: note.id,
@@ -378,7 +379,7 @@ function assembleStateFromValues(
   const plannerPresets: Record<string, PlannerPreset> = {};
   let contentBoard = fallbackState.contentBoard;
   const contentCards: Record<string, ContentCard> = {};
-  const appNotes: Record<string, AppNote> = {};
+  const changeRequests: Record<string, ChangeRequest> = {};
   const memory = emptyMemoryData();
   const changeLog: Record<string, ChangeLogEntry> = {};
   let syncableUiState = extractSyncableUIState(fallbackState.uiState);
@@ -419,7 +420,7 @@ function assembleStateFromValues(
     }
 
     if (record.kind === "app_note") {
-      appNotes[record.value.id] = record.value;
+      changeRequests[record.value.id] = record.value;
       continue;
     }
 
@@ -448,7 +449,7 @@ function assembleStateFromValues(
       plannerPresets,
       contentBoard,
       contentCards,
-      appNotes,
+      changeRequests,
       memory,
       changeLog,
       uiState: mergeUiState(
@@ -732,7 +733,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     records: Record<string, PersistenceRecordMetadata>;
   }> {
     const client = getPocketBaseClient();
-    const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, appNotes, workspaceState] =
+    const [dailyPages, notes, noteFolders, plannerPresets, contentBoard, contentCards, changeRequests, workspaceState] =
       await Promise.all([
       client
         .collection("daily_pages")
@@ -752,9 +753,9 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       // applied): no notes, rather than failing the whole load.
       client
         .collection("app_notes")
-        .getFullList<PocketBaseAppNoteRecord>({ filter: `owner="${userId}"`, requestKey: null })
+        .getFullList<PocketBaseChangeRequestRecord>({ filter: `owner="${userId}"`, requestKey: null })
         .catch((error: unknown) => {
-          if (isNotFoundError(error)) return [] as PocketBaseAppNoteRecord[];
+          if (isNotFoundError(error)) return [] as PocketBaseChangeRequestRecord[];
           throw error;
         }),
       getFirstByFilter<PocketBaseWorkspaceStateRecord>("workspace_state", `owner="${userId}"`),
@@ -908,8 +909,8 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
       );
     }
 
-    for (const record of appNotes) {
-      const value = appNoteFromRow(record);
+    for (const record of changeRequests) {
+      const value = changeRequestFromRow(record);
       if (!value) continue;
       const key = `app_note:${value.id}`;
       values[key] = { key, kind: "app_note", value };
@@ -1065,7 +1066,7 @@ class PocketBaseSplitRemoteStore implements SplitRemotePersistenceStore {
     }
 
     if (record.kind === "app_note") {
-      const payload = appNoteToRow(record.value, userId, updatedAtClient);
+      const payload = changeRequestToRow(record.value, userId, updatedAtClient);
       if (existing) {
         return client.collection("app_notes").update<PocketBaseRow>(existing.id, payload, { requestKey: null });
       } else {

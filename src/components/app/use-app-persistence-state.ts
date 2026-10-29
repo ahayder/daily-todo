@@ -68,7 +68,7 @@ function changesSyncedContent(current: AppState, next: AppState) {
     current.plannerPresets !== next.plannerPresets ||
     current.contentBoard !== next.contentBoard ||
     current.contentCards !== next.contentCards ||
-    current.appNotes !== next.appNotes ||
+    current.changeRequests !== next.changeRequests ||
     current.memory !== next.memory ||
     current.changeLog !== next.changeLog
   );
