@@ -84,7 +84,8 @@ Feature components — reuse inside the Content Planner; copy their pattern else
 | `TaskRow` | `task-row.tsx` | external-brain task: round check (44px touch target), plain title, meta line (area chip, washi tag, "From Claude"), one right-side action |
 | `LifeAreaChip` | `task-row.tsx` | life area as a neutral `chip` Badge + icon (Job/Content/Personal) — never a priority color |
 | `useFocusSoon` | `use-focus-soon.ts` | after an action removes the focused control, focus a section heading (pass `headingRef` to `SectionTitle`) |
-| `SectionTitle` · `DoTodayMenu` | `section-title.tsx` · `do-today-menu.tsx` | page section heading + hint (focusable with a ref) · "Do today" block picker |
+| `SectionTitle` · `DoTodayMenu` | `section-title.tsx` · `do-today-menu.tsx` | page section heading + hint (focusable with a ref, optional `action` at the row end) · "Do today" block picker |
+| `PlannerSetupDialog` | `src/components/planner/planner-view.tsx` | the day-plan editor (planner Set up) in a dialog over Today |
 | `DecisionCard` · `WaitingList` | `src/components/memory/memory-parts.tsx` | a decision (status chip, why, replaced strike-through, Mark agreed) · follow-ups by person with washi "N days waiting" and Mark resolved |
 | `useHistoryActions` | `use-history-actions.ts` | `act(action, title)` runs an edit with an Undo toast; `undo` / `redo` show results and refusals as toasts ("Bring back") |
 

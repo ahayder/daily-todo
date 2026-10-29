@@ -152,7 +152,7 @@ const contentCardSchema = z.object({
   seriesId: z.string().optional().catch(undefined),
 });
 
-const appNoteSchema = z.object({
+const changeRequestSchema = z.object({
   id: z.string().min(1),
   text: z.string().catch(""),
   kind: z.enum(["idea", "improvement", "bug"]).catch("idea"),
@@ -203,7 +203,7 @@ export const appStateSchema = z.object({
   plannerPresets: z.record(z.string(), plannerPresetSchema),
   contentBoard: contentBoardSchema,
   contentCards: z.record(z.string(), contentCardSchema).catch({}),
-  appNotes: z.record(z.string(), appNoteSchema).catch({}),
+  changeRequests: z.record(z.string(), changeRequestSchema).catch({}),
   memory: memorySchema.optional().transform((value) => value ?? memorySchema.parse({})),
   changeLog: recordMap<ChangeLogEntry>().optional().transform((value) => value ?? {}),
   uiState: z.object({

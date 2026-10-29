@@ -16,9 +16,9 @@ import {
 import { toISODate } from "@/lib/date";
 import { applyMemoryAction, isMemoryAction } from "@/lib/memory/app-actions";
 import {
-  createAppNote,
-  setAppNoteDeleted,
-  updateAppNote,
+  createChangeRequest,
+  setChangeRequestDeleted,
+  updateChangeRequest,
   addPlannerPurposeToDays,
   addContentColumn,
   applyPlannerPurposeToDays,
@@ -495,18 +495,18 @@ function handleContentPlannerActions(state: AppState, action: AppAction): AppSta
         contentCards: unlinkContentSeriesCards(state.contentCards, action.seriesId),
       };
     }
-    case "create-app-note": {
-      const note = createAppNote(action);
-      return note ? { ...state, appNotes: { ...state.appNotes, [note.id]: note } } : state;
+    case "create-change-request": {
+      const note = createChangeRequest(action);
+      return note ? { ...state, changeRequests: { ...state.changeRequests, [note.id]: note } } : state;
     }
-    case "update-app-note": {
-      const appNotes = updateAppNote(state.appNotes, action.noteId, action);
-      return appNotes === state.appNotes ? state : { ...state, appNotes };
+    case "update-change-request": {
+      const changeRequests = updateChangeRequest(state.changeRequests, action.noteId, action);
+      return changeRequests === state.changeRequests ? state : { ...state, changeRequests };
     }
-    case "delete-app-note":
-    case "restore-app-note": {
-      const appNotes = setAppNoteDeleted(state.appNotes, action.noteId, action.type === "delete-app-note");
-      return appNotes === state.appNotes ? state : { ...state, appNotes };
+    case "delete-change-request":
+    case "restore-change-request": {
+      const changeRequests = setChangeRequestDeleted(state.changeRequests, action.noteId, action.type === "delete-change-request");
+      return changeRequests === state.changeRequests ? state : { ...state, changeRequests };
     }
     case "set-content-card-series": {
       if (action.seriesId && !state.contentBoard.series?.some((series) => series.id === action.seriesId)) {

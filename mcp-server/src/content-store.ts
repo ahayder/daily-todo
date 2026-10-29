@@ -1,6 +1,6 @@
 import PocketBase from "pocketbase";
-import { APP_NOTE_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
-import type { AppNote, ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
+import { CHANGE_REQUEST_KINDS, CONTENT_PLATFORMS } from "@/lib/types";
+import type { ChangeRequest, ContentBoard, ContentCard, ContentLinks, ContentSeries } from "@/lib/types";
 import { createPocketBaseMemoryStore, type MemoryStore } from "./memory-store";
 
 /**
@@ -14,9 +14,9 @@ export type ContentStore = {
   loadCards(): Promise<Record<string, ContentCard>>;
   saveBoard(board: ContentBoard): Promise<void>;
   saveCard(card: ContentCard): Promise<void>;
-  loadAppNotes(): Promise<Record<string, AppNote>>;
-  /** App notes are only ever soft-deleted (deletedAt), so there is no delete. */
-  saveAppNote(note: AppNote): Promise<void>;
+  loadChangeRequests(): Promise<Record<string, ChangeRequest>>;
+  /** Change requests are only ever soft-deleted (deletedAt), so there is no delete. */
+  saveChangeRequest(note: ChangeRequest): Promise<void>;
 };
 
 /** Everything the MCP server reads and writes. */
@@ -102,15 +102,15 @@ export function cardToPayload(card: ContentCard, owner: string) {
   };
 }
 
-// Mirrors appNoteFromRow / appNoteToRow in persistence-repository.ts.
-export function rowToAppNote(row: Row): AppNote | null {
+// Mirrors changeRequestFromRow / changeRequestToRow in persistence-repository.ts.
+export function rowToChangeRequest(row: Row): ChangeRequest | null {
   if (!row.note_id) return null;
   const updatedAt = String(row.updated_at_client ?? row.updated ?? new Date(0).toISOString());
   const kind = String(row.kind ?? "");
   return {
     id: String(row.note_id),
     text: typeof row.text === "string" ? row.text : "",
-    kind: (APP_NOTE_KINDS as readonly string[]).includes(kind) ? (kind as AppNote["kind"]) : "idea",
+    kind: (CHANGE_REQUEST_KINDS as readonly string[]).includes(kind) ? (kind as ChangeRequest["kind"]) : "idea",
     status: row.status === "done" ? "done" : "open",
     screen: typeof row.screen === "string" ? row.screen : "",
     createdAt: normalizeDate(row.created_at_client) ?? updatedAt,
@@ -119,7 +119,7 @@ export function rowToAppNote(row: Row): AppNote | null {
   };
 }
 
-export function appNoteToPayload(note: AppNote, owner: string) {
+export function changeRequestToPayload(note: ChangeRequest, owner: string) {
   return {
     owner,
     note_id: note.id,
@@ -218,26 +218,27 @@ export function createPocketBaseStore(options: { url: string; auth: PocketBaseAu
       else await pb.collection("content_boards").create(payload);
     },
 
-    async loadAppNotes() {
+    async loadChangeRequests() {
       const owner = await ownerId();
       const rows = await pb
+        // Stored name kept: change requests live in the `app_notes` collection.
         .collection("app_notes")
         .getFullList<Row>({ filter: pb.filter("owner = {:owner}", { owner }) });
-      const notes: Record<string, AppNote> = {};
+      const notes: Record<string, ChangeRequest> = {};
       for (const row of rows) {
-        const note = rowToAppNote(row);
+        const note = rowToChangeRequest(row);
         if (note) notes[note.id] = note;
       }
       return notes;
     },
 
-    async saveAppNote(note) {
+    async saveChangeRequest(note) {
       const owner = await ownerId();
       const existing = await findOne(
         "app_notes",
         pb.filter("owner = {:owner} && note_id = {:noteId}", { owner, noteId: note.id }),
       );
-      const payload = appNoteToPayload(note, owner);
+      const payload = changeRequestToPayload(note, owner);
       if (existing) await pb.collection("app_notes").update(existing.id, payload);
       else await pb.collection("app_notes").create(payload);
     },

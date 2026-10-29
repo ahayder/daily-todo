@@ -8,7 +8,7 @@ import {
 import { getDailyPageKey, getTodoWorkspaceIdFromDailyPageKey } from "@/lib/store";
 import { MEMORY_KINDS } from "@/lib/types";
 import type {
-  AppNote,
+  ChangeRequest,
   AppState,
   ChangeLogEntry,
   MemoryKind,
@@ -52,14 +52,15 @@ export type SyncRecordValue =
   | { key: string; kind: "planner_preset"; value: PlannerPreset }
   | { key: string; kind: "content_board"; value: ContentBoard }
   | { key: string; kind: "content_card"; value: ContentCard }
-  | { key: string; kind: "app_note"; value: AppNote }
+  // Stored kind kept as "app_note" so existing data and older apps keep working.
+  | { key: string; kind: "app_note"; value: ChangeRequest }
   | MemorySyncRecordValue
   | { key: string; kind: "change_log"; value: ChangeLogEntry }
   | { key: string; kind: "workspace_state"; value: SyncableWorkspaceState };
 
 /**
  * Kinds that are never deleted on the server: daily history is append-only,
- * app notes and external-brain records are soft-deleted (deletedAt, synced as
+ * change requests and external-brain records are soft-deleted (deletedAt, synced as
  * an upsert), and the change log is append-only. A record of these kinds
  * missing on a device never becomes a delete.
  */
@@ -155,7 +156,7 @@ export function getSyncRecordValuesFromState(state: AppState): Record<string, Sy
     values[key] = { key, kind: "content_card", value: card };
   }
 
-  for (const [noteId, note] of Object.entries(state.appNotes)) {
+  for (const [noteId, note] of Object.entries(state.changeRequests)) {
     const key = `app_note:${noteId}`;
     values[key] = { key, kind: "app_note", value: note };
   }
@@ -354,9 +355,9 @@ export function applySyncOpsToState(state: AppState, ops: Array<Pick<SyncOp, "ty
     }
 
     if (record.kind === "app_note") {
-      // App notes are soft-deleted (deletedAt), so a delete op should never
+      // Change requests are soft-deleted (deletedAt), so a delete op should never
       // exist; if one does, keep the note rather than drop it.
-      if (type !== "delete") next = { ...next, appNotes: { ...next.appNotes, [record.value.id]: record.value } };
+      if (type !== "delete") next = { ...next, changeRequests: { ...next.changeRequests, [record.value.id]: record.value } };
       continue;
     }
 

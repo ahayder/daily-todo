@@ -1,5 +1,5 @@
 # External brain (tasks, decisions, memory, change log)
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 Backend + UI for the "chat captures, the app shows" redesign ([user-needs.md](user-needs.md)): chat
 saves tasks, decisions, projects, meetings, follow-ups and repeats through MCP; the app shows them
@@ -11,7 +11,7 @@ branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop relea
 
 ## How it works
 - **Collections** (`scripts/lib/pocketbase-schema.mjs`, helper `softDeleteCollection()`): `tasks`,
-  `decisions`, `projects`, `meetings`, `follow_ups`, `repeats`. Same shape as `app_notes`: `deleteRule`
+  `decisions`, `projects`, `meetings`, `follow_ups`, `repeats`. Same shape as `app_notes` (change requests): `deleteRule`
   null (soft delete only), only `owner`, `<kind>_id`, `updated_at_client` required, optional
   `deleted_at`/`created_at_client` dates, unique (owner, id) index, `tags_json` json (2 MB).
   `repeats.active` is a non-required bool (PocketBase treats `false` as blank).
@@ -35,7 +35,7 @@ branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop relea
   - `repeats.ts` `repeatsForDate`; `search.ts` (all words must match, tag filter, `collectTags`).
   - `standup.ts`: `since` defaults to the previous Mon–Fri workday; area defaults to `job`; records with no area are kept.
   - `today-screen.ts`: `selectedPlannerPreset` (selected, else newest), `minutesInZone`, `getNow`, `shortDuration`, `aiChangesToday`.
-  - `history-view.ts`: `describeChange`, `sourceLabel` (You / Claude / ChatGPT / An AI chat), `buildHistory` (one row per batch; undo/redo entries hidden and shown as the original row's "undone" status; grouped by day in Asia/Dhaka; `count` for "Undo all N").
+  - `history-view.ts`: `describeChange` (kind `app_note` → "Saved change request"), `sourceLabel` (You / Claude / ChatGPT / An AI chat), `buildHistory` (one row per batch; undo/redo entries hidden and shown as the original row's "undone" status; grouped by day in Asia/Dhaka; `count` for "Undo all N").
   - `memory-screen.ts` (Memory/Project view models): `projectGroups` (active vs paused/done), `decisionLog` (with `replacedBy` and links like "1 open task" / "Repeats Mon/Wed/Fri"), `decisionTags`, `waitingByPerson` (`daysWaiting`), `projectView` (where-labels + timeline from `changeLog` of the project and its records), `nextStepTask`, `projectHref`.
   - `pings.ts` `duePings`: weekdays only, 08:00–18:00 Asia/Dhaka; a ping when a block with an open task starts (3-min grace) and a standup heads-up 10 min before `STANDUP_TIME` (16:00); none while the app is focused; deduped by ping id.
   - `standup.ts` `buildStandupAgenda` feeds `/standup` (area `job`).
@@ -72,8 +72,8 @@ branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop relea
   stale `tuesday`–`friday` days; fixed in `getTodayView` and MCP `resolveBlock`).
 - `canUndo` reasons mention `redo_change` and `summarizeChange` lists raw field names — MCP
   wording. The app uses `app-history.ts` refusals and `history-view.ts` `describeChange` instead.
-- Only external-brain edits made in the app write `change_log`. Content Planner and app-note edits
-  in the app don't yet (follow-up), so History doesn't show them.
+- Only external-brain edits made in the app write `change_log`. Content Planner and change-request edits
+  in the app don't yet (follow-up), so History doesn't show them (MCP edits of both do show).
 - Project page uses `/memory/project?id=…`, not `/memory/[id]`: the desktop app is a static export,
   so dynamic segments don't work. Read the id with `useSearchParams` inside `<Suspense>`.
 - Meetings show the summary only, never the transcript.
@@ -81,4 +81,4 @@ branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop relea
   `http://dailytodo.localhost:5005` with `pnpm dev:test` + local PocketBase ([testing.md](testing.md), [dev-environment.md](dev-environment.md)).
 
 ## Related
-[mcp-server.md](mcp-server.md), [sync-persistence.md](sync-persistence.md), [pocketbase.md](pocketbase.md), [user-needs.md](user-needs.md), [decisions.md](decisions.md), [app-notes.md](app-notes.md), [desktop.md](desktop.md), [ui-design.md](ui-design.md)
+[mcp-server.md](mcp-server.md), [sync-persistence.md](sync-persistence.md), [pocketbase.md](pocketbase.md), [user-needs.md](user-needs.md), [decisions.md](decisions.md), [change-requests.md](change-requests.md), [desktop.md](desktop.md), [ui-design.md](ui-design.md)

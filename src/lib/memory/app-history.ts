@@ -1,6 +1,6 @@
 import { buildChange, canRedo, canUndo, makeBatchId, redoTarget, sameRecord, undoTarget } from "@/lib/change-log";
 import type {
-  AppNote,
+  ChangeRequest,
   AppState,
   ChangeEntityKind,
   ChangeLogEntry,
@@ -18,7 +18,7 @@ import { MEMORY_KINDS } from "@/lib/types";
  * whole batch, all or nothing, refusing when a record changed again since.
  */
 
-export type HistoryState = Pick<AppState, "memory" | "changeLog" | "contentCards" | "contentBoard" | "appNotes">;
+export type HistoryState = Pick<AppState, "memory" | "changeLog" | "contentCards" | "contentBoard" | "changeRequests">;
 
 export type RecordWrite = { kind: ChangeEntityKind; id: string; value: unknown };
 
@@ -32,7 +32,7 @@ const isMemoryKind = (kind: ChangeEntityKind): kind is MemoryKind =>
 export function currentValue(state: HistoryState, kind: ChangeEntityKind, id: string): unknown {
   if (kind === "content_card") return state.contentCards[id] ?? null;
   if (kind === "content_board") return state.contentBoard;
-  if (kind === "app_note") return state.appNotes[id] ?? null;
+  if (kind === "app_note") return state.changeRequests[id] ?? null;
   if (isMemoryKind(kind)) return state.memory[kind][id] ?? null;
   return null;
 }
@@ -40,7 +40,7 @@ export function currentValue(state: HistoryState, kind: ChangeEntityKind, id: st
 function writeValue<S extends HistoryState>(state: S, kind: ChangeEntityKind, id: string, value: unknown): S {
   if (kind === "content_card") return { ...state, contentCards: { ...state.contentCards, [id]: value as ContentCard } };
   if (kind === "content_board") return { ...state, contentBoard: value as ContentBoard };
-  if (kind === "app_note") return { ...state, appNotes: { ...state.appNotes, [id]: value as AppNote } };
+  if (kind === "app_note") return { ...state, changeRequests: { ...state.changeRequests, [id]: value as ChangeRequest } };
   if (isMemoryKind(kind)) {
     return {
       ...state,

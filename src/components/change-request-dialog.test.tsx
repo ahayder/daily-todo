@@ -2,11 +2,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
-import { AppNotesDialog } from "@/components/app-notes/app-notes-dialog";
+import { ChangeRequestDialog } from "@/components/change-requests/change-request-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { AppNote } from "@/lib/types";
+import type { ChangeRequest } from "@/lib/types";
 
-const note: AppNote = {
+const note: ChangeRequest = {
   id: "app-note_1",
   text: "Show a weekly review",
   kind: "improvement",
@@ -17,11 +17,11 @@ const note: AppNote = {
   deletedAt: null,
 };
 
-function renderDialog(props: Partial<Parameters<typeof AppNotesDialog>[0]> = {}) {
+function renderDialog(props: Partial<Parameters<typeof ChangeRequestDialog>[0]> = {}) {
   const dispatch = vi.fn();
   render(
     <TooltipProvider>
-      <AppNotesDialog
+      <ChangeRequestDialog
         open
         onOpenChange={() => {}}
         notes={{ [note.id]: note }}
@@ -35,14 +35,14 @@ function renderDialog(props: Partial<Parameters<typeof AppNotesDialog>[0]> = {})
   return dispatch;
 }
 
-describe("AppNotesDialog", () => {
+describe("ChangeRequestDialog", () => {
   test("saves a typed note with its type and screen, then clears the box", async () => {
     const dispatch = renderDialog();
-    const box = screen.getByLabelText("Note text");
+    const box = screen.getByLabelText("Request text");
     await userEvent.type(box, "Bigger timer");
     await userEvent.click(screen.getByRole("radio", { name: "Bug" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save note" }));
-    expect(dispatch).toHaveBeenCalledWith({ type: "create-app-note", text: "Bigger timer", kind: "bug", screen: "planner" });
+    await userEvent.click(screen.getByRole("button", { name: "Save request" }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "create-change-request", text: "Bigger timer", kind: "bug", screen: "planner" });
     expect(box).toHaveValue("");
     expect(screen.getByRole("status")).toHaveTextContent("Saved");
   });
@@ -51,9 +51,9 @@ describe("AppNotesDialog", () => {
     const dispatch = renderDialog();
     expect(screen.getByText("Show a weekly review")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(dispatch).toHaveBeenCalledWith({ type: "delete-app-note", noteId: note.id });
+    expect(dispatch).toHaveBeenCalledWith({ type: "delete-change-request", noteId: note.id });
     await userEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(dispatch).toHaveBeenCalledWith({ type: "restore-app-note", noteId: note.id });
+    expect(dispatch).toHaveBeenCalledWith({ type: "restore-change-request", noteId: note.id });
   });
 
   test("can't save while the app is still connecting", () => {

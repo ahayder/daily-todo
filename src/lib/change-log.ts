@@ -63,7 +63,7 @@ const KIND_LABELS: Record<ChangeEntityKind, string> = {
   repeat: "repeat",
   content_card: "video card",
   content_board: "content board",
-  app_note: "app note",
+  app_note: "change request",
 };
 
 function recordLabel(value: unknown): string {

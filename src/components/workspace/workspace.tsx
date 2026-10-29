@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
 
 import { useAppState } from "@/components/app/app-context";
-import { AppNotesDialog } from "@/components/app-notes/app-notes-dialog";
+import { ChangeRequestDialog } from "@/components/change-requests/change-request-dialog";
 import { ContentPlannerView } from "@/components/content-planner-view";
 import { NotesView } from "@/components/notes/notes-view";
 import { PlannerView } from "@/components/planner/planner-view";
@@ -36,12 +36,12 @@ export function Workspace({ forcedView }: Props) {
     isContentPlanner || isPlanner || ["today", "history", "memory", "project", "standup"].includes(activeView);
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
   const previousViewRef = useRef<ViewMode | null>(null);
-  const [isAppNotesOpen, setIsAppNotesOpen] = useState(false);
+  const [isChangeRequestsOpen, setIsChangeRequestsOpen] = useState(false);
   // What the user was working in, so closing the note dialog puts them back.
-  const appNotesReturnFocusRef = useRef<HTMLElement | null>(null);
-  const openAppNotes = () => {
-    appNotesReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setIsAppNotesOpen(true);
+  const changeRequestsReturnFocusRef = useRef<HTMLElement | null>(null);
+  const openChangeRequests = () => {
+    changeRequestsReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setIsChangeRequestsOpen(true);
   };
   const shellStyle = {
     "--content-font-scale": String(contentFontScale),
@@ -73,10 +73,10 @@ export function Workspace({ forcedView }: Props) {
         return;
       }
 
-      // Cmd/Ctrl+Shift+I: note for the app, from anywhere (also in focus mode).
+      // Cmd/Ctrl+Shift+I: change request, from anywhere (also in focus mode).
       if (event.shiftKey && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        openAppNotes();
+        openChangeRequests();
         return;
       }
 
@@ -140,20 +140,20 @@ export function Workspace({ forcedView }: Props) {
           dispatch={dispatch}
           sync={sync}
           retrySync={retrySync}
-          onOpenAppNotes={openAppNotes}
+          onOpenChangeRequests={openChangeRequests}
         />
       ) : null}
 
       <PingScheduler />
 
-      <AppNotesDialog
-        open={isAppNotesOpen}
-        onOpenChange={setIsAppNotesOpen}
-        notes={state.appNotes}
+      <ChangeRequestDialog
+        open={isChangeRequestsOpen}
+        onOpenChange={setIsChangeRequestsOpen}
+        notes={state.changeRequests}
         dispatch={dispatch}
         screen={activeView}
         isReadOnly={sync.isReadOnly}
-        returnFocusRef={appNotesReturnFocusRef}
+        returnFocusRef={changeRequestsReturnFocusRef}
       />
 
       <div

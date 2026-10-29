@@ -30,6 +30,7 @@ export type PersistenceRecordKind =
   | "planner_preset"
   | "content_board"
   | "content_card"
+  // Change requests. Stored name kept as "app_note" so existing data and older apps keep working.
   | "app_note"
   | MemoryKind
   | "change_log"
@@ -238,6 +239,8 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
     noteFolders?: unknown;
     contentBoard?: unknown;
     contentCards?: unknown;
+    changeRequests?: unknown;
+    /** Saved by builds before the rename to change requests. */
     appNotes?: unknown;
     memory?: unknown;
     changeLog?: unknown;
@@ -298,8 +301,10 @@ function normalizeLegacyState(parsed: unknown, now: Date): unknown {
       candidate.contentCards && typeof candidate.contentCards === "object"
         ? candidate.contentCards
         : {},
-    appNotes:
-      candidate.appNotes && typeof candidate.appNotes === "object" ? candidate.appNotes : {},
+    changeRequests: (() => {
+      const saved = candidate.changeRequests ?? candidate.appNotes;
+      return saved && typeof saved === "object" ? saved : {};
+    })(),
     memory: candidate.memory && typeof candidate.memory === "object" ? candidate.memory : {},
     changeLog: candidate.changeLog && typeof candidate.changeLog === "object" ? candidate.changeLog : {},
     noteFolders:

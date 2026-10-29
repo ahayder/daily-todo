@@ -1,5 +1,5 @@
 import { createDefaultContentBoard } from "@/lib/store";
-import type { AppNote, ChangeLogEntry, ContentBoard, ContentCard, MemoryKind, PlannerPreset } from "@/lib/types";
+import type { ChangeRequest, ChangeLogEntry, ContentBoard, ContentCard, MemoryKind, PlannerPreset } from "@/lib/types";
 import type { AppStore } from "./content-store";
 
 /**
@@ -7,12 +7,12 @@ import type { AppStore } from "./content-store";
  * was sent. Like the real store it has no delete method of any kind.
  */
 export function createMemoryTestStore(
-  initial: { board?: ContentBoard | null; cards?: ContentCard[]; appNotes?: AppNote[]; preset?: PlannerPreset | null } = {},
+  initial: { board?: ContentBoard | null; cards?: ContentCard[]; changeRequests?: ChangeRequest[]; preset?: PlannerPreset | null } = {},
 ) {
   const state = {
     board: initial.board === undefined ? createDefaultContentBoard(new Date("2026-01-01")) : initial.board,
     cards: Object.fromEntries((initial.cards ?? []).map((card) => [card.id, card])) as Record<string, ContentCard>,
-    appNotes: Object.fromEntries((initial.appNotes ?? []).map((note) => [note.id, note])) as Record<string, AppNote>,
+    changeRequests: Object.fromEntries((initial.changeRequests ?? []).map((note) => [note.id, note])) as Record<string, ChangeRequest>,
     records: { task: {}, decision: {}, project: {}, meeting: {}, follow_up: {}, repeat: {} } as Record<
       MemoryKind,
       Record<string, unknown>
@@ -33,9 +33,9 @@ export function createMemoryTestStore(
       state.cards[card.id] = card;
       state.writes.push(`content_card:${card.id}`);
     },
-    loadAppNotes: async () => ({ ...state.appNotes }),
-    saveAppNote: async (note) => {
-      state.appNotes[note.id] = note;
+    loadChangeRequests: async () => ({ ...state.changeRequests }),
+    saveChangeRequest: async (note) => {
+      state.changeRequests[note.id] = note;
       state.writes.push(`app_note:${note.id}`);
     },
     loadRecords: async (kind) => ({ ...state.records[kind] }) as never,

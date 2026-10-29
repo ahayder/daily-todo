@@ -56,7 +56,7 @@ How DailyTodo does it:
 
 ## Navigation
 
-- Standard: top nav pills (Todos / Notes / Daily Planner / Content Planner) + sync pill + theme; sidebar only on Todos and Notes; Planner and Content Planner are full-width. View states inside a page use `SegmentedControl`, not nav pills.
+- Standard: top nav pills (Today / Memory / Content Planner) + change-request lightbulb + sync pill + theme. Todos and Notes still open by URL (sidebar only there); the Daily Planner's editor opens from Today ("Edit day plan" dialog, `/planner` redirects there). View states inside a page use `SegmentedControl`, not nav pills.
 - Ask: adding/removing/moving nav items or the sidebar (major change — see Ask before major changes below).
 
 ## Responsive

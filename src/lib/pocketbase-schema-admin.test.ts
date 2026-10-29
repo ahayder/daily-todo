@@ -135,8 +135,8 @@ describe("buildSchemaDefinitions", () => {
 
 test("app_notes: only the ids and sync timestamp are required (everything else can be empty)", () => {
   const definitions = buildSchemaDefinitions({ usersCollectionId: "users_1" });
-  const appNotes = definitions.find((item) => item.name === "app_notes");
-  const required = appNotes?.fields
+  const changeRequests = definitions.find((item) => item.name === "app_notes");
+  const required = changeRequests?.fields
     .filter((field: { required?: boolean }) => field.required)
     .map((field: { name: string }) => field.name);
   expect(required).toEqual(["owner", "note_id", "updated_at_client"]);

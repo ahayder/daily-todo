@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AppAction } from "@/components/app/app-context";
 import {
@@ -56,13 +57,12 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
+/** 24-hour "HH:MM" (midnight end is "24:00"), the same format Today uses. */
 function formatClock(minutes: number): string {
   const safe = Math.min(24 * 60, Math.max(0, Math.round(minutes)));
-  const h24 = Math.floor(safe / 60) % 24;
+  const h = Math.floor(safe / 60);
   const m = safe % 60;
-  const h12 = h24 % 12 || 12;
-  const suffix = h24 >= 12 ? "p" : "a";
-  return `${h12}:${String(m).padStart(2, "0")}${suffix}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 function formatRange(event: PlannerEvent): string {
@@ -528,12 +528,16 @@ function SetupView({
   presetId,
   days,
   dispatch,
+  showHeader = true,
+  initialDay = "monday",
 }: {
   presetId: string;
   days: Record<string, PlannerDay>;
   dispatch: Dispatch<AppAction>;
+  showHeader?: boolean;
+  initialDay?: PlannerTemplateKey;
 }) {
-  const [tab, setTab] = useState<PlannerTemplateKey>("monday");
+  const [tab, setTab] = useState<PlannerTemplateKey>(initialDay);
   const day = days[tab];
   // Show blocks in the order the user created them — no auto-sort, so a row
   // never jumps while its time is being edited.
@@ -541,13 +545,15 @@ function SetupView({
   const totalMinutes = events.reduce((sum, e) => sum + Math.max(0, e.endMinutes - e.startMinutes), 0);
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mb-6 px-1">
-        <h1 className="text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">Your ideal days</h1>
-        <p className="mt-1 text-[0.8125em] text-[var(--ink-700)]">
-          Sketch each day once. Changes save on their own.
-        </p>
-      </div>
+    <div className={showHeader ? "mx-auto w-full max-w-md" : "w-full"}>
+      {showHeader ? (
+        <div className="mb-6 px-1">
+          <h1 className="text-[1.5em] font-semibold leading-tight tracking-tight text-[var(--ink-900)]">Your ideal days</h1>
+          <p className="mt-1 text-[0.8125em] text-[var(--ink-700)]">
+            Sketch each day once. Changes save on their own.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mb-4">
         <Segmented
@@ -607,6 +613,38 @@ function SetupView({
       </div>
 
     </div>
+  );
+}
+
+/** The day-plan editor (Set up) over Today, so the planner lives inside Today. */
+export function PlannerSetupDialog({
+  open,
+  onOpenChange,
+  presetId,
+  days,
+  dispatch,
+  initialDay,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  presetId: string;
+  days: Record<string, PlannerDay>;
+  dispatch: Dispatch<AppAction>;
+  /** The template tab to open on: today's ("monday" stands for Mon–Fri). */
+  initialDay: PlannerTemplateKey;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col gap-4 overflow-hidden p-0">
+        <DialogHeader className="px-5 pt-5">
+          <DialogTitle>Your day plan</DialogTitle>
+          <DialogDescription>Sketch each day once. Changes save on their own and show up on Today.</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 overflow-y-auto px-4 pb-5 text-base">
+          <SetupView presetId={presetId} days={days} dispatch={dispatch} showHeader={false} initialDay={initialDay} />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

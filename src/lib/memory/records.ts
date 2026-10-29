@@ -2,7 +2,7 @@ import { makeId } from "@/lib/store";
 import type { MemoryRecordBase } from "@/lib/types";
 
 /**
- * Shared record helpers for the external brain. Like the app-note helpers in
+ * Shared record helpers for the external brain. Like the change-request helpers in
  * store.ts they return the same map when nothing changed, and records are
  * never removed: deleting only sets `deletedAt`.
  */

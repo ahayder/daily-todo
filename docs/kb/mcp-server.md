@@ -1,10 +1,10 @@
 # DailyTodo MCP server
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 `mcp-server/` is a small Node server that lets ChatGPT/Claude read and edit the Content Planner,
-app notes and the external brain (tasks, decisions, projects, meetings, follow-ups, repeats,
+change requests and the external brain (tasks, decisions, projects, meetings, follow-ups, repeats,
 change history) from chat (MCP over HTTP). No hard deletes anywhere; the only deletes are the soft
-`delete_app_note` and `delete_task`. Deployed on Coolify at `https://mcp.ahayder.me` against the
+`delete_change_request` and `delete_task`. Deployed on Coolify at `https://mcp.ahayder.me` against the
 prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23, `USER_TIMEZONE=Asia/Dhaka` set on Coolify).
 
 ## How it works
@@ -14,10 +14,10 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - **Login token:** `POCKETBASE_USER_TOKEN` is a PocketBase impersonation token for the **normal user** (never superuser). Mint it with `pnpm mcp:token [email] [days]` (`scripts/create-mcp-token.mjs`, uses the admin login in `.env.local`; `pnpm mcp:token:local` for the test DB). It prints only the token to stdout, so pipe it straight into `coolify app env create ... --value "$(pnpm -s mcp:token)"` without it showing on screen. Current prod token: 365 days, expires 2027-10-26. Revoke early by changing the user's `tokenKey` (this also signs out all the user's devices).
 - `mcp-server/src/content-store.ts`: with a token, reads the owner id from the token payload (`tokenUserId`) and errors if it's expired; otherwise falls back to `authWithPassword`.
 - **Stores:** `createPocketBaseStore` (`content-store.ts`) returns `AppStore` = `ContentStore & MemoryStore`. `memory-store.ts` (row mappers re-exported from `src/lib/pocketbase/memory-rows.ts`) has generic `loadRecords`/`getRecord`/`saveRecord` per kind via `MEMORY_MAPPERS`, `loadPlannerPreset` (`workspace_state.selected_planner_preset_id`, else newest preset), and `appendChange`/`listChanges`/`getChange`. Test fake: `mcp-server/src/memory-test-store.ts`.
-- **History:** `history.ts` `withHistory(store, source)` wraps the store so every `saveCard`/`saveBoard`/`saveAppNote`/`saveRecord` appends a `change_log` entry. One wrapper per HTTP request = one batch. `undo_change` undoes the **whole batch** (checks every entry first, all-or-nothing); `redo_change` takes the undo's id or the original id. Logic rules: [external-brain.md](external-brain.md).
-- Tools are registered in `mcp-server/src/server.ts`; logic in `mcp-server/src/tools.ts` (content + app notes) and `mcp-server/src/memory-tools.ts` (external brain). 49 tools:
+- **History:** `history.ts` `withHistory(store, source)` wraps the store so every `saveCard`/`saveBoard`/`saveChangeRequest`/`saveRecord` appends a `change_log` entry. One wrapper per HTTP request = one batch. `undo_change` undoes the **whole batch** (checks every entry first, all-or-nothing); `redo_change` takes the undo's id or the original id. Logic rules: [external-brain.md](external-brain.md).
+- Tools are registered in `mcp-server/src/server.ts`; logic in `mcp-server/src/tools.ts` (content + change requests) and `mcp-server/src/memory-tools.ts` (external brain). 49 tools:
   - Content Planner: `list_board`, `get_card`, `add_idea`, `update_card`, `move_card` (`to="next"` = the app's advance button), `set_publish_info`, `list_series`, `add_series`, `update_series`, `set_card_series`.
-  - App notes ([app-notes.md](app-notes.md)): `list_app_notes` (status `open` default / `done` / `all`, `kind`, `include_deleted`), `get_app_note`, `add_app_note` (screen = "chat"), `update_app_note`, `delete_app_note` (soft, sets `deletedAt`), `restore_app_note`. Both soft-delete tools use `setAppNoteDeletedTool`.
+  - Change requests ([change-requests.md](change-requests.md)): `list_change_requests` (status `open` default / `done` / `all`, `kind`, `include_deleted`), `get_change_request`, `add_change_request` (screen = "chat"), `update_change_request`, `delete_change_request` (soft, sets `deletedAt`), `restore_change_request`. Both soft-delete tools use `setChangeRequestDeletedTool`. The old `*_app_note(s)` tool names were removed on 2026-10-30 (chat connectors must refresh). History entries still use kind `"app_note"` (stored name).
   - Tasks: `list_today`, `list_tasks`, `get_task`, `add_task`, `update_task`, `schedule_task`, `complete_task`, `reopen_task`, `delete_task` (soft), `restore_task`.
   - Decisions / projects: `log_decision`, `list_decisions`, `get_decision`, `update_decision`, `list_projects`, `get_project`, `add_project`, `update_project`.
   - Meetings / follow-ups / repeats: `file_meeting`, `list_meetings`, `get_meeting`, `add_follow_up`, `list_follow_ups`, `resolve_follow_up`, `add_repeat`, `list_repeats`, `update_repeat`.
@@ -39,10 +39,10 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - The Coolify CLI can't set the dockerfile location — it was set via the Coolify API (`PATCH` with `dockerfile_location`).
 - Password login from the server kept failing with "Failed to authenticate"; that's why the token is the main login now.
 - Keep secrets off screen: generate `MCP_SECRET` in the shell and copy the connector URL with `pbcopy`; never print the token.
-- **Row ↔ type mapping is duplicated** in `content-store.ts` from `src/lib/pocketbase/persistence-repository.ts` (content normalizers aren't exported; app notes: `rowToAppNote`/`appNoteToPayload` mirror `appNoteFromRow`/`appNoteToRow`). If a content card/board or app note field changes, update both. External-brain mappers are **not** duplicated: they live in `src/lib/pocketbase/memory-rows.ts`, shared by the app and `memory-store.ts`.
+- **Row ↔ type mapping is duplicated** in `content-store.ts` from `src/lib/pocketbase/persistence-repository.ts` (content normalizers aren't exported; change requests: `rowToChangeRequest`/`changeRequestToPayload` mirror `changeRequestFromRow`/`changeRequestToRow`). If a content card/board or change request field changes, update both. External-brain mappers are **not** duplicated: they live in `src/lib/pocketbase/memory-rows.ts`, shared by the app and `memory-store.ts`.
 - `list_today` and block resolution (`resolveBlock` in `memory-tools.ts`) use `plannerEventsForDay`, so Mon–Fri read the planner's `monday` day.
 - App-made external-brain edits also write `change_log` (`source: "app"`); `list_changes` shows them too.
-- No hard deletes on purpose. `tools.test.ts` checks the only delete tools are the soft `delete_app_note` and `delete_task` (it reads `server.ts` as text — importing `server.ts` starts the server) and the stores have no delete/remove method. Don't add a delete without the user's OK.
+- No hard deletes on purpose. `tools.test.ts` checks the only delete tools are the soft `delete_change_request` and `delete_task` (it reads `server.ts` as text — importing `server.ts` starts the server) and the stores have no delete/remove method. Don't add a delete without the user's OK.
 - `pb.filter()` throws "Cannot read properties of undefined (reading 'replace')" if any param is `undefined` — only pass params that are set (this broke `list_changes` once).
 - PocketBase returns dates with a space instead of `T`; normalize every date (incl. `updated_at_client`) or outputs mix formats.
 - ESLint also lints `mcp-server/dist` if a local `pnpm mcp:build` left it there (git-ignored); delete it before `pnpm lint`.
@@ -52,4 +52,4 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - Prod deploys need the user's OK. Point `mcp:dev` at the local test DB for experiments — prod data otherwise.
 
 ## Related
-[external-brain.md](external-brain.md), [content-planner.md](content-planner.md), [app-notes.md](app-notes.md), [pocketbase.md](pocketbase.md), [decisions.md](decisions.md), [dev-environment.md](dev-environment.md)
+[external-brain.md](external-brain.md), [content-planner.md](content-planner.md), [change-requests.md](change-requests.md), [pocketbase.md](pocketbase.md), [decisions.md](decisions.md), [dev-environment.md](dev-environment.md)

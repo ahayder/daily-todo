@@ -44,7 +44,7 @@ Next.js 16 (App Router) · TypeScript 5 · Tailwind CSS v4 + shadcn/ui on Base U
 - **Sync is server-first.** Never add logic that deletes or overwrites server records based on what a device *lacks*; never seed/replace the workspace on load failure; daily pages are never deleted. (A whole-copy sync wiped all prod daily pages on 2026-10-07.)
 - **PocketBase fields that can be empty or zero must not be `required`** — required fields reject `[]`, `{}`, `0`, `""` and silently freeze sync.
 - **Dev auto-login credentials** (`NEXT_PUBLIC_DEV_AUTO_LOGIN_*`) are bundled into the client — local only, never in production.
-- **Git:** commit as the personal account (`git config user.email` must be the `ahayder` no-reply address), on `dev`; `main` is the PR base.
+- **Git:** commit as the personal account (`git config user.email` must be the `ahayder` no-reply address), on `dev`; `main` is the PR base. Don't create worktrees without asking the user; use a separate branch only when `dev` is busy or for an isolated test feature.
 
 ## Engineering rules
 

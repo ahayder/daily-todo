@@ -1,12 +1,12 @@
 import { buildChange, canRedo, canUndo, makeBatchId, redoTarget, undoTarget } from "@/lib/change-log";
-import type { AppNote, ChangeEntityKind, ChangeLogEntry, ContentBoard, ContentCard, MemoryKind } from "@/lib/types";
+import type { ChangeRequest, ChangeEntityKind, ChangeLogEntry, ContentBoard, ContentCard, MemoryKind } from "@/lib/types";
 import { MEMORY_KINDS } from "@/lib/types";
 import type { AppStore } from "./content-store";
 import { ToolError } from "./tools";
 
 /**
  * A store that writes a change_log entry for every save, so every MCP write
- * (content cards, the board, app notes and the external brain) shows up in
+ * (content cards, the board, change requests and the external brain) shows up in
  * History and can be undone. One wrapper = one batch (one tool call); undo
  * works on a whole batch so a multi-record change goes back together.
  */
@@ -25,9 +25,9 @@ export function withHistory(store: AppStore, source: string, batchId = makeBatch
   // Loaded once per batch and kept current, so a renumbering move that saves
   // several cards doesn't reload every card for each save.
   let cards: Promise<Record<string, ContentCard>> | null = null;
-  let appNotes: Promise<Record<string, AppNote>> | null = null;
+  let changeRequests: Promise<Record<string, ChangeRequest>> | null = null;
   const loadCards = () => (cards ??= store.loadCards());
-  const loadAppNotes = () => (appNotes ??= store.loadAppNotes());
+  const loadChangeRequests = () => (changeRequests ??= store.loadChangeRequests());
 
   async function log(entityKind: ChangeEntityKind, entityId: string, before: unknown, after: unknown, extra = {}) {
     await store.appendChange(buildChange({ batchId, entityKind, entityId, before, after, source, ...extra }));
@@ -36,7 +36,7 @@ export function withHistory(store: AppStore, source: string, batchId = makeBatch
   async function currentValue(kind: ChangeEntityKind, id: string): Promise<unknown> {
     if (kind === "content_card") return (await store.loadCards())[id] ?? null;
     if (kind === "content_board") return store.loadBoard();
-    if (kind === "app_note") return (await store.loadAppNotes())[id] ?? null;
+    if (kind === "app_note") return (await store.loadChangeRequests())[id] ?? null;
     if ((MEMORY_KINDS as readonly string[]).includes(kind)) return store.getRecord(kind as MemoryKind, id);
     throw new ToolError(`Unknown record kind "${kind}".`);
   }
@@ -45,7 +45,7 @@ export function withHistory(store: AppStore, source: string, batchId = makeBatch
   async function writeValue(kind: ChangeEntityKind, value: unknown): Promise<void> {
     if (kind === "content_card") return store.saveCard(value as ContentCard);
     if (kind === "content_board") return store.saveBoard(value as ContentBoard);
-    if (kind === "app_note") return store.saveAppNote(value as AppNote);
+    if (kind === "app_note") return store.saveChangeRequest(value as ChangeRequest);
     return store.saveRecord(kind as MemoryKind, value as never);
   }
 
@@ -72,7 +72,7 @@ export function withHistory(store: AppStore, source: string, batchId = makeBatch
     batchId,
 
     loadCards,
-    loadAppNotes,
+    loadChangeRequests,
 
     async saveCard(card) {
       const before = (await loadCards())[card.id] ?? null;
@@ -87,10 +87,10 @@ export function withHistory(store: AppStore, source: string, batchId = makeBatch
       await log("content_board", BOARD_ID, before, board);
     },
 
-    async saveAppNote(note) {
-      const before = (await loadAppNotes())[note.id] ?? null;
-      await store.saveAppNote(note);
-      appNotes = loadAppNotes().then((current) => ({ ...current, [note.id]: note }));
+    async saveChangeRequest(note) {
+      const before = (await loadChangeRequests())[note.id] ?? null;
+      await store.saveChangeRequest(note);
+      changeRequests = loadChangeRequests().then((current) => ({ ...current, [note.id]: note }));
       await log("app_note", note.id, before, note);
     },
 

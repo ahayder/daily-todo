@@ -1,11 +1,11 @@
 # Dev environment
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 ## How it works
 - pnpm. Dev server: `pnpm dev` on port 5005 (production DB!) or `pnpm dev:test` (local PocketBase). Lint: `pnpm lint`.
 - Env files: `.env.local` (prod URL + admin creds), `.env.test.local` (local DB). Both git-ignored.
 - **Git identity:** this repo commits as the personal GitHub account `ahayder` (repo-local `user.email = 2572383+ahayder@users.noreply.github.com`), remote `git@github.com-personal:ahayder/daily-todo.git`. The machine's global identity is a work account — check `git config user.email` before committing. The user usually uses GitHub Desktop.
-- Branches: work on `dev`; `main` is the PR base.
+- Branches: always work and commit on `dev`; `main` is the PR base. Don't create worktrees without asking the user; use a separate branch only when `dev` is busy or for an isolated test feature (user rule, 2026-10-30).
 - **gh CLI:** the default `gh` account is the work account (`ahayder-astra`). For PRs on `ahayder/daily-todo`, prefix each command with `GH_TOKEN="$(gh auth token --user ahayder)" gh ...` instead of switching accounts (the work account can't create PRs there).
 
 ## Gotchas

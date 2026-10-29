@@ -1,7 +1,7 @@
 import type { Dispatch, ReactNode } from "react";
 import type {
-  AppNoteKind,
-  AppNoteStatus,
+  ChangeRequestKind,
+  ChangeRequestStatus,
   AppState,
   CategoryTheme,
   ContentCard,
@@ -94,11 +94,11 @@ export type AppAction =
   | { type: "update-content-series"; seriesId: string; title: string; about: string }
   | { type: "delete-content-series"; seriesId: string }
   | { type: "set-content-card-series"; cardId: string; seriesId: string | null }
-  | { type: "create-app-note"; text: string; kind: AppNoteKind; screen: string }
-  | { type: "update-app-note"; noteId: string; text?: string; kind?: AppNoteKind; status?: AppNoteStatus }
-  /** Soft delete: sets deletedAt. App notes are never removed. */
-  | { type: "delete-app-note"; noteId: string }
-  | { type: "restore-app-note"; noteId: string }
+  | { type: "create-change-request"; text: string; kind: ChangeRequestKind; screen: string }
+  | { type: "update-change-request"; noteId: string; text?: string; kind?: ChangeRequestKind; status?: ChangeRequestStatus }
+  /** Soft delete: sets deletedAt. Change requests are never removed. */
+  | { type: "delete-change-request"; noteId: string }
+  | { type: "restore-change-request"; noteId: string }
   | { type: "create-planner-preset"; name?: string }
   | { type: "duplicate-planner-preset"; presetId: string }
   | { type: "delete-planner-preset"; presetId: string }

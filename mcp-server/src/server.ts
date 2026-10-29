@@ -4,17 +4,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { DEFAULT_TIME_ZONE } from "@/lib/memory/dates";
-import { APP_NOTE_KINDS, CONTENT_PLATFORMS, DECISION_STATUSES, LIFE_AREAS, MEMORY_KINDS } from "@/lib/types";
+import { CHANGE_REQUEST_KINDS, CONTENT_PLATFORMS, DECISION_STATUSES, LIFE_AREAS, MEMORY_KINDS } from "@/lib/types";
 import { createPocketBaseStore, type AppStore } from "./content-store";
 import { withHistory } from "./history";
 import * as memory from "./memory-tools";
 import {
-  addAppNote,
+  addChangeRequest,
   addIdea,
-  getAppNote,
-  listAppNotes,
-  setAppNoteDeletedTool,
-  updateAppNoteTool,
+  getChangeRequest,
+  listChangeRequests,
+  setChangeRequestDeletedTool,
+  updateChangeRequestTool,
   addSeries,
   getCard,
   listBoard,
@@ -219,15 +219,15 @@ function buildServer(baseStore: AppStore, options: { source: string; timeZone: s
     run((args) => setCardSeries(store, args)),
   );
 
-  const noteParam = z.string().describe("App note id (best) or part of its text");
-  const noteKind = z.enum(APP_NOTE_KINDS);
+  const noteParam = z.string().describe("Change request id (best) or part of its text");
+  const noteKind = z.enum(CHANGE_REQUEST_KINDS);
 
   server.registerTool(
-    "list_app_notes",
+    "list_change_requests",
     {
-      title: "List app notes",
+      title: "List change requests",
       description:
-        "Quick notes the user captured about the DailyTodo app itself (ideas, improvements, bugs). Open notes by default, newest first.",
+        "Change requests the user captured about the DailyTodo app itself (ideas, improvements, bugs). Open ones by default, newest first.",
       inputSchema: {
         status: z.enum(["open", "done", "all"]).optional(),
         kind: noteKind.optional(),
@@ -235,36 +235,36 @@ function buildServer(baseStore: AppStore, options: { source: string; timeZone: s
       },
       annotations: readOnly,
     },
-    run((args) => listAppNotes(store, args)),
+    run((args) => listChangeRequests(store, args)),
   );
 
   server.registerTool(
-    "get_app_note",
+    "get_change_request",
     {
-      title: "Get an app note",
-      description: "One app note in full.",
+      title: "Get a change request",
+      description: "One change request in full.",
       inputSchema: { note: noteParam },
       annotations: readOnly,
     },
-    run(({ note }) => getAppNote(store, note)),
+    run(({ note }) => getChangeRequest(store, note)),
   );
 
   server.registerTool(
-    "add_app_note",
+    "add_change_request",
     {
-      title: "Add an app note",
+      title: "Add a change request",
       description: "Save a new note about the DailyTodo app: an idea, improvement or bug (user story welcome).",
       inputSchema: { text: z.string(), kind: noteKind.optional().describe("Defaults to idea") },
       annotations: write,
     },
-    run((args) => addAppNote(store, args)),
+    run((args) => addChangeRequest(store, args)),
   );
 
   server.registerTool(
-    "update_app_note",
+    "update_change_request",
     {
-      title: "Update an app note",
-      description: "Change an app note's text, type, or status (open/done). Only the fields given change.",
+      title: "Update a change request",
+      description: "Edit a change request's text, type, or status (open/done). Only the fields given change.",
       inputSchema: {
         note: noteParam,
         text: z.string().optional(),
@@ -273,29 +273,29 @@ function buildServer(baseStore: AppStore, options: { source: string; timeZone: s
       },
       annotations: write,
     },
-    run((args) => updateAppNoteTool(store, args)),
+    run((args) => updateChangeRequestTool(store, args)),
   );
 
   server.registerTool(
-    "delete_app_note",
+    "delete_change_request",
     {
-      title: "Delete an app note (soft)",
-      description: "Soft-delete an app note: it is hidden but kept, and can be brought back with restore_app_note.",
+      title: "Delete a change request (soft)",
+      description: "Soft-delete a change request: it is hidden but kept, and can be brought back with restore_change_request.",
       inputSchema: { note: noteParam },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    run(({ note }) => setAppNoteDeletedTool(store, { note, deleted: true })),
+    run(({ note }) => setChangeRequestDeletedTool(store, { note, deleted: true })),
   );
 
   server.registerTool(
-    "restore_app_note",
+    "restore_change_request",
     {
-      title: "Restore an app note",
-      description: "Bring back a soft-deleted app note.",
+      title: "Restore a change request",
+      description: "Bring back a soft-deleted change request.",
       inputSchema: { note: noteParam },
       annotations: write,
     },
-    run(({ note }) => setAppNoteDeletedTool(store, { note, deleted: false })),
+    run(({ note }) => setChangeRequestDeletedTool(store, { note, deleted: false })),
   );
 
   // ---- External brain ----

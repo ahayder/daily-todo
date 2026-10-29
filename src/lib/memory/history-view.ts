@@ -61,7 +61,7 @@ const NOUNS: Record<ChangeEntityKind, string> = {
   repeat: "repeat",
   content_card: "video",
   content_board: "content board",
-  app_note: "app note",
+  app_note: "change request",
 };
 
 const FIELD_WORDS: Record<string, string> = {
@@ -126,7 +126,7 @@ const CREATED: Partial<Record<ChangeEntityKind, string>> = {
   follow_up: "Added follow-up",
   repeat: "Added repeat",
   content_card: "Saved video idea",
-  app_note: "Saved app note",
+  app_note: "Saved change request",
 };
 
 /** One change in plain words, e.g. `Finished “Send link”` or `Moved “Send link” to the Shelf`. */
