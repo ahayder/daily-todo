@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/blocks/page-header";
 import { PlannerSetupDialog } from "@/components/planner/planner-view";
 import { NowCard } from "@/components/signature/now-card";
 import { WashiTag } from "@/components/signature/washi-tag";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { setPingsEnabled, usePingsEnabled } from "@/lib/ping-settings";
 import { DEFAULT_TIME_ZONE, todayIn, weekdayOf } from "@/lib/memory/dates";
@@ -71,7 +71,6 @@ export function TodayView() {
     [preset, state.memory.repeat, state.memory.task, today],
   );
   const now = getNow(view, minutes);
-  const isWorkday = !["sat", "sun"].includes(weekdayOf(today));
   // Pings only exist in the desktop app.
   const [isDesktop] = useState(() => typeof window !== "undefined" && isTauri());
   const pingsEnabled = usePingsEnabled();
@@ -155,11 +154,6 @@ export function TodayView() {
           subtitle={`${longDate(today)} · your plan is a guide, not a rule`}
           actions={
             <>
-              {isWorkday ? (
-                <Link href="/standup" className={buttonVariants({ variant: "ghost", size: "sm", className: "pointer-coarse:h-11" })}>
-                  Standup agenda
-                </Link>
-              ) : null}
               {isDesktop ? (
                 <IconButton
                   label={pingsEnabled ? "Turn desktop pings off" : "Turn desktop pings on"}

@@ -24,7 +24,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { toISODate } from "@/lib/date";
 import { getDayLabel, getMonthLabel, getYearMonth } from "@/lib/date";
 import type { AppAction } from "@/components/app/app-context";
-import { ConfirmDialog } from "@/components/blocks/confirm-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth/auth-context";
@@ -37,15 +36,11 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  Copy,
   FilePlus2,
   FileText,
   Folder,
   FolderOpen,
   FolderPlus,
-  PanelsTopLeft,
-  Plus,
-  Trash2,
   ArrowDownToLine,
   LoaderCircle,
   LogOut,
@@ -575,8 +570,6 @@ function NotesTree({
 
 export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   const [activeDraggedNoteId, setActiveDraggedNoteId] = useState<string | null>(null);
-  const [presetToDelete, setPresetToDelete] = useState<{ id: string; name: string } | null>(null);
-  const [isPresetDeleteOpen, setIsPresetDeleteOpen] = useState(false);
   const { session } = useAuth();
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -613,15 +606,11 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
     months.get(month)?.push(date);
   }
 
-  const plannerPresets = Object.values(state.plannerPresets).sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt),
-  );
   const themeMode = mounted ? state.uiState.themeMode : "dark";
   const ThemeIcon = THEME_ICONS[themeMode];
   const nextThemeMode = THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
 
   const isTodosView = !mounted || state.uiState.lastView === "todos";
-  const isPlannerView = mounted && state.uiState.lastView === "planner";
 
   const handleDragEnd = (event: DragEndEvent) => {
     const noteId = event.active.data.current?.noteId as string | undefined;
@@ -646,7 +635,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
   };
 
   return (
-    <aside className={cn("sidebar", isPlannerView && "sidebar--planner")}>
+    <aside className="sidebar">
       {isTodosView && mounted && (
         <button
           type="button"
@@ -656,86 +645,33 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
           className="today-btn"
         >
           <CalendarDays className="h-4 w-4" />
-          <span>Today</span>
+          <span>Today&apos;s page</span>
         </button>
       )}
 
       {!isTodosView && mounted && (
         <div className="sidebar-section-header">
           <span className="sidebar-section-label">
-            {isPlannerView ? (
-              <>
-                <PanelsTopLeft className="h-3.5 w-3.5" />
-                Daily Plans
-              </>
-            ) : (
-              <>
-                <FileText className="h-3.5 w-3.5" />
-                Notes
-              </>
-            )}
+            <FileText className="h-3.5 w-3.5" />
+            Notes
           </span>
           <div className="flex items-center gap-1">
-            {isPlannerView ? (
-              <>
-                {state.uiState.selectedPlannerPresetId && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="sidebar-add-btn"
-                        onClick={() =>
-                          dispatch({
-                            type: "duplicate-planner-preset",
-                            presetId: state.uiState.selectedPlannerPresetId!,
-                          })
-                        }
-                        aria-label="Duplicate plan"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      Duplicate plan
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="sidebar-add-btn"
-                      onClick={() => dispatch({ type: "create-planner-preset" })}
-                      aria-label="New plan"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    New plan
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="sidebar-add-btn"
-                  onClick={() => dispatch({ type: "create-note-folder" })}
-                  aria-label="New folder"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-add-btn"
-                  onClick={() => dispatch({ type: "create-note" })}
-                  aria-label="New note"
-                >
-                  <FilePlus2 className="h-3.5 w-3.5" />
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              className="sidebar-add-btn"
+              onClick={() => dispatch({ type: "create-note-folder" })}
+              aria-label="New folder"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              className="sidebar-add-btn"
+              onClick={() => dispatch({ type: "create-note" })}
+              aria-label="New note"
+            >
+              <FilePlus2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}
@@ -747,7 +683,7 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDraggedNoteId(null)}
       >
-      <ScrollArea className={cn("flex-1 min-h-0", isPlannerView && "sidebar-plan-scroll")}>
+      <ScrollArea className="flex-1 min-h-0">
           {!mounted ? null : isTodosView ? (
             <div className="sidebar-tree">
               {Array.from(groupedYears.keys())
@@ -817,57 +753,6 @@ export function Sidebar({ state, dispatch, sync, retrySync }: Props) {
                     </div>
                   );
                 })}
-            </div>
-          ) : isPlannerView ? (
-            <div className="notes-list">
-              {plannerPresets.map((preset) => (
-                <div
-                  key={preset.id}
-                  className={cn(
-                    "sidebar-item-row",
-                    state.uiState.selectedPlannerPresetId === preset.id && "sidebar-item-row--active",
-                  )}
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "note-item sidebar-item-button",
-                      state.uiState.selectedPlannerPresetId === preset.id && "note-item--active",
-                    )}
-                    onClick={() => dispatch({ type: "select-planner-preset", presetId: preset.id })}
-                  >
-                    <span className="note-item-title">{preset.name}</span>
-                  </button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="sidebar-row-action sidebar-row-action--danger"
-                        aria-label={`Delete ${preset.name}`}
-                        onClick={() => {
-                          setPresetToDelete({ id: preset.id, name: preset.name });
-                          setIsPresetDeleteOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="text-[0.8125rem]">
-                      Delete plan
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              ))}
-              <ConfirmDialog
-                open={isPresetDeleteOpen}
-                onOpenChange={setIsPresetDeleteOpen}
-                title={`Delete "${presetToDelete?.name ?? ""}"?`}
-                description="All of its weekday rhythms will be deleted too."
-                confirmLabel="Delete plan"
-                onConfirm={() => {
-                  if (presetToDelete) dispatch({ type: "delete-planner-preset", presetId: presetToDelete.id });
-                }}
-              />
             </div>
           ) : (
             <div className="notes-list">

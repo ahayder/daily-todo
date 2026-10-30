@@ -16,6 +16,22 @@
         "dev:test"
       ],
       "port": 5005
+    },
+    {
+      "name": "dev-test-5006",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090",
+        "NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false",
+        "pnpm",
+        "exec",
+        "next",
+        "dev",
+        "--webpack",
+        "-p",
+        "5006"
+      ],
+      "port": 5006
     }
   ]
 }

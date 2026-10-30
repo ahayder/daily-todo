@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, History } from "lucide-react";
+import { History } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useAppState } from "@/components/app/app-context";
@@ -90,13 +90,6 @@ export function HistoryView() {
     <div className="h-full min-h-0 overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pt-4 pb-12 sm:px-6">
         <div className="flex flex-col gap-2">
-          <Link
-            href="/today"
-            className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            Today
-          </Link>
           <PageHeader
             title="History"
             subtitle="Every change, by you and your AI chats. Undo hides a change — nothing is ever deleted, so you can bring it back."

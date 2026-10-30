@@ -168,7 +168,8 @@ select {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  overflow: hidden;
+  /* clip, not hidden: hidden boxes can still be scrolled by focus (e.g. an sr-only label), shifting the whole app. */
+  overflow: clip;
   position: relative;
 }
 
@@ -338,61 +339,14 @@ select {
 
 @media (max-width: 639px) {
   .top-navbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    height: auto;
-    min-height: 52px;
-    max-height: 120px;
-    gap: 0.375rem 0.5rem;
-    padding: 0.5rem 0.75rem;
-    overflow: hidden;
-    transition:
-      max-height 180ms ease,
-      min-height 180ms ease,
-      padding 180ms ease,
-      border-color 180ms ease,
-      transform 180ms ease;
-  }
-
-  .top-navbar--mobile-hidden {
-    min-height: 0;
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-bottom-color: transparent;
-    transform: translateY(-100%);
-    pointer-events: none;
+    padding: 0 0.75rem;
   }
 
   .top-navbar__brand {
     min-width: 0;
   }
 
-  .top-navbar .nav-pills {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .top-navbar .nav-pills::-webkit-scrollbar {
-    display: none;
-  }
-
-  .top-navbar .nav-pill {
-    flex: 1;
-    padding-right: 0.5rem;
-    padding-left: 0.5rem;
-    font-size: 0.75rem;
-    text-align: center;
-    white-space: nowrap;
-  }
-
   .top-navbar__actions {
-    grid-column: 2;
-    grid-row: 1;
     gap: 0;
   }
 
@@ -403,51 +357,11 @@ select {
   }
 }
 
-@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
-  .top-navbar {
-    transition: none;
-  }
-}
-
 .app-logo {
   width: 20px;
   height: 20px;
   border-radius: 5px;
   background: var(--brand);
-}
-
-.nav-pills {
-  display: flex;
-  gap: 2px;
-  background: color-mix(in srgb, var(--ink-700) 8%, transparent);
-  padding: 3px;
-  border-radius: 10px;
-}
-
-.nav-pill {
-  padding: 5px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-700);
-  border-radius: 7px;
-  text-decoration: none;
-  transition: all 180ms ease;
-  user-select: none;
-}
-
-.nav-pill:hover {
-  color: var(--ink-900);
-  background: color-mix(in srgb, var(--ink-700) 10%, transparent);
-}
-
-.nav-pill--active {
-  background: var(--paper-strong);
-  color: var(--ink-900);
-  box-shadow: 0 1px 3px rgba(31, 36, 48, 0.08);
-}
-
-.nav-pill--active:hover {
-  background: var(--paper-strong);
 }
 
 .theme-cycle-btn {
@@ -2187,64 +2101,6 @@ select {
     max-height: 220px;
   }
 
-  .sidebar--planner {
-    min-height: 68px;
-    max-height: 68px;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.55rem 0.75rem;
-  }
-
-  .sidebar--planner .sidebar-section-header {
-    flex: 0 0 auto;
-    gap: 0.4rem;
-  }
-
-  .sidebar--planner .sidebar-section-label {
-    white-space: nowrap;
-  }
-
-  .sidebar--planner .sidebar-plan-scroll {
-    min-width: 0;
-    min-height: 48px;
-  }
-
-  .sidebar--planner .sidebar-plan-scroll [data-slot="scroll-area-viewport"] {
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .sidebar--planner .sidebar-plan-scroll [data-slot="scroll-area-viewport"]::-webkit-scrollbar {
-    display: none;
-  }
-
-  .sidebar--planner .notes-list {
-    width: max-content;
-    min-width: 100%;
-    flex-direction: row;
-    gap: 0.35rem;
-    padding-bottom: 0;
-  }
-
-  .sidebar--planner .sidebar-item-row {
-    width: 158px;
-    min-width: 158px;
-    border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
-    border-radius: 10px;
-  }
-
-  .sidebar--planner .note-item {
-    min-height: 46px;
-    padding: 0.38rem 0.5rem;
-  }
-
-  .sidebar--planner .sidebar-footer {
-    display: none;
-  }
-
   .daily-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -2305,32 +2161,6 @@ select {
 }
 
 @media (max-width: 639px) {
-  .sidebar--planner {
-    min-height: 60px;
-    max-height: 60px;
-    gap: 0.45rem;
-    padding: 0.4rem 0.55rem;
-  }
-
-  .sidebar--planner .sidebar-section-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    clip-path: inset(50%);
-  }
-
-  .sidebar--planner .sidebar-item-row {
-    width: 138px;
-    min-width: 138px;
-  }
-
-  .sidebar--planner .note-item {
-    min-height: 44px;
-  }
-
   .note-header,
   .todo-pane-header {
     padding: 0.8rem 0.9rem;
@@ -2565,16 +2395,6 @@ select {
 
 .dark .top-navbar {
   background: color-mix(in srgb, var(--paper-strong) 94%, transparent);
-}
-
-.dark .nav-pills {
-  background: color-mix(in srgb, var(--ink-700) 12%, transparent);
-}
-
-.dark .nav-pill--active,
-.dark .nav-pill--active:hover {
-  background: var(--planner-track);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .dark .shadow-warm {
