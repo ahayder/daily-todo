@@ -256,7 +256,7 @@ export function ContentPlannerView({
       style={typographyStyle}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-10 sm:px-6 lg:h-full lg:pb-4">
-        <PageHeader title="Content" actions={fontControls} />
+        <PageHeader title="Content Planner" actions={fontControls} />
         <WeekStrip
           shippedThisWeek={shippedThisWeek}
           nextUpCard={nextUpCard}

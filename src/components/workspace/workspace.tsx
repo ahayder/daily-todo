@@ -13,13 +13,16 @@ import { ProjectView } from "@/components/memory/project-view";
 import { StandupView } from "@/components/memory/standup-view";
 import { HistoryView } from "@/components/today/history-view";
 import { PingScheduler } from "@/components/today/ping-scheduler";
+import { TodayTabs } from "@/components/today/today-tabs";
 import { TodayView } from "@/components/today/today-view";
 import { TodosView } from "@/components/todos/todos-view";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { MobileTabBar } from "@/components/workspace/mobile-tab-bar";
 import { Sidebar } from "@/components/workspace/sidebar";
 import { TopNavbar } from "@/components/workspace/top-navbar";
 import { CONTENT_FONT_SCALE_DEFAULT } from "@/lib/content-font-scale";
 import type { ViewMode } from "@/lib/types";
+import { isFullWidthView, isTodayAreaView } from "@/lib/views";
 
 type Props = {
   forcedView?: ViewMode;
@@ -30,12 +33,8 @@ export function Workspace({ forcedView }: Props) {
   const activeView = forcedView ?? state.uiState.lastView;
   const isFocusMode = state.uiState.isFocusMode;
   const isContentPlanner = activeView === "content-planner";
-  const isPlanner = activeView === "planner";
-  // Today and History are full-width pages without the Todos/Notes sidebar.
-  const isFullWidth =
-    isContentPlanner || isPlanner || ["today", "history", "memory", "project", "standup"].includes(activeView);
+  const isFullWidth = isFullWidthView(activeView);
   const contentFontScale = state.uiState.contentFontScale ?? CONTENT_FONT_SCALE_DEFAULT;
-  const previousViewRef = useRef<ViewMode | null>(null);
   const [isChangeRequestsOpen, setIsChangeRequestsOpen] = useState(false);
   // What the user was working in, so closing the note dialog puts them back.
   const changeRequestsReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -59,13 +58,6 @@ export function Workspace({ forcedView }: Props) {
       dispatch({ type: "set-view", view: forcedView });
     }
   }, [dispatch, forcedView, state.uiState.lastView]);
-
-  useEffect(() => {
-    if (activeView === "planner" && previousViewRef.current !== "planner") {
-      dispatch({ type: "set-sidebar-collapsed", isCollapsed: true });
-    }
-    previousViewRef.current = activeView;
-  }, [activeView, dispatch]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -155,6 +147,13 @@ export function Workspace({ forcedView }: Props) {
         isReadOnly={sync.isReadOnly}
         returnFocusRef={changeRequestsReturnFocusRef}
       />
+
+      {/* Above the body (not inside <main>) so the tabs stay put when Journal's sidebar stacks on top on small screens. */}
+      {!isFocusMode && isTodayAreaView(activeView) ? (
+        <div className="shrink-0 border-b border-border bg-background px-4 py-2 sm:px-6">
+          <TodayTabs view={activeView} />
+        </div>
+      ) : null}
 
       <div
         className={
@@ -248,6 +247,8 @@ export function Workspace({ forcedView }: Props) {
           )}
         </main>
       </div>
+
+      {!isFocusMode ? <MobileTabBar view={activeView} dispatch={dispatch} /> : null}
     </div>
   );
 }

@@ -1,10 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Workspace } from "@/components/workspace/workspace";
 import { createInitialState } from "@/lib/store";
 
 const mockUseAppState = vi.fn();
 const mockContentPlannerView = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 
 vi.mock("@/components/app/app-context", () => ({
   useAppState: () => mockUseAppState(),
@@ -20,6 +24,7 @@ vi.mock("@/components/notes/notes-view", () => ({
 
 vi.mock("@/components/planner/planner-view", () => ({
   PlannerView: () => <div data-testid="planner-view" />,
+  PlannerSetupDialog: () => null,
 }));
 
 vi.mock("@/components/content-planner-view", () => ({
@@ -165,7 +170,7 @@ describe("Workspace", () => {
     ).not.toBeNull();
   });
 
-  test("collapses the sidebar when entering the daily planner", () => {
+  test("shows the Today tabs on the journal but not on the daily planner", () => {
     const state = createInitialState("2026-03-11");
     state.uiState.lastView = "todos";
     state.uiState.isSidebarCollapsed = false;
@@ -194,13 +199,18 @@ describe("Workspace", () => {
       retrySync: vi.fn(),
     });
 
-    render(<Workspace forcedView="planner" />);
+    const { rerender } = render(<Workspace forcedView="todos" />);
 
-    expect(dispatch).toHaveBeenCalledWith({ type: "set-view", view: "planner" });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "set-sidebar-collapsed",
-      isCollapsed: true,
-    });
+    const tabs = screen.getByRole("navigation", { name: "Today" });
+    expect(within(tabs).getByRole("link", { name: "Journal" })).toHaveAttribute("aria-current", "page");
+    expect(within(tabs).getByRole("link", { name: "Now" })).toHaveAttribute("href", "/today");
+    expect(within(tabs).getByRole("link", { name: "History" })).toBeInTheDocument();
+
+    rerender(<Workspace forcedView="planner" />);
+
+    expect(screen.queryByRole("navigation", { name: "Today" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar")).not.toBeInTheDocument();
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "set-sidebar-collapsed" }));
   });
 
   test("sets shared content font CSS variables on the shell", () => {

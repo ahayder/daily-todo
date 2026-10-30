@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useAppState } from "@/components/app/app-context";
+import { PageHeader } from "@/components/blocks/page-header";
 import { DEFAULT_TIME_ZONE, todayIn } from "@/lib/memory/dates";
 import { DECISION_STATUS_LABEL } from "@/components/memory/memory-parts";
 import { projectHref } from "@/lib/memory/memory-screen";
@@ -112,21 +113,10 @@ export function StandupView() {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-4 pb-12 sm:px-6">
-        <div className="flex flex-col gap-2">
-          <Link
-            href="/today"
-            className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            Today
-          </Link>
-          <h1 className="font-heading text-xl leading-tight font-bold text-foreground sm:text-2xl">
-            Standup · {shortDate(today)}, {STANDUP_TIME}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Built from your job tasks, decisions and follow-ups since {shortDate(agenda.since)}. Tick things off as you talk.
-          </p>
-        </div>
+        <PageHeader
+          title={`Standup · ${shortDate(today)}, ${STANDUP_TIME}`}
+          subtitle={`Built from your job tasks, decisions and follow-ups since ${shortDate(agenda.since)}. Tick things off as you talk.`}
+        />
 
         {sections.map((section) => (
           <section key={section.title} aria-labelledby={`standup-${section.title}`} className="flex flex-col gap-2">

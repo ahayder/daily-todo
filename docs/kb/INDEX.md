@@ -17,9 +17,9 @@ Read this first, then open only the pages that matter for the task.
 | [auth.md](auth.md) | PocketBase auth, dev workspace, dev auto-login, account menu, super-admin | Login, accounts, dev/test tools |
 | [desktop.md](desktop.md) | Tauri shell, updater, notification pings, releases + version gotchas | Desktop app or releases |
 | [testing.md](testing.md) | Vitest, how to check UI in the browser | Writing tests or verifying UI |
-| [ui-design.md](ui-design.md) | Pointers to DESIGN.md, UI skills (inventory), ui-qa agent, ConfirmDialog, sync pill, Tailwind v4 layer trap | Any UI change |
+| [ui-design.md](ui-design.md) | Pointers to DESIGN.md, UI skills (inventory), ui-qa agent, ConfirmDialog, sync pill, nav (4 top pills Today · Notes · Memory · Content Planner, phone tab bar, Today tabs, `src/lib/views.ts`), unlayered `button` font trap, Tailwind v4 layer trap | Any UI change; nav/layout/home-screen work |
 | [user-needs.md](user-needs.md) | How the user really works (2026-10-14 interview), life areas, "chat captures, the app shows" redesign (Today · Memory · Content, mockups + plan), Office Companion fold-in | Redesigning Todos, Daily Planner, Notes, home screen, nudges; MCP task/memory tools |
-| [decisions.md](decisions.md) | Product decisions the user made (and what they declined) | Before adding features or changing behavior |
+| [decisions.md](decisions.md) | Product decisions the user made (and what they declined), incl. the 2026-10-30 nav/home decision (built) | Before adding features or changing behavior; before nav/layout work |
 | [dev-environment.md](dev-environment.md) | Git identity, scripts, env files | Committing, pushing, running scripts |
 
 Other docs (not KB pages, but useful): `docs/pocketbase.md` (full PocketBase setup),

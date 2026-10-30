@@ -11,9 +11,10 @@ import {
   RefreshCw,
   MonitorDown,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
+import { useMemo, useState, useSyncExternalStore, type Dispatch } from "react";
 import type { AppAction } from "@/components/app/app-context";
 import { useDesktopUpdate } from "@/components/workspace/desktop-update-provider";
+import { MAIN_NAV } from "@/components/workspace/main-nav";
 import {
   CONTENT_FONT_SCALE_MAX,
   CONTENT_FONT_SCALE_MIN,
@@ -26,6 +27,7 @@ import {
 import type { AppContextValue } from "@/components/app/app-context.types";
 import type { AppState } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { isFullWidthView } from "@/lib/views";
 
 type Props = {
   state: AppState;
@@ -79,10 +81,14 @@ function formatRelativeLastSaved(lastSyncedAt: string | null) {
   return `Last saved ${formatLastSynced(lastSyncedAt)}`;
 }
 
+const navPillClass =
+  "inline-flex h-8 items-center rounded-full px-4 text-[0.8125rem] font-semibold whitespace-nowrap transition-[color,background-color] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring";
+const navPillActiveClass = "bg-primary text-primary-foreground";
+const navPillIdleClass = "text-muted-foreground hover:bg-card hover:text-foreground";
+
 export function TopNavbar({ state, dispatch, sync, retrySync, onOpenChangeRequests }: Props) {
   const desktopUpdate = useDesktopUpdate();
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -90,80 +96,14 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenChangeReques
   );
 
   const lastView = state.uiState.lastView;
-  // History is opened from Today, so it keeps Today highlighted.
-  const isToday = !mounted || lastView === "today" || lastView === "history" || lastView === "standup";
-  const isMemory = mounted && (lastView === "memory" || lastView === "project");
-  const hasNoSidebar =
-    mounted && ["today", "history", "memory", "project", "standup"].includes(lastView);
-  const isPlanner = mounted && lastView === "planner";
+  // Before mount the synced view isn't known yet, so Today (the home) is highlighted.
+  const activeView = mounted ? lastView : "today";
+  const hasNoSidebar = mounted && isFullWidthView(lastView);
   const isContentPlanner = mounted && lastView === "content-planner";
   const SidebarIcon = state.uiState.isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
   const showDesktopUpdater = mounted && desktopUpdate.isSupported;
   const isDecreaseFontDisabled = state.uiState.contentFontScale <= CONTENT_FONT_SCALE_MIN;
   const isIncreaseFontDisabled = state.uiState.contentFontScale >= CONTENT_FONT_SCALE_MAX;
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-
-    const mobileViewport = window.matchMedia("(max-width: 639px)");
-    const scrollPositions = new WeakMap<EventTarget, number>();
-
-    const handleScroll = (event: Event) => {
-      const scrollTarget = event.target;
-      if (!scrollTarget) return;
-
-      const scrollTop =
-        scrollTarget === document
-          ? window.scrollY
-          : scrollTarget instanceof Element
-            ? scrollTarget.scrollTop
-            : null;
-
-      if (scrollTop === null) return;
-
-      const previousScrollTop = scrollPositions.get(scrollTarget) ?? 0;
-      scrollPositions.set(scrollTarget, scrollTop);
-      const isAtBottom =
-        scrollTarget instanceof Element &&
-        scrollTop >= scrollTarget.scrollHeight - scrollTarget.clientHeight - 2;
-
-      if (!mobileViewport.matches) {
-        setIsMobileHeaderHidden(false);
-        return;
-      }
-
-      if (scrollTop <= 8) {
-        if (previousScrollTop > 8) {
-          setIsMobileHeaderHidden(false);
-        }
-        return;
-      }
-
-      if (scrollTop > previousScrollTop + 4) {
-        setIsMobileHeaderHidden(true);
-      } else if (scrollTop < previousScrollTop - 4 && !isAtBottom) {
-        setIsMobileHeaderHidden(false);
-      }
-    };
-
-    const handleViewportChange = () => {
-      if (!mobileViewport.matches) {
-        setIsMobileHeaderHidden(false);
-      }
-    };
-
-    document.addEventListener("scroll", handleScroll, true);
-    mobileViewport.addEventListener("change", handleViewportChange);
-
-    return () => {
-      document.removeEventListener("scroll", handleScroll, true);
-      mobileViewport.removeEventListener("change", handleViewportChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    setIsMobileHeaderHidden(false);
-  }, [lastView]);
 
   const desktopUpdateLabel =
     desktopUpdate.phase === "downloading"
@@ -253,19 +193,17 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenChangeReques
       className={cn(
         "top-navbar",
         isContentPlanner && "top-navbar--content-planner",
-        isMobileHeaderHidden && "top-navbar--mobile-hidden",
       )}
     >
       <div className="top-navbar__brand flex items-center gap-2.5">
-        {/* Today and History have no sidebar, so no toggle either. */}
-        {!isContentPlanner && !hasNoSidebar ? (
+        {/* Full-width pages have no sidebar, so no toggle either. */}
+        {!hasNoSidebar ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={() => dispatch({ type: "toggle-sidebar-collapsed" })}
                 aria-label={state.uiState.isSidebarCollapsed ? "Open sidebar" : "Collapse sidebar"}
-                data-planner-tour={isPlanner ? "sidebar-toggle" : undefined}
                 className="theme-cycle-btn"
               >
                 <SidebarIcon className="h-4 w-4" />
@@ -282,34 +220,24 @@ export function TopNavbar({ state, dispatch, sync, retrySync, onOpenChangeReques
         </span>
       </div>
 
-      <nav className="nav-pills" role="tablist" aria-label="Main navigation">
-        <Link
-          href="/today"
-          role="tab"
-          aria-selected={isToday}
-          className={cn("nav-pill", isToday && "nav-pill--active")}
-          onClick={() => dispatch({ type: "set-view", view: "today" })}
-        >
-          Today
-        </Link>
-        <Link
-          href="/memory"
-          role="tab"
-          aria-selected={isMemory}
-          className={cn("nav-pill", isMemory && "nav-pill--active")}
-          onClick={() => dispatch({ type: "set-view", view: "memory" })}
-        >
-          Memory
-        </Link>
-        <Link
-          href="/content-planner"
-          role="tab"
-          aria-selected={isContentPlanner}
-          className={cn("nav-pill", isContentPlanner && "nav-pill--active")}
-          onClick={() => dispatch({ type: "set-view", view: "content-planner" })}
-        >
-          Content Planner
-        </Link>
+      <nav aria-label="Main navigation" className="max-md:hidden">
+        <ul className="flex items-center gap-1 rounded-full bg-muted p-1">
+          {MAIN_NAV.map((item) => {
+            const isActive = item.isActive(activeView);
+            return (
+              <li key={item.key}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(navPillClass, isActive ? navPillActiveClass : navPillIdleClass)}
+                  onClick={() => dispatch({ type: "set-view", view: item.view })}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
       <div className="top-navbar__actions flex items-center gap-1">

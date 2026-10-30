@@ -1084,7 +1084,7 @@ export function createInitialState(todayISO: string): AppState {
       expandedYears: [todayISO.slice(0, 4)],
       expandedMonths: [getYearMonth(todayISO)],
       expandedNoteFolders: [defaultNotesFolder.id],
-      lastView: "todos",
+      lastView: "today",
       themeMode: "dark",
       categoryTheme: "normal",
       isFocusMode: false,

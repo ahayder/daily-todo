@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AuthProvider } from "@/components/auth/auth-context";
@@ -11,12 +11,16 @@ import {
 import { createInitialState } from "@/lib/store";
 import { createMockAuthRepository } from "@/test/repositories";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: ComponentProps<"a">) => <a {...props}>{children}</a>,
 }));
 
 describe("TopNavbar", () => {
-  test("shows sidebar toggle in todos and planner views", async () => {
+  test("shows the sidebar toggle in the journal but not on the full-width planner", async () => {
     const dispatch = vi.fn();
     const auth = createMockAuthRepository({
       userId: "user_1",
@@ -25,6 +29,7 @@ describe("TopNavbar", () => {
       accessToken: "token_1",
     });
     const dailyState = createInitialState("2026-03-10");
+    dailyState.uiState.lastView = "todos";
     const plannerState = createInitialState("2026-03-10");
     plannerState.uiState.lastView = "planner";
 
@@ -53,8 +58,9 @@ describe("TopNavbar", () => {
       </AuthProvider>,
     );
     expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
-    // Todos, Notes and the Daily Planner left the nav; the planner's editor opens from Today.
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Today", "Memory", "Content Planner"]);
+    // Todos (now Journal, a Today tab) and the Daily Planner (opens from Today) left the nav.
+    const navLinks = within(screen.getByRole("navigation", { name: "Main navigation" })).getAllByRole("link");
+    expect(navLinks.map((link) => link.textContent)).toEqual(["Today", "Notes", "Memory", "Content Planner"]);
     expect(screen.getByText(/Last saved/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Theme:/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Sign out/i })).not.toBeInTheDocument();
@@ -85,7 +91,7 @@ describe("TopNavbar", () => {
         />
       </AuthProvider>,
     );
-    expect(await screen.findByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collapse sidebar" })).not.toBeInTheDocument();
   });
 
   test("hides the sidebar toggle in the content planner while keeping sync status", async () => {
@@ -127,14 +133,11 @@ describe("TopNavbar", () => {
     expect(screen.queryByRole("button", { name: "Collapse sidebar" })).not.toBeInTheDocument();
     expect(screen.getByText(/Last saved/)).toBeInTheDocument();
     expect(screen.getByRole("banner")).toHaveClass("top-navbar--content-planner");
-    expect(screen.getByRole("tablist", { name: "Main navigation" })).toHaveClass(
-      "nav-pills",
-    );
+    expect(screen.getByRole("link", { name: "Content Planner" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText(/Last saved/).closest(".top-navbar__sync")).toBeInTheDocument();
   });
 
-  test("collapses the shared header while a mobile page scrolls down and restores it on scroll up", () => {
-    const dispatch = vi.fn();
+  test("shows Today, Notes, Memory and Content Planner pills and keeps Today highlighted in the journal", () => {
     const auth = createMockAuthRepository({
       userId: "user_1",
       email: "test@example.com",
@@ -142,22 +145,13 @@ describe("TopNavbar", () => {
       accessToken: "token_1",
     });
     const state = createInitialState("2026-03-10");
-    const originalMatchMedia = window.matchMedia;
+    state.uiState.lastView = "todos";
 
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      value: vi.fn().mockReturnValue({
-        matches: true,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }),
-    });
-
-    const { unmount } = render(
+    render(
       <AuthProvider repository={auth.repository}>
         <TopNavbar
           state={state}
-          dispatch={dispatch}
+          dispatch={vi.fn()}
           sync={{
             status: "synced",
             indicator: "saved",
@@ -177,33 +171,13 @@ describe("TopNavbar", () => {
         />
       </AuthProvider>,
     );
-    const scroller = document.createElement("div");
-    document.body.append(scroller);
-    Object.defineProperties(scroller, {
-      scrollHeight: { configurable: true, value: 200 },
-      clientHeight: { configurable: true, value: 100 },
-    });
 
-    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 80 });
-    fireEvent.scroll(scroller);
-    expect(screen.getByRole("banner")).toHaveClass("top-navbar--mobile-hidden");
-
-    const idleScroller = document.createElement("div");
-    document.body.append(idleScroller);
-    fireEvent.scroll(idleScroller);
-    expect(screen.getByRole("banner")).toHaveClass("top-navbar--mobile-hidden");
-
-    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 40 });
-    fireEvent.scroll(scroller);
-    expect(screen.getByRole("banner")).not.toHaveClass("top-navbar--mobile-hidden");
-
-    idleScroller.remove();
-    scroller.remove();
-    unmount();
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      value: originalMatchMedia,
-    });
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Notes" })).not.toHaveAttribute("aria-current");
+    expect(within(nav).getByRole("link", { name: "Memory" })).toHaveAttribute("href", "/memory");
+    expect(within(nav).getByRole("link", { name: "Content Planner" })).not.toHaveAttribute("aria-current");
+    expect(within(nav).queryByRole("link", { name: "Todos" })).not.toBeInTheDocument();
   });
 
   test("shows plain text saving status", () => {

@@ -1,5 +1,5 @@
 # User needs & Today redesign (proposal)
-Last verified: 2026-10-27
+Last verified: 2026-10-30
 
 How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
 (2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
@@ -41,8 +41,10 @@ sold through content), **personal**.
   `/Users/ahayder/.claude/plans/yes-look-it-up-warm-hinton.md` — `tasks` + `change_log`
   collections, MCP task/history tools, a `withHistory` wrapper.
 - Screens: **Today** (Todos + Daily Planner merged: Now card + guideline timeline + Shelf),
-  **Memory** (search → project cards → decisions + waiting on others), **Content**. As built, the
-  nav is Today · Memory plus the old pills (see [decisions.md](decisions.md)).
+  **Memory** (search → project cards → decisions + waiting on others), **Content**. Nav since
+  2026-10-30: Today is the single home with Now/Journal/Standup/History tabs inside it; pills
+  Today · Notes · Memory + "Plan" dropdown; bottom tab bar on phones (see [decisions.md](decisions.md),
+  [ui-design.md](ui-design.md) → "Nav").
 - UI review (ui-qa) outcomes already in the mockups: timeline rows show time + task only
   (details on expand); "Do today" opens a block picker; Now card has a "Not now" button; no
   D-codes in the UI; reuse the NowCard ring and WashiTag ("N days waiting"); headings ≤30px;

@@ -1,147 +1,133 @@
 # Repo research — DailyTodo (update run)
 
-Checked 2026-10-14 · mode `repo`, variant **update** (compared against v1 brain: AGENTS.md block `ui-ux-pro:brain:start v1`, `.design/scaffold.md` updated 2026-10-01, no `.brain/`).
+Checked 2026-10-30 · mode `repo`, variant **update** — compared against the v2 brain (AGENTS.md `ui-brain:start v2` block, `.design/DESIGN.md`, `.claude/skills/{ui-system,ui-components,ux-patterns,ui-custom-elements}` marked `ui-brain:skill v1`; last check 2026-10-14). 38 commits since then, mainly "external brain": Today, History, Memory, Project, Standup, app notes, desktop pings, MCP server. `docs/kb/` not read (kb-keeper owns it). No dev server started (`pnpm dev` = prod data).
 
-## 1. Stack
+## 1. Stack (unchanged since 2026-10-14)
 
 | Area | Fact |
 |---|---|
 | Framework | Next.js 16.1.6 App Router, React 19.2.3, TS 5 (confident — package.json) |
-| Platforms | Web + Tauri 2 desktop shell, `@tauri-apps/plugin-updater` (confident — package.json) |
-| Package manager | pnpm 8.7.1 (confident — package.json `packageManager`) |
-| Styling | Tailwind v4 (`@tailwindcss/postcss` ^4.2.1), `tw-animate-css`, one 5,012-line `src/app/globals.css` (confident) |
-| Components | shadcn ^4 on `@base-ui/react` ^1.2 (not Radix) (confident — package.json) |
-| Icons | lucide-react only (36 import sites; no tabler/heroicons) (confident — grep) |
-| Fonts | Baloo Da 2, Nunito, DM Mono via next/font (confident — src/app/layout.tsx:2) |
-| Editor | Tiptap 3 + Excalidraw 0.18; dnd-kit; canvas-confetti (confident) |
-| State/data | useReducer + Context, PocketBase 0.26, idb, zod 4 (confident) |
-| Tests | Vitest + Testing Library + jsdom; no Storybook (confident) |
+| Platforms | Web + Tauri 2 desktop (updater, notification plugin) (confident — package.json, f497e10) |
+| Styling | Tailwind v4.2 + `tw-animate-css`; `src/app/globals.css` 4,992 lines, mostly unlayered (layers only at :104, :4309, :4921–4949) (confident) |
+| Components | shadcn ^4 on `@base-ui/react` ^1.2 (confident) |
+| Icons / fonts | lucide-react only · Baloo Da 2, Nunito, DM Mono via next/font (confident — src/app/layout.tsx:2) |
+| State | useReducer + Context (`AppProvider`), PocketBase 0.26, per-record outbox (confident) |
+| Tests | Vitest 4 + Testing Library; no Storybook (confident) |
 
-## 2. Design system inventory (usage = non-test files importing it)
+## 2. Design system inventory (non-test importers, outside ui/ and blocks/)
 
-| Kind | Item | Uses | Where |
-|---|---|---|---|
-| block | `ConfirmDialog` | 1 | content-planner/series-detail |
-| block | `InlineComposer` | 1 | series-detail |
-| block | `PageHeader` | 1 | content-planner-view-root |
-| block | `EmptyState` | **0** | — |
-| block | `InlineAlert` | **0** | — |
-| block | `SegmentedControl` | **0** | — |
-| signature | `StageTrack` / `SoftCapBadge` | 3 / 1 | content planner |
-| signature | `NowCard` · `PriorityTab` · `WashiTag` | **0 · 0 · 0** | — |
-| ui | `IconButton` | 7 | all content-planner |
-| ui | `DropdownMenu` · `Dialog` | 4 · 4 | content-planner |
-| ui | `AlertDialog` (direct) | 5 screens | planner, notes, todos, sidebar, desktop-update |
-| ui | `Tooltip` | 13 | everywhere |
-| ui | `Skeleton` · `Checkbox` · `Select` · `Separator` | **0** each | — |
-| ui | toast `showUndoToast` | 2 | todos-view:1483, content-planner-view-root:150 |
-| hook | `useMediaQuery` | 1 | content-planner-view-root |
+| Item | Uses | Where |
+|---|---|---|
+| `ConfirmDialog` | 5 | series-detail, planner-view, sidebar, notes-view, todos-view |
+| `EmptyState` | 6 | memory-view, project-view, today-view, history-view, content-planner root, notes-view |
+| `PageHeader` | 4 | today-view, history-view, memory-view, content-planner root |
+| `InlineComposer` | 2 | today-view, series-detail |
+| `SegmentedControl` | 1 | app-notes-dialog (planner uses its own local `Segmented`, planner-view.tsx:648) |
+| `InlineAlert` | 0 | — |
+| `NowCard` / `WashiTag` | 1 / 3 | today-view / memory-parts, project-view, today-view |
+| `StageTrack` | 3 | content planner |
+| `PriorityTab` | **0** | nowhere (listed as a live custom element) |
+| `Skeleton` / `Checkbox` / `Select` | 0 / 0 / 0 | — |
 
-Tokens: `src/app/globals.css` (`:root`, `.dark`, `@theme inline`); names match DESIGN.md (core shadcn + `--p1..3*`, `--now-*`, `--washi`, `--rule`, `--rim`, `--card-shadow`, `--duration-ui`). Dark default (`dark` class on `<html>` in layout.tsx:39). Motion utilities: `animate-enter/settle/stamp`, `press`.
+Layout: one shell `src/components/workspace/workspace.tsx` → `TopNavbar` + optional `Sidebar` + `main`. Every route page is a one-liner `<Workspace forcedView="…"/>`.
 
 ## 3. Screens
 
-| Route | Rating | Why |
-|---|---|---|
-| `/content-planner` | **ok → near target** | Rebuilt after 10-01 with PageHeader, IconButton, StageTrack, DropdownMenu, showUndoToast; still 6 raw `<button>` |
-| `/planner` | legacy | 76 `[var(--…)]`; no NowCard/SegmentedControl; "Remove this block?" copy (planner-view.tsx:525) |
-| `/todos` | legacy | 2,071 lines, 104 `[var(--…)]`, hand-built dialogs, `window.confirm` (todos-view.tsx:1495) |
-| `/notes` | legacy | hand-built `.empty-view` empty states (notes-view.tsx:112–198), legacy vars |
-| shell (top-navbar, sidebar) | legacy | `text-[var(--ink-900)]`, `bg-[var(--brand)]`, `text-xs` tooltips |
-| auth / `/auth/reset` | legacy | 58 legacy vars in auth-gate |
-| `/`, `/daily` | redirect | both redirect to `/todos` |
+| Route | View file | Rating | Why |
+|---|---|---|---|
+| `/` | app/page.tsx | — | client redirect to `/today` |
+| `/today` | today/today-view.tsx | target-ready | PageHeader, NowCard, EmptyState, InlineComposer, WashiTag |
+| `/history` | today/history-view.tsx | target-ready | PageHeader + back link, EmptyState |
+| `/memory` | memory/memory-view.tsx | target-ready | PageHeader, EmptyState, tokens only |
+| `/memory/project?id=` | memory/project-view.tsx | ok | target tokens; hand-built header (:159–172), not PageHeader |
+| `/standup` | memory/standup-view.tsx | ok | target tokens; hand-built header (:117–129) |
+| `/content-planner` | content-planner/content-planner-view-root.tsx | target-ready | PageHeader — but titled "Content" (:259) vs nav "Content Planner" |
+| `/todos` | todos/todos-view.tsx (2,029 lines) | legacy | 62 `*-[var(--…)]` classes, no h1/PageHeader |
+| `/notes` | notes/notes-view.tsx | legacy | no page title; folder h2 only |
+| `/planner` | planner/planner-view.tsx | legacy | 46 `var(--ink/paper)` classes, local Segmented, hand h1 |
+| `/daily` | app/daily/page.tsx | — | server redirect to `/todos` (old alias) |
+| `/auth/reset` | auth | ok | outside shell |
 
-Validation candidates: **`/notes`** (small, clarity problem: hand-built empty states, delete confirm), **`/planner`** (should get NowCard + SegmentedControl), `/todos` (largest, riskiest).
+Validation candidates: **/todos** (legacy + the "two Todays" clarity problem), **/planner** (three names, dead sidebar toggle), **/standup** (new, small, hand header).
 
 ## 4. Repeated patterns done by hand (block candidates)
 
-- **Confirm dialogs via raw AlertDialog** instead of `ConfirmDialog`: notes-view.tsx:91,167 · planner-view.tsx:525 · todos-view.tsx:829,1189 · sidebar.tsx:865 · desktop-update-provider.tsx:470.
-- **Empty states not using `EmptyState`**: notes-view.tsx:112,123,189,198 · content-planner/content-empty-state.tsx (custom, OK as signature teaching state but not documented).
-- **Horizontal pill/chip strips**: week-strip.tsx, series-strip.tsx (both new, raw `<button>` + `shadow-[var(--rim)]`) — possible shared "ChipStrip".
+| Pattern | Files |
+|---|---|
+| Back link + title header (`← Today` / `← Memory` + h1) | history-view.tsx:93, standup-view.tsx:116, project-view.tsx:158 → add `back` prop to `PageHeader` |
+| Card row surface `rounded-xl bg-card px-3/4 py-2.5 shadow-[var(--rim)]` | memory-parts.tsx:42,107 · standup-view.tsx:143 · project-view.tsx:356 · memory-view.tsx:73,170,175 · history-view.tsx:42 → `ListCard` block |
+| Section pane `rounded-2xl bg-card p-3 shadow-[var(--rim)]` | today-view.tsx:205,330 · project-view.tsx:174 |
+| Page container `mx-auto max-w-{3xl,6xl} px-4 pt-4 pb-12 sm:px-6` | today, history, memory, project, standup (two widths) → `PageBody` layout |
 
-## 5. Consistency problems (whole app, tsx non-test)
+## 5. Consistency problems
 
-| Issue | Count | Top files |
+| Check | Count | Top files |
 |---|---|---|
-| `[var(--…)]` arbitrary classes | 299 | todos-view 104, planner-view 76, auth-gate 58, notes-view 16 |
-| legacy vars (`--paper/ink/brand/line/warn/priority/planner`) | 322 | same |
-| `text-xs` / `text-[11px]` | 46 | incl. primitives: ui/tooltip.tsx:70, ui/dropdown-menu.tsx:67,243, ui/select.tsx:105, ui/dialog.tsx:56 |
-| raw `<button>` | 78 | todos, sidebar, top-navbar (5), content-planner (6) |
-| `duration-N` | 19 | legacy screens |
-| hex in tsx | 12 · `text-white/bg-black/bg-white` 6 | (guess — legacy screens; not traced) |
-| `.planner-*` lines in globals.css | 368 matches | globals.css |
+| `bg/text/border-[var(--…)]` in tsx | 259 | todos-view 62, planner-view 46, auth-gate 33, desktop-update-provider 12, notes-view 12 |
+| hex in tsx | 14 | (low) |
+| `text-xs` (non-test) | 27 | sidebar tooltips (sidebar.tsx:697,713) etc. |
+| raw `<button>` | 84 | sidebar, todos, planner |
+| nav pills (globals.css:419–450, 2570) | — | legacy `--ink-700`/`--paper-strong`/`--planner-track`, radius 7px, 12px text on phones (:388) — DESIGN says `rounded-full`, active = `primary`, ≥13px |
+| new areas (memory/, today/) | 0 violations | only sanctioned `shadow-[var(--rim)]` |
 
 ## 6. Instruction files
 
-| File | UI content | Conflicts with brain |
-|---|---|---|
-| `CLAUDE.md` | Styling Removal, Tailwind layers, device-local UI state, defers UI to DESIGN.md | "New shadcn components: `npx shadcn@latest add`" vs ui-components "`pnpm exec shadcn add` … run `shadcn diff` first" (minor) |
-| `AGENTS.md` | v1 ui-ux-pro block, lines 35–88 | none; precedence clause gives UI to block + DESIGN.md |
-| `.claude/skills/{ui-system,ui-components,ux-patterns,ui-custom-elements}` | brain skills (`ui-ux-pro:skill v1`) | — |
-| `.agents/skills/tiptap-editor` | points to DESIGN.md tokens | none |
-| `.agents/skills/tauri-desktop` §3 | traffic-light / navbar alignment | none |
-| `.agents/skills/{state-persistence,vitest-testing}` | local-only UI state; test helpers | none |
-| `.claude/agents/kb-keeper.md` + `docs/kb/` (incl. `ui-design.md`) | KB; `ui-design.md` is pointers only (Last verified 2026-10-11) | none — defers to DESIGN.md |
-| `.cursor/`, `.github/copilot-instructions.md`, `.claude/commands/`, `.brain/` | absent | — |
+| File | UI content |
+|---|---|
+| CLAUDE.md | stack, safety, Tailwind layer rule, Styling Removal Rule; points UI to DESIGN.md — no conflict |
+| AGENTS.md | ui-brain v2 block (has "Every screen must be obvious") — consistent |
+| .design/DESIGN.md (223 lines) | source of truth; Quick card present |
+| .claude/skills/ui-* + ux-patterns | v1 skill marker; ux-patterns has Clarity section (:11) |
+| .agents/skills/{state-persistence,tauri-desktop,tiptap-editor,vitest-testing} | non-UI |
+| .brain/, .cursor/, .github/copilot-instructions.md, .claude/commands | absent |
 
 ## 7. Can it render?
 
-- `pnpm dev` → :5005 (**production PocketBase — real data**); `pnpm dev:test` → :5005 with local PB at 127.0.0.1:8090 (confident — package.json, .claude/launch.json).
-- No-login local workspace: `http://localhost:5005/<route>?devWorkspace=1` (confident — AGENTS.md; src/lib/dev-mode.ts). Env: `.env.local`, `.env.test.local` exist.
-- Screenshot: preview_start `dev-test` (or reuse a running :5005), open `/notes?devWorkspace=1`, 375px + 1280px, toggle `dark` class.
+`pnpm dev` → next dev :5005 against **production** PocketBase — don't use. `pnpm dev:test` → local PocketBase 127.0.0.1:8090 (must be running). Auth gate wraps the shell; `?devWorkspace=1` (src/lib/dev-mode.ts) gives a local workspace for screenshots. Screenshot: `pnpm dev:test` + browser at `localhost:5005/<route>?devWorkspace=1`, 375px + desktop, dark + light.
 
 ## 8. Similar helpers
 
-| Path | What it does | Overlaps | Overlap | Worth keeping |
-|---|---|---|---|---|
-| `.claude/agents/kb-keeper.md` + `docs/kb/` (14 pages, INDEX/README/decisions) | Project knowledge base; ask mode before planning, record mode after; main agents must not read `docs/kb/` | `brain` | **full** (same job: project memory, self-maintained by an agent) | Strong: CLAUDE.md + AGENTS.md + KB README all wire agents to it; decisions.md log; "trust code over page"; safety gotchas (prod PB, server-first sync) |
-| `docs/kb/ui-design.md` | UI pointer page | `brain` (UI slice) | partial | already defers to DESIGN.md |
-| `.agents/skills/vitest-testing` §3 "UI Interaction Standards" | test conventions | `ui-qa` | partial (unit tests, not visual/usability QA) | test helpers in `src/test/repositories.ts` |
-| any UI QA / a11y review agent | — | `ui-qa` | none found | — |
+| Path | What | Overlaps | Keep |
+|---|---|---|---|
+| .claude/agents/ui-qa.md | ui-brain QA agent (marker `ui-brain:qa v1`) | — skipped (ui-brain file) | — |
+| .claude/agents/kb-keeper.md | ask/record agent for `docs/kb/` project knowledge | `brain` — partial-to-full | the KB itself, ask-before/record-after workflow, server-first sync and PocketBase traps; keep kb-keeper as the project memory, point any `brain` agent at it rather than a second store |
 
 ## Drift
 
-**In code, not in skills**
-- Content-planner components added since 10-01 (series-strip, card-series-picker, series-detail, series-name-dialog, publish-info, week-strip, shoot-card-view, capture-box, ideas-review, content-shelf) — none in `ui-components`; Series chip is in DESIGN.md → Components but not in `ui-custom-elements`.
-- `content-planner/content-empty-state.tsx` (the "model" empty state per ux-patterns) is not listed as a block/signature.
-- `/daily` route (redirect) undocumented (trivial).
+| Kind | Finding | Evidence |
+|---|---|---|
+| In code, not in skills | Navigation standard lists 4 pills (Todos / Notes / Daily Planner / Content Planner); code has **6**: Today, Memory, Todos, Notes, Daily Planner, Content Planner, and `/` lands on Today | ux-patterns SKILL.md:59 vs top-navbar.tsx:287–340, app/page.tsx |
+| In code, not in skills | Layouts row says full-width = Today, History, Planner, Content Planner; also Memory, Project, Standup | ui-components SKILL.md:95 vs workspace.tsx:36 |
+| In code, not in skills | Memory/Project/Standup pieces (project step form, standup checklist, `projectHref`) not inventoried beyond `DecisionCard`/`WaitingList` | memory/project-view.tsx, standup-view.tsx |
+| Stale "Used in" | `PageHeader` "content planner" only (now 4); `EmptyState` "content planner" (now 6); `SegmentedControl` "not adopted" (app-notes uses it); `ConfirmDialog` ok | ui-components SKILL.md:66–72 |
+| In skills, unused in code | `PriorityTab` sticker tab — 0 importers | ui-custom-elements SKILL.md; grep |
+| Target not met in shell | DESIGN Navigation (active pill = `primary`, `rounded-full`, card track + rim) not implemented; nav still legacy CSS | DESIGN.md:115,141 vs globals.css:419–450,2574 |
+| Dead code vs brain | Sidebar "Daily Plans" section + `.sidebar--planner` CSS unreachable (Planner is full-width) | sidebar.tsx:664–720, globals.css:2307, workspace.tsx:36 |
+| Token restatement | none found outside DESIGN.md / globals.css | grep |
+| Conflicting rules | none | — |
+| Size vs budget | AGENTS block ~10 lines; DESIGN 223; skills 51–101 lines — within budget | wc |
+| Clarity rules | present (AGENTS block line "Every screen must be obvious"; ux-patterns `## Clarity`) | — |
+| Paths | all skill paths exist | ls |
 
-**In skills, not (really) in code**
-- `ui-components` "Example screen" claims are false: `EmptyState` (notes, todo groups), `InlineAlert` (auth, note load errors), `SegmentedControl` (planner, content planner), `PageHeader` (todos pane, planner), `ConfirmDialog` (todos workspace menu, notes) — actual uses are 0/0/0/content-planner-only/series-detail-only.
-- `NowCard`, `PriorityTab`, `WashiTag` have 0 uses; `ui-custom-elements` says they appear in Planner, todo groups, todo rows.
-- `Skeleton`, `Checkbox`, `Select`, `Separator` unused.
+## Structure review (big picture)
 
-**Dead paths:** none — every path in AGENTS block, skills and DESIGN.md → Files exists (confident — ls). `.design/directions/_source/` referenced (not verified in depth).
+**Nav today** (top-navbar.tsx:287–340): `Today · Memory · Todos · Notes · Daily Planner · Content Planner` + app-note button, sync pill, updater, A-/A+. Sub-pages highlight a parent: History and **Standup** → Today, Project → Memory (:94–95). No grouping, no icons, all equal weight.
 
-**Token values outside DESIGN.md:** `ui-system` restates `--radius 0.875rem` (SKILL.md:47) and `300ms` cap (:66); `ux-patterns` "~200ms" (:18). Small but against DESIGN.md's own "never restate values" note.
-
-**Internal DESIGN.md inconsistencies**
-- NowCard row says "`--surface-shadow`" (a legacy alias) — Product tokens say `shadow-card`.
-- Color rule says dark rims = `inset … var(--rule)`; product table defines `--rim` used as `shadow-[var(--rim)]`.
-- Legacy vs target still says "Target-ready: none yet"; Content Planner now near target and not listed.
-- `--warning` is "sync issue, offline", but the new offline-readonly sync pill uses `text-destructive` (top-navbar.tsx:~205).
-
-**Hardcoded values in UI changed since 2026-10-01** (20 tsx files): 0 hex/rgb/oklch, 0 `text-white`. Remaining: legacy `[var(--ink-900|brand|brand-soft|warn)]` ×5 in top-navbar.tsx:272,369,371,385 (touched in f026d02, only partly migrated); `text-xs` tooltips top-navbar.tsx:266,389,418,440 + workspace.tsx:106; raw `<button>` ×6 in content-planner; `duration-[1000ms]` now-card.tsx:65 (documented exception); `dark:shadow-[…]` override stage-track.tsx:39 (ui-system says no `dark:` overrides). `text-[0.8125rem]` ×34 = sanctioned 13px.
-
-**Rule conflicts elsewhere:** CLAUDE.md shadcn command vs ui-components (above). Primitives themselves (`ui/tooltip.tsx:70` etc.) use `text-xs`, contradicting "no `text-xs`".
-
-**Size budget**
-| File | Lines | Budget | Status |
-|---|---|---|---|
-| AGENTS.md brain block | 54 (lines 35–88) | ≤ 15 | **over ×3.6** |
-| ui-system / ui-components / ux-patterns / ui-custom-elements | 66 / 70 / 58 / 50 | ≤ 150 | ok |
-| DESIGN.md | 208 | ~3-min read | ok-ish |
-
-**Missing clarity rules:** no "Every screen must be obvious" section in the AGENTS block; no Clarity section in `ux-patterns`. Live clarity issues: codebase jargon "PocketBase" in sync pill text (top-navbar.tsx:212,224,239); "Remove" vs "Delete" (planner-view.tsx:525).
-
-**Quick card:** DESIGN.md has **no Quick card** (opens with Direction/Language/Personality lines, then Principles) and no "Read more" task→section map.
-
-**Format drift:** v1 markers `ui-ux-pro:*` and state file `.design/scaffold.md` (current format uses ui-brain markers / `.design/setup.md`).
+| # | Finding (clarity question failed) | Evidence |
+|---|---|---|
+| S1 | **Three "today" surfaces, two task systems.** Today (external-brain tasks + Now card + blocks + Shelf), Todos (daily-page todos with carryover; its sidebar has its *own* "Today" button), Planner "Now" (current block again). User can't tell where a task belongs or which "today" is real. *What is this for?* | today-view.tsx:18 (`lib/memory/tasks`), sidebar.tsx:650–660, planner-view.tsx:660 |
+| S2 | **Nav order mixes kinds**: daily-use (Today, Todos), reference (Memory, Notes), setup (Daily Planner = the template feeding Today's blocks), and a separate project (Content Planner) — flat list of 6, with the new home "Today" and old home "Todos" side by side (store default `lastView: "todos"`, store.ts:1086). *Where am I?* | top-navbar.tsx:287–340 |
+| S3 | **One area, three names**: nav "Daily Planner", Planner screen h1 "Your ideal days" / weekday name, sidebar label "Daily Plans"; Today empty state calls it "Daily Planner". Content area: nav "Content Planner", h1 "Content". | planner-view.tsx:286,546; sidebar.tsx:668; today-view.tsx:258; content-planner-view-root.tsx:259 |
+| S4 | **Dead control on Planner**: navbar shows the sidebar toggle on Planner, but Planner is full-width so nothing opens; the planner tour still points at it ("planner sidebar starts collapsed"). Preset create/duplicate lives only in that unreachable sidebar. *What happens next?* — nothing. | top-navbar.tsx:263, workspace.tsx:36, planner-tour.tsx:44–46 |
+| S5 | **Inconsistent page frame**: Today/History/Memory/Content use `PageHeader`; Project/Standup hand-roll it; Todos and Notes have **no page title**; Planner uses legacy h1. Two content widths (max-w-3xl vs 6xl). Primary action placement differs per area. | §3 table, §4 |
+| S6 | **Hidden sub-pages**: Standup is only reachable from a ghost button on Today on workdays; History only via text links; Project only from Memory cards. Highlighting Standup as "Today" is surprising. | today-view.tsx:141,238,362; top-navbar.tsx:94 |
+| S7 | **Mobile nav**: 6 pills in a horizontally scrolling row with hidden scrollbar at 12px; Daily/Content Planner likely off-screen at 375px with no cue; header auto-hides on scroll. No bottom nav. | globals.css:371–390, top-navbar.tsx:107 |
+| S8 | Sidebar only for Todos (date tree) and Notes (folders); fine, but Todos sidebar duplicates the job of Today/History (pick a day). | sidebar.tsx:650–800 |
 
 ## Open questions
 
-1. kb-keeper vs `brain`: (a) keep kb-keeper and connect it (recommended — wired into CLAUDE.md, AGENTS.md, KB README) · (b) merge into one · (c) replace with ui-brain's · (d) keep both.
-2. AGENTS block over budget: (a) trim to ≤15 lines, move detail to skills (recommended) · (b) keep as is.
-3. Offline sync pill color: (a) switch to `warning` per DESIGN.md · (b) keep destructive and update DESIGN.md.
-4. Unused blocks/signatures (EmptyState, InlineAlert, SegmentedControl, NowCard, PriorityTab, WashiTag): (a) keep, fix skill examples to say "not adopted yet" (recommended) · (b) adopt on next touch of Notes/Planner/Todos · (c) remove.
-5. Fix `text-xs` in shadcn primitives (tooltip, dropdown, select, dialog): (a) yes, routine compliance · (b) leave until touched.
+1. Is Todos (daily pages) being replaced by Today (external brain)? — (a) yes, merge/retire Todos · (b) both stay, different jobs · (c) Todos becomes a "journal/day log" under Notes.
+2. Should Daily Planner become a Today setting ("Plan my days") instead of a top-level tab? — (a) yes, move under Today · (b) keep top-level, rename · (c) keep as is.
+3. Nav grouping — (a) group: Today · Memory | Notes | Content · (b) keep flat 6 · (c) primary 3 + "More".
+4. Mobile — (a) bottom tab bar with 4–5 items · (b) keep scrolling pills, add overflow cue · (c) drawer.
+5. One name for the content area — (a) "Content" · (b) "Content Planner".
