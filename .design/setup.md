@@ -4,7 +4,7 @@ next: "Run /ui-brain:doctor after the next big UI change"
 waiting_for: ""
 brain_version: 2
 updated: 2026-10-14
-last_checked: 2026-10-14
+last_checked: 2026-10-30
 ---
 
 <!--
@@ -67,6 +67,12 @@ Visual direction: new — via makeover directions (Tiimo-like, dark-first, Benga
 - 2026-10-14 — Upgraded v1 → v2: renamed markers + `scaffold.md` → `setup.md`; block cut 54 → 11 lines (long rules moved to `ux-patterns` / `ui-system`); added Clarity, DESIGN.md Quick card, `ui-qa`; fixed 4 DESIGN.md contradictions; inventory +11 content-planner pieces, Series chip, "not adopted yet" marks
 - 2026-10-14 — Offline sync pill: user chose `warning` (amber) per DESIGN.md
 - 2026-10-14 — App-code fixes approved: top bar cleanup, `text-xs` in shadcn primitives, raw AlertDialog → `ConfirmDialog` (new `variant` prop)
+
+- 2026-10-30 — Doctor: 4 brain findings (nav/layout/inventory drift) + 7 app-structure findings (focus: layout, nav, structure)
+
+- 2026-10-30 — Structure decided (not built yet): Today is the one home; Todos daily pages become a Journal inside Today; two task lists merge over time (separate job)
+- 2026-10-30 — Nav decided: pills Today · Notes · Memory + "Plan" menu (Daily Planner, Content Planner); Journal, Standup, History = tabs/links inside Today
+- 2026-10-30 — Mobile nav decided: bottom tab bar (Today, Notes, Memory, Plan); desktop keeps top pills
 
 ## Validation notes
 

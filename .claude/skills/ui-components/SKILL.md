@@ -36,10 +36,11 @@ Blocks are the **target** even where legacy screens don't use them yet — adopt
 | Block | Import | Use when | Used in |
 |---|---|---|---|
 | `ConfirmDialog` | `@/components/blocks/confirm-dialog` | any confirm: big deletes (`variant="destructive"`, default) or a non-delete confirm (`variant="default"`). Never raw `AlertDialog` | series detail, notes, todos, planner, sidebar, desktop update |
-| `EmptyState` | `@/components/blocks/empty-state` | no items yet (`size="page"` or `"inline"`) | content planner (`ContentEmptyState`) |
+| `EmptyState` | `@/components/blocks/empty-state` | no items yet (`size="page"` or `"inline"`) | Today, History, Memory, Project |
 | `InlineComposer` | `@/components/blocks/inline-composer` | inline add: `line` (Enter, keeps focus) · `block` (⌘/Ctrl+Enter, Esc) | series detail |
-| `SegmentedControl` | `@/components/blocks/segmented-control` | 2–4 view states (Now/Set up, Todos/Daily note) | not adopted yet |
-| `PageHeader` | `@/components/blocks/page-header` | title + subtitle + meta chip + actions at the top of a page/pane | content planner |
+| `SegmentedControl` | `@/components/blocks/segmented-control` | 2–4 view states (Now/Set up, Todos/Daily note). Not for navigation | app notes dialog |
+| `AreaTabs` | `@/components/blocks/area-tabs` | links between the screens of one nav area (real routes, `aria-current`) — looks like `SegmentedControl` | Today tabs (`today/today-tabs.tsx`) |
+| `PageHeader` | `@/components/blocks/page-header` | title + subtitle + meta chip + actions at the top of a page/pane | content planner, Today, History, Standup, Memory |
 | `InlineAlert` | `@/components/blocks/inline-alert` | in-place error/notice (`tone="warn"|"info"`) | not adopted yet |
 | `useMediaQuery` + `MEDIA_QUERIES` | `@/hooks/use-media-query` | JS needs a breakpoint or pointer type (`touchFirst`, `desktop`, `compact`) | content planner |
 
@@ -93,9 +94,10 @@ Feature components — reuse inside the Content Planner; copy their pattern else
 
 | Layout | File | Used by |
 |---|---|---|
-| App shell (top nav + optional sidebar + main) | `src/components/workspace/workspace.tsx` | all routes; sidebar only on Todos/Notes (Today, History, Planner, Content Planner are full-width) |
-| Top nav (pills, sync pill, theme, A-/A+) | `src/components/workspace/top-navbar.tsx` | all routes (legacy styling) |
-| Sidebar (dates, notes tree, profile menu) | `src/components/workspace/sidebar.tsx` | Todos, Notes (legacy styling) |
+| App shell (top nav + Today tabs + optional sidebar + main + phone tab bar) | `src/components/workspace/workspace.tsx` | all routes; sidebar only on Journal (`todos`) and Notes — `isFullWidthView` in `src/lib/views.ts` |
+| Top nav (Today · Notes · Memory · Content Planner pills, sync pill, A-/A+) | `src/components/workspace/top-navbar.tsx` (items in `main-nav.ts`) | all routes; pills hidden <768px |
+| Phone tab bar (Today · Notes · Memory · Content Planner) | `src/components/workspace/mobile-tab-bar.tsx` | <768px only; hidden in focus mode |
+| Sidebar (dates, notes tree, profile menu) | `src/components/workspace/sidebar.tsx` | Journal, Notes (legacy styling) |
 
 ## Adding to this inventory
 

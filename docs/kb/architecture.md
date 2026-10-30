@@ -9,7 +9,7 @@ React `useReducer` + Context (`AppProvider`), synced to PocketBase record-by-rec
 - State: `src/components/app/` — `app-provider.tsx`, `app-context.reducer.ts` (all actions), `use-app-persistence-state.ts` (load/sync phases, see [sync-persistence.md](sync-persistence.md)).
 - Pure logic in `src/lib/`: `store.ts` (state factories, selectors, carryover, content-board defaults/migration), `content-conveyor.ts`, `planner-now.ts`, `task-attention.ts`, `date.ts`, `schema.ts` (Zod for persisted state), `types.ts` (all types).
 - Persistence: `persistence.ts` (normalize, `parseAppStateOrThrow`), `sync-outbox.ts`, `split-persistence-repository.ts`, `local-cache-storage.ts`, `pocketbase/` (auth + persistence repositories).
-- Shell: `src/components/workspace/` (providers, top navbar, sidebar, desktop updater, `workspace.tsx`). Todos/Notes have the sidebar; Today, History, Memory, Project, Standup, Planner and Content Planner are full-width, no sidebar toggle (the `isPlanner` branch in `workspace.tsx`).
+- Shell: `src/components/workspace/` (providers, top navbar, sidebar, desktop updater, `workspace.tsx`). Todos/Notes have the sidebar; Today, History, Memory, Project, Standup, Planner and Content Planner are full-width (`isFullWidthView` in `src/lib/views.ts`, used by `workspace.tsx` and the top navbar, which hides the sidebar toggle on them). Nav layout (top pills, phone tab bar, Today tabs): [ui-design.md](ui-design.md) → "Nav".
 - UI layers: `components/ui` (Base UI primitives), `components/blocks` (shared blocks), `components/signature` (product elements). See [ui-design.md](ui-design.md).
 
 ### State shape

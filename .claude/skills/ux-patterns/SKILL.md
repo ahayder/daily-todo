@@ -56,7 +56,7 @@ How DailyTodo does it:
 
 ## Navigation
 
-- Standard: top nav pills (Today / Memory / Content Planner) + change-request lightbulb + sync pill + theme. Todos and Notes still open by URL (sidebar only there); the Daily Planner's editor opens from Today ("Edit day plan" dialog, `/planner` redirects there). View states inside a page use `SegmentedControl`, not nav pills.
+- Standard: top nav = 4 pills **Today · Notes · Memory · Content Planner** + change-request lightbulb + sync pill. One list in `main-nav.ts` feeds both the top nav and the phone bar; below 768px the pills are replaced by the bottom tab bar. Today is the home: its screens are tabs (`TodayTabs`) — Now `/today` · Journal `/todos` · Standup `/standup` (Mon–Fri) · History `/history` — and the Today pill stays lit on all four. The Daily Planner's editor opens from Today ("Edit day plan" dialog; `/planner` redirects there and keeps Today lit). Sub-pages get a tab or stay under a pill's highlight; no "← Back" links. Sidebar only on Journal and Notes (`isFullWidthView` in `src/lib/views.ts` decides). "Journal" is a label only: the view is still `todos` (synced `lastView` must stay readable by older desktop builds). View states inside a page use `SegmentedControl`, not nav pills.
 - Ask: adding/removing/moving nav items or the sidebar (major change — see Ask before major changes below).
 
 ## Responsive
