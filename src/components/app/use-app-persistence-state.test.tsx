@@ -62,7 +62,7 @@ function createRepository(overrides: Partial<PersistenceRepository> = {}) {
     loadServer: vi.fn(async () => {
       throw new Error("offline");
     }),
-    applyOps: vi.fn(async ({ ops }) => {
+    applyOps: vi.fn(async ({ ops }: { ops: SyncOp[] }) => {
       applied.push(...ops);
       return ops.map((op) => ({
         key: op.key,
@@ -91,7 +91,7 @@ function renderPersistence(repository: PersistenceRepository) {
 
 function addTodo(result: { current: ReturnType<typeof useAppPersistenceState> }, text: string) {
   act(() => {
-    result.current.value?.dispatch({ type: "add-todo", date: today, text, priority: "medium" });
+    result.current.value?.dispatch({ type: "add-todo", date: today, text, priority: 2 });
   });
 }
 
