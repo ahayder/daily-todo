@@ -40,10 +40,10 @@ Next.js 16 (App Router) · TypeScript 5 · Tailwind CSS v4 + shadcn/ui on Base U
 
 ## Safety rules (always)
 
-- **`pnpm dev` uses the production PocketBase** — localhost edits real data. Use the local test DB for experiments (`pnpm dev:test`, details in the KB). Prod deploys, prod schema applies and prod backup changes need the user's OK.
+- **Prod is opt-in and human-only.** `pnpm dev` and the `:local` scripts use the local test PocketBase. Prod needs `pnpm dev:prod` or a `:prod` script, and they ask a human to type "prod" (they refuse without a terminal). A hook (`scripts/guard-prod.mjs`) blocks agents from prod commands and env files. Don't work around it: ask the user to run prod actions. Prod deploys, prod schema applies and prod backup changes need the user's OK.
 - **Sync is server-first.** Never add logic that deletes or overwrites server records based on what a device *lacks*; never seed/replace the workspace on load failure; daily pages are never deleted. (A whole-copy sync wiped all prod daily pages on 2026-10-07.)
 - **PocketBase fields that can be empty or zero must not be `required`** — required fields reject `[]`, `{}`, `0`, `""` and silently freeze sync.
-- **Dev auto-login credentials** (`NEXT_PUBLIC_DEV_AUTO_LOGIN_*`) are bundled into the client — local only, never in production.
+- **Dev auto-login credentials** (`NEXT_PUBLIC_DEV_AUTO_LOGIN_*`) belong in `.env.development.local` only. Production builds refuse to run if they're set, and `build:web` scans `out/` for leaked secrets.
 - **Git:** commit as the personal account (`git config user.email` must be the `ahayder` no-reply address), on `dev`; `main` is the PR base. Don't create worktrees without asking the user; use a separate branch only when `dev` is busy or for an isolated test feature.
 
 ## Engineering rules
