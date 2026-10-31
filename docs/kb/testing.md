@@ -6,7 +6,7 @@ Last verified: 2026-10-31
 - Types: `pnpm typecheck` (`tsc --noEmit`).
 - Hook-level sync tests: `src/components/app/use-app-persistence-state.test.tsx` (needs a `matchMedia` stub). MCP server tests: `mcp-server/src/history.test.ts`, `mcp-server/src/content-store.test.ts` (and others in `mcp-server/src/`).
 - E2E smoke: `pnpm test:e2e` = `pnpm e2e:build` (static export with PocketBase pointed at `127.0.0.1:8090`, so it never reaches prod) + `playwright test` via `playwright.config.ts`. Server `e2e/static-server.mjs` on port 5010; specs in `e2e/`; runs in the dev workspace.
-- CI: `.github/workflows/ci.yml` on PRs to `main` and pushes to `dev`. Jobs: `checks` (lint, typecheck, Vitest, MCP build) and `e2e` (Playwright).
+- CI: `.github/workflows/ci.yml` on PRs to `main` and pushes to `dev`. Jobs: `checks` (lint, typecheck, Vitest, MCP build, `pnpm kb:lint --warn`) and `e2e` (Playwright). First run on `dev` passed (2026-10-31).
 - UI check: `http://localhost:5005/<route>?devWorkspace=1` (local workspace, no login; reuse a running dev server on 5005). Test 375px and ≥1280px, dark and light (remove `dark` class on `<html>` or use the profile menu).
 - Real sync testing: local PocketBase + `pnpm dev:test` on `http://dailytodo.localhost:5005` (see [pocketbase.md](pocketbase.md)).
 - Port 5005 may be held by another worktree's dev server; `.claude/launch.json` has a `dev-test-5006` entry (test DB on port 5006).

@@ -3,7 +3,7 @@ Last verified: 2026-10-31
 
 Decisions the user made. Don't undo or re-propose without asking. Newest first.
 
-- **2026-10-31 — KB upkeep by reminder, not auto-writes.** A Stop hook (scripts/kb-reminder.mjs) only prints a reminder when code changed but `docs/kb/` didn't; agents still send kb-keeper a record-mode summary. Why: keeps the 2026-10-14 "one project memory, no auto Stop-hook memory" decision. Also added `pnpm kb:lint` and the [project.md](project.md) card.
+- **2026-10-31 — KB upkeep by reminder, not auto-writes.** A Stop hook (`scripts/kb-reminder.mjs`) only blocks the stop once with a reminder when code changed but `docs/kb/` didn't, and never writes; agents still send kb-keeper a record-mode summary. Why: keeps the 2026-10-14 "one project memory, no auto Stop-hook memory" decision. Also added `pnpm kb:lint` and the [project.md](project.md) card.
 - **2026-10-31 — Playwright smoke tests on the static export.** E2E runs against a static build in the dev workspace (`e2e/static-server.mjs`), not `next dev`. Why: `next dev` was too flaky under Playwright. See [testing.md](testing.md).
 - **2026-10-31 — Security is a separate, later pass.** Planned: `pnpm dev` → test DB by default, a hook blocking prod commands, dev auto-login creds review. Not mixed into the CI/KB work.
 

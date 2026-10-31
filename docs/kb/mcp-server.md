@@ -1,5 +1,5 @@
 # DailyTodo MCP server
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 
 `mcp-server/` is a small Node server that lets ChatGPT/Claude read and edit the Content Planner,
 change requests and the external brain (tasks, decisions, projects, meetings, follow-ups, repeats,
@@ -25,7 +25,7 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - Tool logic reuses pure helpers from `src/lib` (`moveContentCard`, `appendSection`, `notesToDraft`/`draftToNotes`, `getEditorSections`, `cleanPastedShootCard`, `createContentSeries`, …) so behavior matches the app.
 - Writes: `saveChangedCards` saves only cards whose object reference changed, one record at a time. Series edits read the latest board record, then write it.
 - If the user has no `content_boards` record, tools error ("open the Content Planner once") instead of creating one.
-- Scripts: `pnpm mcp:dev` (tsx, reads `mcp-server/.env`), `pnpm mcp:build` (esbuild → single file `mcp-server/dist/server.mjs`, git-ignored; needs the `createRequire` banner for ESM). Tests: `mcp-server/src/*.test.ts` (`tools`, `memory-tools`, `memory-store`), picked up by `vitest.config.ts` (`mcp-server/**/*.test.ts`). Deploy steps for humans: `mcp-server/README.md`.
+- Scripts: `pnpm mcp:dev` (tsx, reads `mcp-server/.env`), `pnpm mcp:build` (esbuild → single git-ignored file mcp-server/dist/server.mjs; needs the `createRequire` banner for ESM). Tests: `mcp-server/src/*.test.ts` (`tools`, `memory-tools`, `memory-store`), picked up by `vitest.config.ts` (`mcp-server/**/*.test.ts`). Deploy steps for humans: `mcp-server/README.md`.
 
 ## Deployment (Coolify)
 - Coolify at `coolify.ahayder.me`, CLI context `myvps`, project **DailyTodo**.
@@ -45,7 +45,6 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - No hard deletes on purpose. `tools.test.ts` checks the only delete tools are the soft `delete_change_request` and `delete_task` (it reads `server.ts` as text — importing `server.ts` starts the server) and the stores have no delete/remove method. Don't add a delete without the user's OK.
 - `pb.filter()` throws "Cannot read properties of undefined (reading 'replace')" if any param is `undefined` — only pass params that are set (this broke `list_changes` once).
 - PocketBase returns dates with a space instead of `T`; normalize every date (incl. `updated_at_client`) or outputs mix formats.
-- ESLint also lints `mcp-server/dist` if a local `pnpm mcp:build` left it there (git-ignored); delete it before `pnpm lint`.
 - **Local walkthrough without touching `mcp-server/.env`:** mint a 1-day test-DB token with `node --env-file=<main checkout>/.env.test.local scripts/create-mcp-token.mjs "" 1` into a private env file (`umask 077`), run `npx tsx --env-file=<that file> mcp-server/src/server.ts` with `PORT=8788`, then POST JSON-RPC to `/mcp/<secret>` with `Accept: application/json, text/event-stream`. Worktrees have no `.env` files or `pocketbase-local/`; use the main checkout's.
 - After adding tools, chat clients must reconnect/refresh the connector to see them.
 - Open app tabs only see MCP edits on focus/reload; a stale tab that then saves wins (last write wins).

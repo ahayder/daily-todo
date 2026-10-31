@@ -1,5 +1,5 @@
 # Notes & markdown editor
-Last verified: 2026-10-11
+Last verified: 2026-10-31
 
 Notes are full-width docs (title + editor) in folders. The editor (also used for Daily notes) is
 Tiptap with markdown round-trip and embedded Excalidraw drawings.

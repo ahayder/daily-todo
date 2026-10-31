@@ -1,13 +1,13 @@
 # External brain (tasks, decisions, memory, change log)
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 
 Backend + UI for the "chat captures, the app shows" redesign ([user-needs.md](user-needs.md)): chat
 saves tasks, decisions, projects, meetings, follow-ups and repeats through MCP; the app shows them
 on **Today** (`/today`), **Memory** (`/memory`, `/memory/project?id=…`), **Standup** (`/standup`)
 and lists every change on **History** (`/history`), with undo; desktop pings nudge.
 M1 (schema, logic, MCP tools) live on prod since 2026-10-27. M2 (Today + History, app sync) and
-M3 (Memory, Project, Standup, pings; plan `docs/plans/2026-10-27-external-brain-m3.md`) built on
-branch `claude/charming-bun-fe98e0`, going to `dev` → `main` + a desktop release for a 2–3 day trial.
+M3 (Memory, Project, Standup, pings; plan `docs/plans/2026-10-27-external-brain-m3.md`) are on
+`dev`; release status in [project.md](project.md).
 
 ## How it works
 - **Collections** (`scripts/lib/pocketbase-schema.mjs`, helper `softDeleteCollection()`): `tasks`,

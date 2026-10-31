@@ -1,5 +1,5 @@
 # Dev environment
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 
 ## How it works
 - pnpm. Dev server: `pnpm dev` on port 5005 (production DB!) or `pnpm dev:test` (local PocketBase). Lint: `pnpm lint`.
@@ -7,9 +7,11 @@ Last verified: 2026-10-30
 - **Git identity:** this repo commits as the personal GitHub account `ahayder` (repo-local `user.email = 2572383+ahayder@users.noreply.github.com`), remote `git@github.com-personal:ahayder/daily-todo.git`. The machine's global identity is a work account — check `git config user.email` before committing. The user usually uses GitHub Desktop.
 - Branches: always work and commit on `dev`; `main` is the PR base. Don't create worktrees without asking the user; use a separate branch only when `dev` is busy or for an isolated test feature (user rule, 2026-10-30).
 - **gh CLI:** the default `gh` account is the work account (`ahayder-astra`). For PRs on `ahayder/daily-todo`, prefix each command with `GH_TOKEN="$(gh auth token --user ahayder)" gh ...` instead of switching accounts (the work account can't create PRs there).
+- **KB lint:** `pnpm kb:lint` (`scripts/kb-lint.mjs`) checks KB paths, INDEX, size budgets, staleness; exit 1 on errors, `--warn` always exits 0.
+- **KB Stop hook** (`.claude/settings.json` → `scripts/kb-reminder.mjs`): blocks the stop **once** with a reminder when `src/`, `mcp-server/`, `scripts/` or `src-tauri/src/` changed (working tree, untracked, unpushed commits) but `docs/kb/` didn't. Fingerprint in `.git/kb-reminder-seen` so it won't repeat for the same changes; skips when `stop_hook_active`; never writes to the KB.
 
 ## Gotchas
-- `pnpm lint` on the whole repo scans `src-tauri/target/**` build output and fails with ~860 parse errors. Run eslint on just the changed files instead.
 - **Worktrees** (`.claude/worktrees/*`) have no `.env` files or `pocketbase-local/`. Run admin scripts with `node --env-file=<main checkout>/.env.test.local …`.
 - `tsx` scripts that use `@/` imports must live inside the repo (scratchpad paths don't resolve the alias); use a `.mts` file.
 - A fresh clone inherits the work identity unless the local user values are re-set.
+- `.claude/settings.json` hooks load at session start: edits to the hook config or a new hook only take effect in a new Claude Code session.
