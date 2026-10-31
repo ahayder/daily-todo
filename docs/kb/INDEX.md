@@ -21,7 +21,7 @@ Read project.md + this index first, then open only the pages that matter for the
 | [ui-design.md](ui-design.md) | Pointers to DESIGN.md, UI skills (inventory), ui-qa agent, ConfirmDialog, sync pill, nav (4 top pills Today · Notes · Memory · Content Planner, phone tab bar, Today tabs, `src/lib/views.ts`), unlayered `button` font trap, Tailwind v4 layer trap | Any UI change; nav/layout/home-screen work |
 | [user-needs.md](user-needs.md) | How the user really works (2026-10-14 interview), life areas, "chat captures, the app shows" redesign (Today · Memory · Content, mockups + plan), Office Companion fold-in | Redesigning Todos, Daily Planner, Notes, home screen, nudges; MCP task/memory tools |
 | [decisions.md](decisions.md) | Product decisions the user made (and what they declined), incl. the 2026-10-30 nav/home decision (built) | Before adding features or changing behavior; before nav/layout work |
-| [dev-environment.md](dev-environment.md) | Git identity, scripts, env files | Committing, pushing, running scripts |
+| [dev-environment.md](dev-environment.md) | Git identity, scripts, env files, prod opt-in (`:prod` + typed confirm), prod guard hook | Committing, pushing, running scripts, anything touching prod or env files |
 
 Other docs (not KB pages, but useful): `docs/pocketbase.md` (full PocketBase setup),
 `docs/macos-personal-release.md` (mac release), `docs/2026-04-19-content-planner-user-stories.md`

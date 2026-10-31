@@ -34,10 +34,12 @@ _Owned by Ali. kb-keeper proposes changes in decisions.md → Proposed; it never
   on `dev`, not yet in a desktop release.
 - As of 2026-10-31 the repo has PR CI: lint, typecheck, Vitest, MCP build, Playwright smoke
   tests ([testing.md](testing.md)).
+- Security pass done on `dev` (2026-10-31): `pnpm dev` → test DB, prod opt-in + guard hook
+  ([dev-environment.md](dev-environment.md)), auto-login build guards, MCP hardening.
 
 ## Next 3 steps
-1. **Security pass** (planned, separate later pass): `pnpm dev` → test DB by default, a hook
-   blocking prod commands, review of dev auto-login creds ([auth.md](auth.md)).
+1. Ali's follow-ups from the security pass: move auto-login vars to `.env.development.local`
+   ([auth.md](auth.md)); redeploy the MCP server on Coolify ([mcp-server.md](mcp-server.md)).
 2. Merge the two task lists (external-brain `tasks` vs Journal daily-page todos) — agreed
    direction, not planned yet (guess — confirm with Ali).
 3. M4: import Office Companion + OAuth for the MCP server ([user-needs.md](user-needs.md))
@@ -47,6 +49,8 @@ _Owned by Ali. kb-keeper proposes changes in decisions.md → Proposed; it never
 - Today tab row left-aligned vs centred; "Now" tab vs "Today" title; cramped phone Journal.
 - How Journal todos and `tasks` merge, and the migration of old daily-page todos.
 - Privacy of work transcripts on a personal server (summaries only for now).
+- Desktop app likely opens in the offline dev workspace (`tauri://localhost`); unverified, left
+  unfixed while desktop is out of scope ([desktop.md](desktop.md)).
 - Full list: [decisions.md](decisions.md) → "Needs the user's judgment".
 
 ## Related

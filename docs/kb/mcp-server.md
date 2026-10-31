@@ -8,7 +8,7 @@ change history) from chat (MCP over HTTP). No hard deletes anywhere; the only de
 prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23, `USER_TIMEZONE=Asia/Dhaka` set on Coolify).
 
 ## How it works
-- `mcp-server/src/server.ts`: `node:http` + `@modelcontextprotocol/sdk` Streamable HTTP, **stateless** — a new `McpServer` + transport per request. Only `/mcp/<MCP_SECRET>` serves MCP; `/health` returns ok; any other path (incl. wrong secret) is a 404. Auth is just the secret URL path (no OAuth); `MCP_SECRET` must be 32+ chars.
+- `mcp-server/src/server.ts`: `node:http` + `@modelcontextprotocol/sdk` Streamable HTTP, **stateless** — a new `McpServer` + transport per request. Only `/mcp/<MCP_SECRET>` serves MCP; `/health` returns ok; any other path (incl. wrong secret) is a 404. Auth is just the secret URL path (no OAuth); `MCP_SECRET` must be 32+ chars. `mcp-server/src/http-guards.ts`: `secretMatches` sha256-hashes both sides before `timingSafeEqual` (no length leak); `readJsonBody` caps bodies at `MAX_BODY_BYTES` (1 MB) → 413.
 - Server name `dailytodo` v2.0.0 with `SERVER_INSTRUCTIONS` (Office Companion rules) in `server.ts`. The change `source` comes from the User-Agent: `chat:claude`, `chat:chatgpt`, else `chat`.
 - Env: `MCP_SECRET`, `POCKETBASE_URL`, `POCKETBASE_USER_TOKEN` (preferred), or `POCKETBASE_USER_EMAIL` + `POCKETBASE_USER_PASSWORD` (fallback), `PORT` (default 8787), `USER_TIMEZONE` (default Asia/Dhaka, validated at start; decides what "today" is). Template: `mcp-server/env.example` (no leading dot because `.env*` is git-ignored); real values in `mcp-server/.env`.
 - **Login token:** `POCKETBASE_USER_TOKEN` is a PocketBase impersonation token for the **normal user** (never superuser). Mint it with `pnpm mcp:token [email] [days]` (`scripts/create-mcp-token.mjs`, uses the admin login in `.env.local`; `pnpm mcp:token:local` for the test DB). It prints only the token to stdout, so pipe it straight into `coolify app env create ... --value "$(pnpm -s mcp:token)"` without it showing on screen. Current prod token: 365 days, expires 2027-10-26. Revoke early by changing the user's `tokenKey` (this also signs out all the user's devices).
@@ -25,7 +25,7 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - Tool logic reuses pure helpers from `src/lib` (`moveContentCard`, `appendSection`, `notesToDraft`/`draftToNotes`, `getEditorSections`, `cleanPastedShootCard`, `createContentSeries`, …) so behavior matches the app.
 - Writes: `saveChangedCards` saves only cards whose object reference changed, one record at a time. Series edits read the latest board record, then write it.
 - If the user has no `content_boards` record, tools error ("open the Content Planner once") instead of creating one.
-- Scripts: `pnpm mcp:dev` (tsx, reads `mcp-server/.env`), `pnpm mcp:build` (esbuild → single git-ignored file mcp-server/dist/server.mjs; needs the `createRequire` banner for ESM). Tests: `mcp-server/src/*.test.ts` (`tools`, `memory-tools`, `memory-store`), picked up by `vitest.config.ts` (`mcp-server/**/*.test.ts`). Deploy steps for humans: `mcp-server/README.md`.
+- Scripts: `pnpm mcp:dev` (tsx, reads `mcp-server/.env`), `pnpm mcp:build` (esbuild → single git-ignored file mcp-server/dist/server.mjs; needs the `createRequire` banner for ESM). Tests: `mcp-server/src/*.test.ts` (`tools`, `memory-tools`, `memory-store`, `http-guards`), picked up by `vitest.config.ts` (`mcp-server/**/*.test.ts`). Deploy steps for humans: `mcp-server/README.md`.
 
 ## Deployment (Coolify)
 - Coolify at `coolify.ahayder.me`, CLI context `myvps`, project **DailyTodo**.
@@ -48,7 +48,8 @@ prod PocketBase. v2.0.0 (external-brain tools) is live since 2026-10-27 (PR #23,
 - **Local walkthrough without touching `mcp-server/.env`:** mint a 1-day test-DB token with `node --env-file=<main checkout>/.env.test.local scripts/create-mcp-token.mjs "" 1` into a private env file (`umask 077`), run `npx tsx --env-file=<that file> mcp-server/src/server.ts` with `PORT=8788`, then POST JSON-RPC to `/mcp/<secret>` with `Accept: application/json, text/event-stream`. Worktrees have no `.env` files or `pocketbase-local/`; use the main checkout's.
 - After adding tools, chat clients must reconnect/refresh the connector to see them.
 - Open app tabs only see MCP edits on focus/reload; a stale tab that then saves wins (last write wins).
-- Prod deploys need the user's OK. Point `mcp:dev` at the local test DB for experiments — prod data otherwise.
+- Prod deploys need the user's OK. `pnpm mcp:dev` reads `mcp-server/.env` (prod) and the prod guard hook blocks it for agents; use the local walkthrough above. Tokens: `mcp:token:local` / `mcp:token:prod` ([pocketbase.md](pocketbase.md)).
+- The 2026-10-31 hardening (hashed secret compare, 1 MB cap) needs a Coolify redeploy (Ali's action) before it's live. Still open: the secret in the URL can appear in access logs — fixed only by OAuth (M4).
 
 ## Related
 [external-brain.md](external-brain.md), [content-planner.md](content-planner.md), [change-requests.md](change-requests.md), [pocketbase.md](pocketbase.md), [decisions.md](decisions.md), [dev-environment.md](dev-environment.md)
