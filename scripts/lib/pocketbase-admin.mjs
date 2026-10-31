@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import PocketBase from "pocketbase";
+import { assertTarget, confirmProd, usesEnvFile, wantsProd } from "./pocketbase-target.mjs";
 
 function parseEnvValue(rawValue) {
   const trimmed = rawValue.trim();
@@ -70,18 +71,26 @@ export function getPocketBaseUrl() {
 }
 
 /** Logs in as a PocketBase superuser using the admin env vars (see docs/pocketbase.md). */
-export async function connectAdminClient() {
-  loadLocalEnvFile();
+/**
+ * Loads env and checks the target before any network call (see pocketbase-target.mjs):
+ * :local scripts (node --env-file) never read .env.local; prod needs --prod plus a typed "prod".
+ */
+export async function resolveAdminTarget() {
+  if (!usesEnvFile()) {
+    loadLocalEnvFile();
+  }
+  const wantProd = wantsProd();
+  const { url } = assertTarget({ url: getPocketBaseUrl(), wantProd });
+  if (wantProd) {
+    await confirmProd(url);
+  }
+  return url;
+}
 
-  const baseUrl = getPocketBaseUrl();
+export async function connectAdminClient() {
+  const baseUrl = await resolveAdminTarget();
   const email = getRequiredEnv("POCKETBASE_ADMIN_EMAIL");
   const password = getRequiredEnv("POCKETBASE_ADMIN_PASSWORD");
-
-  if (!baseUrl) {
-    throw new Error(
-      "Missing PocketBase URL. Set POCKETBASE_ADMIN_URL, NEXT_PUBLIC_POCKETBASE_URL, or POCKETBASE_URL.",
-    );
-  }
 
   const client = new PocketBase(baseUrl);
   client.autoCancellation(false);

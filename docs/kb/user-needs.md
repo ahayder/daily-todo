@@ -1,13 +1,11 @@
 # User needs & Today redesign (proposal)
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 
 How the user actually works (interview 2026-10-14) and the redesign direction agreed in mockups
 (2026-10-27). Use this before redesigning Todos, Daily Planner, Notes or the home screen.
-M1 (backend: collections, logic, MCP tools, change history) is live on prod since 2026-10-27;
-M2 (Today + History) and M3 (Memory / Project / Standup pages + desktop pings) are built on branch
-`claude/charming-bun-fe98e0`, shipping to web + desktop for a 2–3 day trial, then feedback — see
-[external-brain.md](external-brain.md). Old Todos / Daily Planner stay until a migration of old
-daily-page todos is decided. Next: M4 import Office Companion + OAuth.
+M1 (backend), M2 (Today + History) and M3 (Memory / Project / Standup + desktop pings) are on
+`dev` — status in [project.md](project.md), details in [external-brain.md](external-brain.md).
+Old daily-page todos live on as the Journal tab until a migration is decided.
 
 ## Pain points
 - Too many choices (decision paralysis), losing the thread mid-day (shiny things), time
@@ -42,9 +40,9 @@ sold through content), **personal**.
   collections, MCP task/history tools, a `withHistory` wrapper.
 - Screens: **Today** (Todos + Daily Planner merged: Now card + guideline timeline + Shelf),
   **Memory** (search → project cards → decisions + waiting on others), **Content**. Nav since
-  2026-10-30: Today is the single home with Now/Journal/Standup/History tabs inside it; pills
-  Today · Notes · Memory + "Plan" dropdown; bottom tab bar on phones (see [decisions.md](decisions.md),
-  [ui-design.md](ui-design.md) → "Nav").
+  2026-10-30: Today is the single home with Now/Journal/Standup/History tabs inside it; 4 pills
+  Today · Notes · Memory · Content Planner (`MAIN_NAV` in `src/components/workspace/main-nav.ts`),
+  the same 4 in a bottom tab bar on phones (see [decisions.md](decisions.md), [ui-design.md](ui-design.md) → "Nav").
 - UI review (ui-qa) outcomes already in the mockups: timeline rows show time + task only
   (details on expand); "Do today" opens a block picker; Now card has a "Not now" button; no
   D-codes in the UI; reuse the NowCard ring and WashiTag ("N days waiting"); headings ≤30px;

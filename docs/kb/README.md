@@ -10,7 +10,32 @@ This folder holds the project's detailed knowledge: how features behave, why, an
   and work from its short brief. This keeps the main task context small and on-topic.
 - **The KB improves itself.** After a task that changes behavior, fixes a non-obvious bug, or
   reveals a gotcha or a user decision, the main agent sends `kb-keeper` (record mode) a short
-  summary and it updates the pages.
+  summary and it updates the pages. A Stop hook (`scripts/kb-reminder.mjs`) prints a reminder
+  when code changed but `docs/kb/` didn't. It never writes.
+
+## What belongs in the KB
+Why, decisions, philosophy, traps, current status, and where things live. Not step-by-step
+"how the code works" that the code already says: keep "How it works" to pointers + the
+non-obvious bits, and slim those sections when you touch a page.
+
+## Size budgets
+Each page ≤ 90 lines; INDEX ≤ 40 rows; `project.md` ≤ 60 lines. Over budget → split or trim
+(enforced by `pnpm kb:lint`, script `scripts/kb-lint.mjs`).
+
+## Who may change what
+kb-keeper edits facts freely. Philosophy (`project.md` → Philosophy), rules in `CLAUDE.md` /
+`AGENTS.md`, and the kb-keeper agent's own instructions are changed only by Ali: kb-keeper adds a
+proposal to `decisions.md` → "## Proposed (needs Ali)" with date + why.
+
+## Modes
+- **ask** — short brief for a task.
+- **record** — after work; input = summary + `git diff --stat`.
+- **tidy** — run `pnpm kb:lint`, fix broken paths, trim over-budget pages, re-verify the oldest
+  `Last verified` pages against code.
+
+## Repeated mistakes
+When an agent repeats a mistake the KB already covers, add "(repeated YYYY-MM-DD)" to that
+Gotcha. Repeats mean the page or rule needs rewriting.
 
 ## Page format
 

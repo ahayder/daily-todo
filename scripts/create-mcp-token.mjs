@@ -4,10 +4,10 @@
 // The token goes to stdout and everything else to stderr, so it can be piped
 // straight into Coolify without being shown.
 //
-// Usage: node scripts/create-mcp-token.mjs [email] [days=365]
+// Usage: pnpm -s mcp:token:prod [email] [days=365]   (or mcp:token:local)
 import { connectAdminClient } from "./lib/pocketbase-admin.mjs";
 
-const [email, daysArg] = process.argv.slice(2);
+const [email, daysArg] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
 const days = Number(daysArg ?? 365);
 
 const { client } = await connectAdminClient();
