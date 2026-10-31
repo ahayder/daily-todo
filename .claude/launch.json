@@ -2,18 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
+      "name": "dev (test DB)",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "dev"
-      ],
-      "port": 5005
-    },
-    {
-      "name": "dev-test",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "dev:test"
       ],
       "port": 5005
     },
