@@ -1,5 +1,4 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
@@ -7,6 +6,7 @@ import { DEFAULT_TIME_ZONE } from "@/lib/memory/dates";
 import { CHANGE_REQUEST_KINDS, CONTENT_PLATFORMS, DECISION_STATUSES, LIFE_AREAS, MEMORY_KINDS } from "@/lib/types";
 import { createPocketBaseStore, type AppStore } from "./content-store";
 import { withHistory } from "./history";
+import { BodyTooLargeError, readJsonBody, secretMatches } from "./http-guards";
 import * as memory from "./memory-tools";
 import {
   addChangeRequest,
@@ -798,19 +798,6 @@ function buildServer(baseStore: AppStore, options: { source: string; timeZone: s
   return server;
 }
 
-function secretMatches(candidate: string, secret: string): boolean {
-  const a = Buffer.from(candidate);
-  const b = Buffer.from(secret);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-async function readJson(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
-  const text = Buffer.concat(chunks).toString("utf8");
-  return text ? JSON.parse(text) : undefined;
-}
-
 function notFound(res: ServerResponse) {
   res.writeHead(404).end();
 }
@@ -845,9 +832,13 @@ export function startServer() {
     });
     try {
       await server.connect(transport);
-      const body = req.method === "POST" ? await readJson(req) : undefined;
+      const body = req.method === "POST" ? await readJsonBody(req) : undefined;
       await transport.handleRequest(req, res, body);
     } catch (error) {
+      if (error instanceof BodyTooLargeError) {
+        if (!res.headersSent) res.writeHead(413).end();
+        return;
+      }
       console.error(error);
       if (!res.headersSent) res.writeHead(500).end();
     }
