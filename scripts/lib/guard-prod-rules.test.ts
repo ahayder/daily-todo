@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { checkCommand } from "./guard-prod-rules.mjs";
+import { checkCommand, checkToolCall } from "./guard-prod-rules.mjs";
+
+describe("prod guard — file tools", () => {
+  it.each([
+    ["Read", { file_path: "/repo/.env.local" }],
+    ["Read", { file_path: "/repo/mcp-server/.env" }],
+    ["Edit", { file_path: "/repo/.env.development.local" }],
+    ["Write", { file_path: "/repo/.env" }],
+    ["Grep", { pattern: "URL", path: "/repo/.env.test.local" }],
+  ])("blocks %s %o", (tool_name, tool_input) => {
+    expect(checkToolCall({ tool_name, tool_input })).not.toBeNull();
+  });
+
+  it.each([
+    ["Read", { file_path: "/repo/mcp-server/env.example" }],
+    ["Read", { file_path: "/repo/src/lib/auth-config.ts" }],
+    ["Grep", { pattern: "env", path: "/repo/src" }],
+    ["Bash", { command: "pnpm dev" }],
+  ])("allows %s %o", (tool_name, tool_input) => {
+    expect(checkToolCall({ tool_name, tool_input })).toBeNull();
+  });
+});
 
 describe("prod guard", () => {
   it.each([

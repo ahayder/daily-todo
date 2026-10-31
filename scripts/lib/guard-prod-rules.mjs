@@ -46,6 +46,29 @@ export function checkCommand(command) {
   return null;
 }
 
+// Env files with real values (templates like env.example are fine).
+const SECRET_FILE = /(^|\/)(\.env(\.[\w.-]+)?|mcp-server\/\.env)$/;
+const TEMPLATE_FILE = /\.(example|sample|template)$/;
+
+/** For file tools (Read, Edit, Write, Grep): blocks env files that hold real credentials. */
+export function checkFilePath(filePath) {
+  if (typeof filePath !== "string" || !filePath.trim()) return null;
+  const normalized = filePath.replace(/\\/g, "/");
+  if (SECRET_FILE.test(normalized) && !TEMPLATE_FILE.test(normalized)) {
+    return "env files hold the prod URL and credentials";
+  }
+  return null;
+}
+
+/**
+ * Checks one hook payload ({ tool_name, tool_input }).
+ * @param {{ tool_name?: string, tool_input?: Record<string, string | undefined> }} [payload]
+ */
+export function checkToolCall({ tool_name: toolName, tool_input: toolInput = {} } = {}) {
+  if (toolName === "Bash") return checkCommand(toolInput.command);
+  return checkFilePath(toolInput.file_path) ?? checkFilePath(toolInput.path) ?? checkFilePath(toolInput.glob);
+}
+
 export function blockMessage(reason) {
   return (
     `Blocked by the DailyTodo prod guard: ${reason}. ` +
