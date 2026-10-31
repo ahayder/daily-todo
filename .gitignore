@@ -49,3 +49,7 @@ next-env.d.ts
 
 # Content Planner MCP server build
 /mcp-server/dist/
+
+# Playwright
+/test-results/
+/playwright-report/

@@ -28,7 +28,9 @@
     "mcp:dev": "tsx --env-file=mcp-server/.env mcp-server/src/server.ts",
     "mcp:build": "esbuild mcp-server/src/server.ts --bundle --platform=node --target=node22 --format=esm --outfile=mcp-server/dist/server.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
     "mcp:token": "node scripts/create-mcp-token.mjs",
-    "mcp:token:local": "node --env-file=.env.test.local scripts/create-mcp-token.mjs"
+    "mcp:token:local": "node --env-file=.env.test.local scripts/create-mcp-token.mjs",
+    "test:e2e": "pnpm e2e:build && playwright test",
+    "e2e:build": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false NEXT_TELEMETRY_DISABLED=1 next build"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -72,6 +74,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@tauri-apps/cli": "^2.10.1",
     "@testing-library/jest-dom": "^6.9.1",
