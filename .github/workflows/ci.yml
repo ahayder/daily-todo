@@ -40,6 +40,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm mcp:build
+      # Knowledge-base drift report (warns only; fix with kb-keeper tidy mode).
+      - run: pnpm kb:lint --warn
 
   e2e:
     name: Browser smoke tests (Playwright)

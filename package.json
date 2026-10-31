@@ -30,7 +30,8 @@
     "mcp:token": "node scripts/create-mcp-token.mjs",
     "mcp:token:local": "node --env-file=.env.test.local scripts/create-mcp-token.mjs",
     "test:e2e": "pnpm e2e:build && playwright test",
-    "e2e:build": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false NEXT_TELEMETRY_DISABLED=1 next build"
+    "e2e:build": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false NEXT_TELEMETRY_DISABLED=1 next build",
+    "kb:lint": "node scripts/kb-lint.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
