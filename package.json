@@ -22,6 +22,7 @@
     "pocketbase:backups:enable": "node scripts/enable-pocketbase-backups.mjs",
     "pocketbase:backups:enable:local": "node --env-file=.env.test.local scripts/enable-pocketbase-backups.mjs",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp:dev": "tsx --env-file=mcp-server/.env mcp-server/src/server.ts",

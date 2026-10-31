@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build output and local-only folders (keep local runs the same as CI):
+    "src-tauri/target/**",
+    "mcp-server/dist/**",
+    ".claude/worktrees/**",
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 
