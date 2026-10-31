@@ -80,3 +80,12 @@ Before merging test changes:
 - [ ] Dependencies like `AuthRepository` and `PersistenceRepository` are correctly injected using the `src/test/repositories.ts` mocks.
 - [ ] Simulated events utilize `@testing-library/user-event` instead of standard `fireEvent`.
 - [ ] The tests execute successfully locally using `pnpm test`.
+- [ ] `pnpm lint` and `pnpm typecheck` pass too — CI (`.github/workflows/ci.yml`) runs all three on every PR.
+
+---
+
+## 5. Browser smoke tests (Playwright)
+
+Core flows also have browser tests in `e2e/` (run with `pnpm test:e2e`). They use the static export in the
+local dev workspace, so they never touch PocketBase. Setup, ports and gotchas: ask `kb-keeper` (KB page
+`testing.md`). When a change breaks one of those flows on purpose, update the spec in the same change.
