@@ -8,7 +8,7 @@
     "dev:test": "pnpm dev",
     "dev:prod": "node scripts/confirm-prod.mjs && next dev --webpack -p 5005",
     "build": "pnpm version:sync && pnpm build:web",
-    "build:web": "next build",
+    "build:web": "next build && node scripts/check-bundle-secrets.mjs",
     "start": "pnpm dlx serve out",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -35,7 +35,7 @@
     "mcp:token:prod": "node scripts/create-mcp-token.mjs --prod",
     "mcp:token:local": "node --env-file=.env.test.local scripts/create-mcp-token.mjs",
     "test:e2e": "pnpm e2e:build && playwright test",
-    "e2e:build": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false NEXT_TELEMETRY_DISABLED=1 next build",
+    "e2e:build": "NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090 NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false NEXT_TELEMETRY_DISABLED=1 next build && node scripts/check-bundle-secrets.mjs",
     "kb:lint": "node scripts/kb-lint.mjs"
   },
   "dependencies": {
