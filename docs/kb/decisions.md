@@ -1,7 +1,11 @@
 # Product decisions
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 
 Decisions the user made. Don't undo or re-propose without asking. Newest first.
+
+- **2026-10-31 — KB upkeep by reminder, not auto-writes.** A Stop hook (scripts/kb-reminder.mjs) only prints a reminder when code changed but `docs/kb/` didn't; agents still send kb-keeper a record-mode summary. Why: keeps the 2026-10-14 "one project memory, no auto Stop-hook memory" decision. Also added `pnpm kb:lint` and the [project.md](project.md) card.
+- **2026-10-31 — Playwright smoke tests on the static export.** E2E runs against a static build in the dev workspace (`e2e/static-server.mjs`), not `next dev`. Why: `next dev` was too flaky under Playwright. See [testing.md](testing.md).
+- **2026-10-31 — Security is a separate, later pass.** Planned: `pnpm dev` → test DB by default, a hook blocking prod commands, dev auto-login creds review. Not mixed into the CI/KB work.
 
 - **2026-10-30 — Navigation + single home, "Combine both" (built on `dev`; not yet in a desktop release).** Two lines of nav work landed the same day (Daily Planner folded into Today, below; and a design-review nav with Today as home + a "3 pills + Plan menu" layout). The user chose **"Combine both"**, which **supersedes the "3 pills + Plan menu" plan** (no Plan menu — only one planner page is left). Why: a design review (`.design/research/repo.md`) found three overlapping "today" screens (`/today`, the `/todos` sidebar "Today", Planner "Now"), a flat 6-pill nav mixing page kinds, the Planner named three ways, and Standup highlighting Today with no sub-nav. Final:
   1. **Today (`/today`) is the single home.** The Todos daily pages (`/todos`, carryover + journal) become **"Journal"**, a tab inside Today. Today tabs = Now · Journal · Standup (weekdays only) · History. The two task lists (external-brain `tasks` vs daily-page todos) should **merge over time** — a separate, larger job, not planned yet.
@@ -30,3 +34,6 @@ Decisions the user made. Don't undo or re-propose without asking. Newest first.
 
 ## Needs the user's judgment (ask first)
 Open 2026-10-30 nav points (Today tab row alignment, "Now" vs "Today" naming, cramped phone Journal) and how Journal + tasks merge · Todo status-change confirmation · soft caps beyond Shoot next · confetti frequency · any delete that can't be undone and isn't a workspace/folder/note/column · carryover or Content Conveyor behavior changes.
+
+## Proposed (needs Ali)
+kb-keeper's proposed changes to Philosophy, `CLAUDE.md`/`AGENTS.md` rules or its own instructions (date + why). Ali accepts or declines. None yet.
